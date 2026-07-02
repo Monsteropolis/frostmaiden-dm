@@ -731,3 +731,75 @@ textarea.input { resize: vertical; font-family: var(--font-read); }
 .rt-title { font-size: 12.5px; color: var(--ink-dim); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rt-total { font-size: 24px; font-weight: 700; color: var(--silver); }
 .rt-detail { font-size: 11.5px; color: var(--ink-faint); }
+
+/* ============================================================
+   PHASE 3 — NPCs, towns, arcs
+   ============================================================ */
+
+.entity-row.npc { cursor: pointer; }
+.yours-mark { color: var(--silver); font-size: 12px; }
+.npc-lastseen {
+  font-family: var(--font-read);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--silver-dim);
+  margin-top: 2px;
+}
+.npc-head { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.npc-statline { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--ink-dim); margin-bottom: 10px; }
+.npc-statline span { border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; }
+.npc-block { margin: 12px 0; }
+.npc-block .read { font-size: 14px; margin: 2px 0; }
+.npc-block.secret {
+  border: 1px solid var(--thread-deep);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.npc-block.secret .field-label { color: var(--thread); }
+.thread-link { font-size: 13.5px; margin: 5px 0; display: flex; align-items: baseline; gap: 7px; }
+.arc-dot {
+  width: 8px; height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  display: inline-block;
+}
+.arc-dot.big { width: 12px; height: 12px; }
+.arc-dot.active { background: var(--frost); }
+.arc-dot.escalating { background: var(--thread); box-shadow: 0 0 6px var(--thread-glow); }
+.arc-dot.resolved { background: var(--ok); }
+.arc-dot.dormant { background: var(--ink-faint); }
+.arc-dot.hook { background: var(--silver-dim); }
+
+.standing-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.standing.pick {
+  margin: 0;
+  min-height: var(--tap);
+  padding: 8px 16px;
+  font-size: 12px;
+  background: none;
+  cursor: pointer;
+}
+.standing.pick.current { background: var(--panel); outline: 1px solid var(--silver-dim); }
+
+/* Towns */
+.card.town .unit-top { cursor: pointer; }
+.card.town:not(.visited) { opacity: 0.82; }
+.flakes { color: var(--frost); font-size: 11px; letter-spacing: 2px; margin-left: 6px; }
+details.loc { margin: 6px 0; }
+details.loc summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+}
+details.loc summary::marker { color: var(--frost-deep); }
+
+/* Arcs */
+.arc-card.escalating { border-color: var(--thread-deep); }
+.arc-line { font-size: 13.5px; margin: 6px 0 0; }
+.arc-line strong { font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.arc-line.hot strong { color: var(--thread); }

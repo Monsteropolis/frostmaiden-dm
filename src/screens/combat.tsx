@@ -223,20 +223,20 @@ function AddCombatants({ open, onClose }: { open: boolean; onClose: () => void }
 
       <div class="field-label" style={{ marginTop: '14px' }}>Quick custom</div>
       <div class="field-row">
-        <Field label="Emoji"><input class="input" style={{ width: '58px' }} value={custom.emoji} onInput={(e) => setCustom({ ...custom, emoji: (e.target as HTMLInputElement).value })} /></Field>
-        <Field label="Name"><input class="input" value={custom.name} onInput={(e) => setCustom({ ...custom, name: (e.target as HTMLInputElement).value })} /></Field>
+        <Field label="Emoji"><input class="input" style={{ width: '58px' }} value={custom.emoji} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setCustom((prev) => ({ ...prev, emoji: v })); })()} /></Field>
+        <Field label="Name"><input class="input" value={custom.name} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setCustom((prev) => ({ ...prev, name: v })); })()} /></Field>
       </div>
       <div class="field-row">
-        <Field label="HP"><NumInput value={custom.hp} min={1} onInput={(n) => setCustom({ ...custom, hp: n })} /></Field>
-        <Field label="AC"><NumInput value={custom.ac} onInput={(n) => setCustom({ ...custom, ac: n })} /></Field>
-        <Field label="Count (3 or 1d4)"><input class="input" value={custom.count} onInput={(e) => setCustom({ ...custom, count: (e.target as HTMLInputElement).value })} /></Field>
+        <Field label="HP"><NumInput value={custom.hp} min={1} onInput={(n) => setCustom((prev) => ({ ...prev, hp: n }))} /></Field>
+        <Field label="AC"><NumInput value={custom.ac} onInput={(n) => setCustom((prev) => ({ ...prev, ac: n }))} /></Field>
+        <Field label="Count (3 or 1d4)"><input class="input" value={custom.count} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setCustom((prev) => ({ ...prev, count: v })); })()} /></Field>
       </div>
       <button class="btn wide" disabled={!custom.name.trim()} onClick={() => {
         const n = rollCount(custom.count);
         patch((d) => {
           for (let i = 0; i < n; i++) d.combat.combatants.push({ id: cid(), name: n > 1 ? `${custom.name} ${i + 1}` : custom.name, emoji: custom.emoji, hp: custom.hp, maxHp: custom.hp, ac: custom.ac, init: null, initMod: 0, conditions: [], srcType: 'custom' });
         });
-        setCustom({ ...custom, name: '' });
+        setCustom((prev) => ({ ...prev, name: '' }));
       }}>Add custom</button>
 
       <button class="btn primary wide" style={{ marginTop: '10px' }} onClick={onClose}>Done</button>
@@ -292,7 +292,7 @@ function Tracker() {
         )}
       </div>
 
-      <AddCombatants open={adding} onClose={() => setAdding(false)} />
+      {adding && <AddCombatants open onClose={() => setAdding(false)} />}
     </>
   );
 }
@@ -370,20 +370,20 @@ function PresetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
     id: '', name: '', type: 'combat', category: 'travel', difficulty: 'medium', desc: '', combatants: [], custom: true,
   });
   const setC = (i: number, k: keyof PresetCombatant, v: unknown) =>
-    setF({ ...f, combatants: f.combatants.map((c, j) => (j === i ? { ...c, [k]: v } : c)) });
+    setF((prev) => ({ ...prev, combatants: prev.combatants.map((c, j) => (j === i ? { ...c, [k]: v } : c)) }));
 
   return (
     <Sheet open={open} title="New encounter" onClose={onClose}>
-      <Field label="Name"><input class="input" value={f.name} onInput={(e) => setF({ ...f, name: (e.target as HTMLInputElement).value })} /></Field>
+      <Field label="Name"><input class="input" value={f.name} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, name: v })); })()} /></Field>
       <div class="field-row">
-        <Field label="Category"><input class="input" value={f.category} onInput={(e) => setF({ ...f, category: (e.target as HTMLInputElement).value })} /></Field>
+        <Field label="Category"><input class="input" value={f.category} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, category: v })); })()} /></Field>
         <Field label="Difficulty">
-          <select class="input" value={f.difficulty} onChange={(e) => setF({ ...f, difficulty: (e.target as HTMLSelectElement).value as Difficulty })}>
+          <select class="input" value={f.difficulty} onChange={(e) => (() => { const v = (e.target as HTMLSelectElement).value as Difficulty; setF((prev) => ({ ...prev, difficulty: v })); })()}>
             {DIFF_ORDER.map((x) => <option value={x}>{x}</option>)}
           </select>
         </Field>
       </div>
-      <Field label="Description"><textarea class="input" rows={2} value={f.desc} onInput={(e) => setF({ ...f, desc: (e.target as HTMLTextAreaElement).value })} /></Field>
+      <Field label="Description"><textarea class="input" rows={2} value={f.desc} onInput={(e) => (() => { const v = (e.target as HTMLTextAreaElement).value; setF((prev) => ({ ...prev, desc: v })); })()} /></Field>
 
       <div class="field-label">Combatants</div>
       {f.combatants.map((c, i) => (
@@ -393,10 +393,10 @@ function PresetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
           <NumInput w="60px" value={c.hp ?? 10} onInput={(n) => setC(i, 'hp', n)} />
           <NumInput w="56px" value={c.ac ?? 12} onInput={(n) => setC(i, 'ac', n)} />
           <input class="input" style={{ width: '58px' }} placeholder="1d4" value={c.count} onInput={(e) => setC(i, 'count', (e.target as HTMLInputElement).value)} />
-          <button class="btn mini ghost danger" onClick={() => setF({ ...f, combatants: f.combatants.filter((_, j) => j !== i) })}>✕</button>
+          <button class="btn mini ghost danger" onClick={() => setF((prev) => ({ ...prev, combatants: prev.combatants.filter((_, j) => j !== i) }))}>✕</button>
         </div>
       ))}
-      <button class="btn ghost" onClick={() => setF({ ...f, combatants: [...f.combatants, { srcType: 'custom', count: '1', emoji: '👾', name: '', hp: 10, ac: 12 }] })}>+ Combatant</button>
+      <button class="btn ghost" onClick={() => setF((prev) => ({ ...prev, combatants: [...prev.combatants, { srcType: 'custom', count: '1', emoji: '👾', name: '', hp: 10, ac: 12 }] }))}>+ Combatant</button>
 
       <button class="btn primary wide" disabled={!f.name.trim()} onClick={() => {
         patch((s) => { s.encounterPresets.push({ ...f, id: `ep${s.seq++}` }); });

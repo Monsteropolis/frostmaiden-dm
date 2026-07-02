@@ -137,6 +137,49 @@ export interface EncounterPreset {
   custom: boolean;    // user-created vs seeded
 }
 
+// --- Phase 3: NPCs, arcs, towns ------------------------------------------------
+
+export interface CustomNpc {
+  id: string;
+  name: string;
+  emoji: string;
+  role: string;
+  town: string;
+  race: string;
+  personality: string;
+  voice: string;
+  wants: string;
+  fears: string;
+  appearance: string;
+  notes: string;
+}
+
+export type ArcStatus = 'dormant' | 'active' | 'escalating' | 'resolved';
+
+export interface Arc {
+  id: string;
+  name: string;
+  status: ArcStatus;
+  lastDev: string;       // last development
+  nextTrigger: string;   // next escalation trigger
+  linkedNpcIds: string[];
+  notes: string;
+}
+
+export type TownStanding = 'unknown' | 'neutral' | 'friendly' | 'hostile' | 'allied';
+
+export interface TownStatus {
+  visited: boolean;
+  standing: TownStanding;
+  activeQuest: string;
+  sidekickRecruited: boolean;
+  notes: string;
+}
+
+export function defaultTownStatus(): TownStatus {
+  return { visited: false, standing: 'unknown', activeQuest: '', sidekickRecruited: false, notes: '' };
+}
+
 // --- Root state --------------------------------------------------------------
 
 export interface AppState {
@@ -154,15 +197,15 @@ export interface AppState {
   sidekicks: Ally[];
   sessions: unknown[];
   quests: unknown[];
-  arcs: unknown[];
+  arcs: Arc[];
   encounterPresets: EncounterPreset[];
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
   travel: { activeJourney: unknown | null; log: unknown[] };
-  towns: Record<string, unknown>;
+  towns: Record<string, TownStatus>;
 
   // NPC system — first-class from the start
   npcOverrides: Record<string, NpcOverride>;
-  customNpcs: unknown[];
+  customNpcs: CustomNpc[];
 
   seq: number; // monotonic id counter for user-created entities
 }

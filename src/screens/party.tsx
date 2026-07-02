@@ -127,7 +127,7 @@ function PcCard({ pc }: { pc: PC }) {
         </div>
       )}
 
-      <PcForm open={editing} onClose={() => setEditing(false)} existing={pc} />
+      {editing && <PcForm key={`edit-${pc.id}`} open onClose={() => setEditing(false)} existing={pc} />}
     </div>
   );
 }
@@ -140,7 +140,7 @@ function PcForm({ open, onClose, existing }: { open: boolean; onClose: () => voi
     ac: 12, pp: 10, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0,
   };
   const [f, setF] = useState<PC>(blank);
-  const set = (k: keyof PC, v: unknown) => setF({ ...f, [k]: v } as PC);
+  const set = (k: keyof PC, v: unknown) => setF((prev) => ({ ...prev, [k]: v } as PC));
 
   return (
     <Sheet open={open} title={existing ? `Edit ${existing.name}` : 'Add character'} onClose={onClose}>
@@ -241,7 +241,7 @@ function AllyCard({ ally }: { ally: Ally }) {
         </div>
       )}
 
-      <AllyForm open={editing} onClose={() => setEditing(false)} existing={ally} />
+      {editing && <AllyForm key={`edit-${ally.id}`} open onClose={() => setEditing(false)} existing={ally} />}
     </div>
   );
 }
@@ -255,11 +255,9 @@ function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => v
     attacks: [], conditions: [], location: '', notes: '',
   };
   const [f, setF] = useState<Ally>(blank);
-  const set = (k: keyof Ally, v: unknown) => setF({ ...f, [k]: v } as Ally);
-  const setAtk = (i: number, k: keyof AllyAttack, v: unknown) => {
-    const attacks = f.attacks.map((a, j) => (j === i ? { ...a, [k]: v } : a));
-    setF({ ...f, attacks });
-  };
+  const set = (k: keyof Ally, v: unknown) => setF((prev) => ({ ...prev, [k]: v } as Ally));
+  const setAtk = (i: number, k: keyof AllyAttack, v: unknown) =>
+    setF((prev) => ({ ...prev, attacks: prev.attacks.map((a, j) => (j === i ? { ...a, [k]: v } : a)) }));
 
   return (
     <Sheet open={open} title={existing ? `Edit ${existing.name}` : 'Add ally'} onClose={onClose}>
@@ -279,7 +277,7 @@ function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => v
       <div class="score-edit">
         {(Object.keys(f.scores) as (keyof Ally['scores'])[]).map((k) => (
           <Field label={k.toUpperCase()}>
-            <NumInput value={f.scores[k]} min={1} max={30} onInput={(n) => set('scores', { ...f.scores, [k]: n })} />
+            <NumInput value={f.scores[k]} min={1} max={30} onInput={(n) => setF((prev) => ({ ...prev, scores: { ...prev.scores, [k]: n } }))} />
           </Field>
         ))}
       </div>
@@ -290,10 +288,10 @@ function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => v
           <input class="input" placeholder="Name" value={a.name} onInput={(e) => setAtk(i, 'name', (e.target as HTMLInputElement).value)} />
           <NumInput w="64px" value={a.bonus} onInput={(n) => setAtk(i, 'bonus', n)} />
           <input class="input" style={{ width: '86px' }} placeholder="1d6+2" value={a.damage} onInput={(e) => setAtk(i, 'damage', (e.target as HTMLInputElement).value)} />
-          <button class="btn mini ghost danger" aria-label="Remove attack" onClick={() => setF({ ...f, attacks: f.attacks.filter((_, j) => j !== i) })}>✕</button>
+          <button class="btn mini ghost danger" aria-label="Remove attack" onClick={() => setF((prev) => ({ ...prev, attacks: prev.attacks.filter((_, j) => j !== i) }))}>✕</button>
         </div>
       ))}
-      <button class="btn ghost" onClick={() => setF({ ...f, attacks: [...f.attacks, { name: '', bonus: 4, damage: '1d6+2' }] })}>+ Attack</button>
+      <button class="btn ghost" onClick={() => setF((prev) => ({ ...prev, attacks: [...prev.attacks, { name: '', bonus: 4, damage: '1d6+2' }] }))}>+ Attack</button>
 
       <Field label="Location"><input class="input" value={f.location} onInput={(e) => set('location', (e.target as HTMLInputElement).value)} /></Field>
       <Field label="Notes"><textarea class="input" rows={3} value={f.notes} onInput={(e) => set('notes', (e.target as HTMLTextAreaElement).value)} /></Field>
@@ -335,7 +333,7 @@ export function PartyScreen() {
           )}
           {party.map((pc) => <PcCard key={pc.id} pc={pc} />)}
           <button class="btn primary wide" onClick={() => setAdding(true)}>+ Add character</button>
-          {adding && <PcForm open={adding} onClose={() => setAdding(false)} />}
+          {adding && <PcForm key="add-pc" open onClose={() => setAdding(false)} />}
         </>
       )}
 
@@ -346,7 +344,7 @@ export function PartyScreen() {
           )}
           {sidekicks.map((a) => <AllyCard key={a.id} ally={a} />)}
           <button class="btn primary wide" onClick={() => setAdding(true)}>+ Add ally</button>
-          {adding && <AllyForm open={adding} onClose={() => setAdding(false)} />}
+          {adding && <AllyForm key="add-ally" open onClose={() => setAdding(false)} />}
         </>
       )}
     </div>

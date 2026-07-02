@@ -38,8 +38,13 @@ Requires Node 18+.
 npm install
 npm run dev       # dev server with hot reload
 npm run build     # typecheck + production build to dist/
+npm run test:sim  # simulated DM session against the real UI (49 checks)
 npm run icons     # regenerate PWA icons from the inline SVG
 ```
+
+`test:sim` drives the actual interface through a full session — roster
+creation, town bookkeeping, arc escalation, NPC standing updates, a bandit
+ambush with HP sync, weather CON saves, and a persistence audit.
 
 ## Architecture
 
