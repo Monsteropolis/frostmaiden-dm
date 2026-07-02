@@ -1,0 +1,56 @@
+/* ============================================================
+   FROSTMAIDEN DM — design tokens
+   Fate Direct (dark cover system) overlaid with glacial frost.
+   Cosmos = ground · Thread = fate in motion · Star = entities
+   Frost = the Rime — weather, cold, ice states
+   ============================================================ */
+
+:root {
+  /* --- Cosmos (ground) --- */
+  --bg: #0D0E22;            /* deepened midnight — app background        */
+  --surface: #171833;       /* brand Midnight — cards                    */
+  --panel: #2A2A52;         /* brand Panel — raised elements, inputs     */
+  --panel-hi: #34346200;
+
+  /* --- Starlight (ink) --- */
+  --ink: #E9E7F4;           /* primary text                              */
+  --ink-dim: #A7A9C6;       /* secondary text                            */
+  --ink-faint: #6E7095;     /* tertiary / disabled                       */
+
+  /* --- Thread (fate in motion — use scarcely) --- */
+  --thread: #C23A52;        /* bright thread, on dark                    */
+  --thread-deep: #9C2547;   /* garnet, subtle uses                       */
+  --thread-glow: rgba(194, 58, 82, 0.35);
+
+  /* --- Star (entities of consequence) --- */
+  --silver: #CDD4E0;
+  --silver-dim: #8F97AB;
+
+  /* --- Frost (the Rime overlay) --- */
+  --frost: #9BD7E8;         /* glacial cyan — weather, cold states       */
+  --frost-deep: #4E8FAC;
+  --frost-glow: rgba(155, 215, 232, 0.22);
+  --frost-edge: rgba(155, 215, 232, 0.16); /* ice highlight on card tops */
+
+  /* --- Status --- */
+  --ok: #7FC8A9;            /* cool green — healing, resolved            */
+  --warn: #C9A86A;          /* muted amber (kept desaturated, cool book) */
+
+  /* --- Lines & surfaces --- */
+  --border: rgba(205, 212, 224, 0.13);
+  --border-strong: rgba(205, 212, 224, 0.24);
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* --- Type --- */
+  --font-ui: 'Space Grotesk', Arial, sans-serif;
+  --font-read: 'Spectral', Georgia, serif;
+
+  /* --- Ergonomics --- */
+  --tap: 44px;              /* minimum tap target                        */
+  --nav-h: 64px;            /* bottom nav height                        */
+  --header-h: 56px;
+
+  /* --- Motion --- */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
