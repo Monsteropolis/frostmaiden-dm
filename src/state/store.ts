@@ -9,6 +9,7 @@
 import { signal } from '@preact/signals';
 import { AppState, STORAGE_KEY, defaultState } from './schema';
 import { migrate } from './migrations';
+import { MODULE_QUESTS } from '../data';
 
 function load(): AppState {
   try {
@@ -25,7 +26,29 @@ function load(): AppState {
   }
 }
 
-export const state = signal<AppState>(load());
+function seedQuests(s: AppState): AppState {
+  if (s.questsSeeded) return s;
+  const existing = new Set(s.quests.map((q) => q.name));
+  for (const q of MODULE_QUESTS) {
+    if (existing.has(q.name)) continue;
+    s.quests.push({
+      id: `q${s.seq++}`,
+      name: q.name,
+      status: 'dormant',
+      town: String(q.town ?? ''),
+      chapter: typeof q.chapter === 'number' ? q.chapter : null,
+      mainHook: !!q.mainHook,
+      trigger: String(q.trigger ?? ''),
+      development: String(q.development ?? ''),
+      notes: String(q.notes ?? ''),
+      custom: false,
+    });
+  }
+  s.questsSeeded = true;
+  return s;
+}
+
+export const state = signal<AppState>(seedQuests(load()));
 
 let saveTimer: number | undefined;
 

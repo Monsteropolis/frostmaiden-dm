@@ -4,6 +4,7 @@ import { Combatant, PresetCombatant, Difficulty, EncounterPreset } from '../stat
 import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
 import { d, rollCount, rollD20, rollDamage, showRoll } from '../lib/dice';
 import { CREATURES, ENCOUNTERS, ENC_TABLES, SeedCreature } from '../data';
+import { ApiMonsterPanel } from '../lib/api';
 import { HpBar, ConditionGrid } from './party';
 
 // ---------------------------------------------------------------- helpers
@@ -36,7 +37,7 @@ function resolvePreset(list: PresetCombatant[]): Combatant[] {
         name: n > 1 ? `${name} ${i + 1}` : name,
         emoji, hp, maxHp: hp, ac,
         init: null, initMod, conditions: [],
-        srcType: ref.srcType === 'monster' ? 'monster' : 'custom',
+        srcType: ref.srcType === 'monster' ? 'monster' : ref.srcType === 'api' ? 'api' : 'custom',
         srcId: ref.srcId,
       });
     }
@@ -118,14 +119,14 @@ function MonsterPanel({ srcId, name }: { srcId?: string; name: string }) {
 function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div class={`card unit combat-row ${active ? 'turn' : ''} ${c.hp <= 0 ? 'dying' : ''}`}>
-      <div class="unit-top" onClick={() => setOpen(!open)}>
-        <NumInput w="52px" value={c.init ?? 0}
+    <div class={`card unit combat-row ${active ? 'turn' : ''} ${c.hp <= 0 ? 'dying' : ''}`}
+         id={`cb-${c.id}`}>
+      <div class="cr-grid" onClick={() => setOpen(!open)}>
+        <NumInput w="44px" value={c.init ?? 0}
           onInput={(n) => patch((s) => { const x = s.combat.combatants.find((y) => y.id === c.id); if (x) x.init = n; })} />
-        <span class="entity-emoji">{c.emoji}</span>
-        <div class="unit-id">
-          <div class="unit-name">{c.name}</div>
-          <div class="unit-meta">AC {c.ac}{c.conditions.length ? <> <span class="sep">·</span> {c.conditions.join(', ')}</> : null}</div>
+        <div class="cr-id">
+          <div class="cr-name">{c.emoji} {c.name}</div>
+          <div class="unit-meta">AC {c.ac}{c.conditions.length ? ` · ${c.conditions.join(', ')}` : ''}</div>
         </div>
         <div class="hp-ctl" onClick={(e) => e.stopPropagation()}>
           <button class="hp-btn" onClick={() => applyHp(c.id, -1)} aria-label="Damage 1">−</button>
@@ -147,6 +148,7 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
             x.conditions = x.conditions.includes(cond) ? x.conditions.filter((z) => z !== cond) : [...x.conditions, cond];
           })} />
           {c.srcType === 'monster' && <MonsterPanel srcId={c.srcId} name={c.name} />}
+          {c.srcType === 'api' && c.srcId && <ApiMonsterPanel index={c.srcId} name={c.name} />}
           <div class="row-actions">
             <ConfirmBtn label="Remove" confirmLabel="Remove?" class="ghost danger"
               onConfirm={() => patch((s) => {
@@ -258,12 +260,21 @@ function Tracker() {
     }
   });
 
-  const nextTurn = () => patch((s) => {
-    const n = s.combat.combatants.length; if (!n) return;
-    if (!s.combat.active) { s.combat.active = true; s.combat.round = 1; s.combat.turn = 0; return; }
-    s.combat.turn++;
-    if (s.combat.turn >= n) { s.combat.turn = 0; s.combat.round++; }
-  });
+  const nextTurn = () => {
+    patch((s) => {
+      const n = s.combat.combatants.length; if (!n) return;
+      if (!s.combat.active) { s.combat.active = true; s.combat.round = 1; s.combat.turn = 0; return; }
+      s.combat.turn++;
+      if (s.combat.turn >= n) { s.combat.turn = 0; s.combat.round++; }
+    });
+    // keep the active combatant in view
+    requestAnimationFrame(() => {
+      const cbState = state.value.combat;
+      const s2 = sortCombatants(cbState.combatants);
+      const id = s2[cbState.turn % Math.max(1, s2.length)]?.id;
+      if (id) document.getElementById(`cb-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
 
   return (
     <>

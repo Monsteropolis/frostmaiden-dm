@@ -7,6 +7,7 @@ import { WorldScreen } from './screens/world';
 import { PartyScreen } from './screens/party';
 import { CombatScreen } from './screens/combat';
 import { RollToast } from './components/ui';
+import { NpcPopup } from './screens/npcs';
 
 const tab = signal<TabId>('world');
 
@@ -28,6 +29,7 @@ export function App() {
       <main class="main">
         <Screen />
       </main>
+      <NpcPopup />
       <RollToast />
       <BottomNav tab={tab} />
     </>

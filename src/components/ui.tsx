@@ -2,6 +2,7 @@
 // inline confirms only, per the table-safety requirement.
 
 import { ComponentChildren } from 'preact';
+import { createPortal } from 'preact/compat';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { lastRoll } from '../lib/dice';
 
@@ -11,7 +12,7 @@ export function Sheet({ open, title, onClose, children }: {
   open: boolean; title: string; onClose: () => void; children: ComponentChildren;
 }) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div class="sheet-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="sheet" role="dialog" aria-label={title}>
         <div class="sheet-head">
@@ -21,7 +22,8 @@ export function Sheet({ open, title, onClose, children }: {
         </div>
         <div class="sheet-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -51,13 +53,14 @@ export function ConfirmBtn({ label, confirmLabel = 'Confirm?', onConfirm, class:
 export function RollToast() {
   const r = lastRoll.value;
   if (!r) return null;
-  return (
+  return createPortal(
     <div class={`roll-toast${r.crit === 'hit' ? ' crit' : ''}${r.crit === 'miss' ? ' fumble' : ''}`}
          onClick={() => (lastRoll.value = null)} role="status">
       <span class="rt-title">{r.title}</span>
       <span class="rt-total">{r.total}</span>
       <span class="rt-detail">{r.detail}</span>
-    </div>
+    </div>,
+    document.body
   );
 }
 

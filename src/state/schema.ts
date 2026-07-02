@@ -152,6 +152,9 @@ export interface CustomNpc {
   fears: string;
   appearance: string;
   notes: string;
+  ac?: number;
+  hp?: number;
+  attacks?: AllyAttack[];
 }
 
 export type ArcStatus = 'dormant' | 'active' | 'escalating' | 'resolved';
@@ -180,6 +183,58 @@ export function defaultTownStatus(): TownStatus {
   return { visited: false, standing: 'unknown', activeQuest: '', sidekickRecruited: false, notes: '' };
 }
 
+// --- Phase 4: sessions, quests, travel ----------------------------------------
+
+export type QuestStatus = 'dormant' | 'active' | 'escalating' | 'resolved';
+
+export interface Quest {
+  id: string;
+  name: string;
+  status: QuestStatus;
+  town: string;
+  chapter: number | null;
+  mainHook: boolean;
+  trigger: string;
+  development: string;
+  notes: string;
+  custom: boolean;
+}
+
+export type SessionStatus = 'idea' | 'planned' | 'complete';
+
+export interface SessionEntry {
+  id: string;
+  title: string;
+  status: SessionStatus;
+  date: string;
+  hook: string;
+  plannedEncounters: string;
+  npcIds: string[];
+  secrets: string;
+  debrief: string;
+}
+
+export interface Milestone { label: string; done: boolean; }
+
+export interface Chapter {
+  id: number;
+  label: string;
+  levels: string;
+  milestones: Milestone[];
+}
+
+export type Pace = 'cautious' | 'normal' | 'dogsled';
+
+export interface Journey {
+  origin: string;
+  dest: string;
+  pace: Pace;
+  day: number;        // current day of journey (1-based)
+  totalDays: number;
+}
+
+export interface TravelLogEntry { day: number; text: string; }
+
 // --- Root state --------------------------------------------------------------
 
 export interface AppState {
@@ -195,12 +250,14 @@ export interface AppState {
   // Collections land in later phases; shaped now so migrations stay simple.
   party: PC[];
   sidekicks: Ally[];
-  sessions: unknown[];
-  quests: unknown[];
+  sessions: SessionEntry[];
+  quests: Quest[];
+  questsSeeded: boolean;
+  chapters: Chapter[];
   arcs: Arc[];
   encounterPresets: EncounterPreset[];
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
-  travel: { activeJourney: unknown | null; log: unknown[] };
+  travel: { activeJourney: Journey | null; log: TravelLogEntry[] };
   towns: Record<string, TownStatus>;
 
   // NPC system — first-class from the start
@@ -219,6 +276,8 @@ export function defaultState(): AppState {
     sidekicks: [],
     sessions: [],
     quests: [],
+    questsSeeded: false,
+    chapters: defaultChapters(),
     arcs: [],
     encounterPresets: [],
     combat: { active: false, round: 0, turn: 0, combatants: [] },
@@ -229,3 +288,57 @@ export function defaultState(): AppState {
     seq: 1,
   };
 }
+
+
+// Module chapters with DM-facing milestones (editable checkmarks).
+export function defaultChapters(): Chapter[] {
+  const c = (id: number, label: string, levels: string, ms: string[]): Chapter =>
+    ({ id, label, levels, milestones: ms.map((label) => ({ label, done: false })) });
+  return [
+    c(1, 'Ten-Towns', '1–4', [
+      'Party arrives in Icewind Dale',
+      'Cold-Hearted Killer: Sephek confronted',
+      'Nature Spirits: the awakened beast dealt with',
+      'Three or more town quests resolved',
+    ]),
+    c(2, 'Icewind Dale', '4–6', [
+      'A Ten-Towns crisis draws the party into the wilds',
+      'Duergar plot uncovered',
+      'Key wilderness site explored (Cairn / Lonelywood / Sea of Moving Ice…)',
+    ]),
+    c(3, 'Sunblight', '5–6', [
+      'Party learns the fortress location',
+      'Xardorok Sunblight confronted',
+      'The chardalyn dragon is unleashed',
+    ]),
+    c(4, 'Destruction\u2019s Light', '6–7', [
+      'The dragon\u2019s rampage across Ten-Towns',
+      'The dragon is destroyed',
+      'The Dale reckons with the aftermath',
+    ]),
+    c(5, 'Auril\u2019s Abode', '7–8', [
+      'The party reaches the Island of Solstice',
+      'Grimskalle\u2019s tests passed',
+      'Auril confronted (or evaded)',
+    ]),
+    c(6, 'Caves of Hunger', '8–9', [
+      'Descent beneath the glacier',
+      'The caves crossed alive',
+    ]),
+    c(7, 'Doom of Ythryn', '9–12', [
+      'The Necropolis entered',
+      'The Rite of the Arcane Octad unraveled',
+      'The mythallar\u2019s fate decided — the endless winter ends?',
+    ]),
+  ];
+}
+
+// Weighted random pool for the weather roll.
+export const WEATHER_POOL: WeatherId[] = [
+  'clear', 'clear',
+  'overcast', 'overcast', 'overcast',
+  'light_snow', 'light_snow', 'light_snow', 'light_snow',
+  'heavy_snow', 'heavy_snow', 'heavy_snow',
+  'blizzard', 'blizzard',
+  'aurils_wrath',
+];

@@ -2,10 +2,16 @@
 // NPCs + custom ones; standing/last-seen editable in three taps.
 
 import { useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { state, patch } from '../state/store';
-import { CustomNpc, Standing } from '../state/schema';
+import { CustomNpc, Standing, AllyAttack } from '../state/schema';
 import { NPCS, SeedNpc } from '../data';
-import { Sheet, ConfirmBtn, Field } from '../components/ui';
+import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
+import { rollD20, rollDamage, showRoll } from '../lib/dice';
+
+/** Global NPC popup — call openNpc(id) from any screen. */
+export const npcPopupId = signal<string | null>(null);
+export const openNpc = (id: string) => { npcPopupId.value = id; };
 
 export const STANDINGS: Standing[] = ['neutral', 'friendly', 'allied', 'hostile', 'dead'];
 export const STANDING_LABEL: Record<Standing, string> = {
@@ -106,6 +112,24 @@ function NpcDetail({ npc, open, onClose, onEdit }: { npc: NpcView; open: boolean
           {s.hp != null && <span>{s.hp} hp</span>}
         </div>
       )}
+      {c && (c.ac || c.hp || c.race) && (
+        <div class="npc-statline">
+          {c.race && <span>{c.race}</span>}
+          {c.ac ? <span>AC {c.ac}</span> : null}
+          {c.hp ? <span>{c.hp} hp</span> : null}
+        </div>
+      )}
+      {(c?.attacks?.length ?? 0) > 0 && (
+        <div class="attack-list">
+          {c!.attacks!.map((a) => (
+            <div class="attack-row">
+              <span class="attack-name">{a.name}</span>
+              <button class="btn mini" onClick={() => rollD20(`${a.name} — attack`, a.bonus)}>d20{a.bonus >= 0 ? '+' : ''}{a.bonus}</button>
+              <button class="btn mini" onClick={() => { const r = rollDamage(a.damage); showRoll({ title: `${a.name} — damage`, total: r.total, detail: r.detail }); }}>{a.damage}</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <ReadBlock label="Personality" text={s?.personality ?? c?.personality} />
       <ReadBlock label="Voice" text={s?.voice ?? c?.voice} />
@@ -184,6 +208,24 @@ export function NpcForm({ open, onClose, existing }: { open: boolean; onClose: (
         <Field label="Fears"><input class="input" value={f.fears} onInput={set('fears')} /></Field>
       </div>
       <Field label="Appearance"><input class="input" value={f.appearance} onInput={set('appearance')} /></Field>
+      <div class="field-row">
+        <Field label="AC (optional)"><NumInput value={f.ac ?? 0} onInput={(n) => setF((prev) => ({ ...prev, ac: n || undefined }))} /></Field>
+        <Field label="HP (optional)"><NumInput value={f.hp ?? 0} onInput={(n) => setF((prev) => ({ ...prev, hp: n || undefined }))} /></Field>
+      </div>
+      <div class="field-label">Attacks</div>
+      {(f.attacks ?? []).map((a, i) => (
+        <div class="attack-edit">
+          <input class="input" placeholder="Name" value={a.name}
+            onInput={(e) => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, attacks: prev.attacks!.map((x, j) => j === i ? { ...x, name: v } : x) })); }} />
+          <NumInput w="64px" value={a.bonus}
+            onInput={(n) => setF((prev) => ({ ...prev, attacks: prev.attacks!.map((x, j) => j === i ? { ...x, bonus: n } : x) }))} />
+          <input class="input" style={{ width: '86px' }} placeholder="1d6+2" value={a.damage}
+            onInput={(e) => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, attacks: prev.attacks!.map((x, j) => j === i ? { ...x, damage: v } : x) })); }} />
+          <button class="btn mini ghost danger" aria-label="Remove attack"
+            onClick={() => setF((prev) => ({ ...prev, attacks: prev.attacks!.filter((_, j) => j !== i) }))}>✕</button>
+        </div>
+      ))}
+      <button class="btn ghost" onClick={() => setF((prev) => ({ ...prev, attacks: [...(prev.attacks ?? []), { name: '', bonus: 4, damage: '1d6+2' } as AllyAttack] }))}>+ Attack</button>
       <Field label="Notes"><textarea class="input" rows={2} value={f.notes} onInput={set('notes')} /></Field>
       <button class="btn primary wide" disabled={!f.name.trim()} onClick={() => {
         if (existing) {
@@ -202,7 +244,6 @@ export function NpcForm({ open, onClose, existing }: { open: boolean; onClose: (
 export function NpcRegistry() {
   const [q, setQ] = useState('');
   const [town, setTown] = useState('all');
-  const [openId, setOpenId] = useState<string | null>(null);
   const [quickId, setQuickId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CustomNpc | null>(null);
@@ -225,7 +266,7 @@ export function NpcRegistry() {
       {shown.map((n) => {
         const ov = state.value.npcOverrides[n.id];
         return (
-          <div class="entity-row npc" onClick={() => setOpenId(n.id)}>
+          <div class="entity-row npc" onClick={() => openNpc(n.id)}>
             <span class="entity-emoji">{n.emoji}</span>
             <div class="unit-id">
               <div class="entity-name">{n.name}{n.custom && <span class="yours-mark"> ✦</span>}</div>
@@ -246,15 +287,26 @@ export function NpcRegistry() {
 
       {shown.map((n) => (
         <>
-          {openId === n.id && (
-            <NpcDetail npc={n} open onClose={() => setOpenId(null)}
-              onEdit={n.custom ? () => { setOpenId(null); setEditing(n.data!); } : undefined} />
-          )}
           {quickId === n.id && <QuickUpdate npc={n} open onClose={() => setQuickId(null)} />}
         </>
       ))}
       {creating && <NpcForm open onClose={() => setCreating(false)} />}
       {editing && <NpcForm open existing={editing} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+
+/** Mounted once in App — the persistent NPC popup any screen can open. */
+export function NpcPopup() {
+  const [editing, setEditing] = useState<CustomNpc | null>(null);
+  const id = npcPopupId.value;
+  if (editing) return <NpcForm open existing={editing} onClose={() => setEditing(null)} />;
+  if (!id) return null;
+  const npc = allNpcs().find((n) => n.id === id);
+  if (!npc) return null;
+  return (
+    <NpcDetail npc={npc} open onClose={() => (npcPopupId.value = null)}
+      onEdit={npc.custom ? () => { npcPopupId.value = null; setEditing(npc.data!); } : undefined} />
   );
 }

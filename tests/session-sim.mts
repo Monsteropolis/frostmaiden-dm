@@ -86,7 +86,15 @@ click(byText('.sheet .cond-chip', 'escalating'), 'status escalating'); await sle
 const areas = $$('.sheet textarea');
 type(areas[0], 'Party found the frozen merchant in Easthaven', 'last dev'); await sleep(20);
 type(areas[1], 'Sephek kills again at the next full moon', 'next trigger'); await sleep(20);
-click(byText('.sheet .cond-chip', 'Sephek Kaltro'), 'link Sephek'); await sleep(20);
+{
+  const sel = document.querySelector('.sheet select.input') as HTMLSelectElement | null;
+  if (sel) {
+    const opt = [...sel.options].find((o) => o.textContent?.includes('Sephek'));
+    if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    check('link Sephek via dropdown', !!opt);
+  } else check('link Sephek via dropdown', false, 'select not found');
+}
+await sleep(20);
 click(byText('.sheet button', 'Create arc'), 'create arc'); await sleep(20);
 check('arc card renders', bodyHas("Sephek's cold trail"));
 check('escalation trigger shown', bodyHas('full moon'));
@@ -119,7 +127,7 @@ const foes = $$('.combat-row').length;
 check('bandits resolved into rows', foes >= 4, `${foes} rows`);
 
 // party joins
-click(byText('button', '+ Add combatants'), 'add combatants'); await sleep(20);
+click(byText('button', '+ Add'), 'add combatants'); await sleep(20);
 click(byText('.sheet button', 'All (3)'), 'add whole party'); await sleep(20);
 click(byText('.sheet button', 'Done'), 'close add sheet'); await sleep(20);
 check('7 combatants total', $$('.combat-row').length === foes + 3, `${$$('.combat-row').length}`);
@@ -134,7 +142,7 @@ check('active turn marked', $$('.unit.turn').length === 1);
 click(byText('button', 'Next turn'), 'next turn'); await sleep(20);
 
 // Wick takes a crossbow bolt: find his row, hit −5 twice via expand
-click(byText('.combat-row .unit-name', 'Wick'), 'expand Wick'); await sleep(20);
+click(byText('.combat-row .cr-name', 'Wick'), 'expand Wick'); await sleep(20);
 click(byText('.combat-row .btn', '−5'), 'damage 5'); await sleep(20);
 click(byText('.combat-row .btn', '−5'), 'damage 5 again'); await sleep(20);
 check('Wick HP 21/31 in tracker', bodyHas('21 / 31'));
@@ -145,11 +153,11 @@ check('SYNC: party sheet shows 21/31', bodyHas('21 / 31'));
 click(byText('.nav-btn', 'Combat'), 'back to Combat'); await sleep(20);
 
 // expand a bandit → monster panel? bandits are custom/api. Use crag cat instead:
-click(byText('button', '+ Add combatants'), 'add combatants again'); await sleep(20);
+click(byText('button', '+ Add'), 'add combatants again'); await sleep(20);
 type($('.sheet .input'), 'crag', 'search creatures'); await sleep(20);
 click(byText('.creature-add', 'Crag Cat'), 'add crag cat'); await sleep(20);
 click(byText('.sheet button', 'Done'), 'close'); await sleep(20);
-click(byText('.combat-row .unit-name', 'Crag Cat'), 'expand crag cat'); await sleep(20);
+click(byText('.combat-row .cr-name', 'Crag Cat'), 'expand crag cat'); await sleep(20);
 check('stat panel: traits', bodyHas('Nondetection'));
 const atkBtn = byText('.stat-action .btn', 'd20+5');
 check('rollable action parsed', !!atkBtn);
@@ -160,7 +168,7 @@ click(dmgBtn, 'roll damage'); await sleep(20);
 check('damage toast', !!$('.roll-toast'));
 
 // kill a bandit: expand first bandit, set hp 0
-const banditName = byText('.combat-row .unit-name', 'Bandit 1');
+const banditName = byText('.combat-row .cr-name', 'Bandit 1');
 click(banditName, 'expand Bandit 1'); await sleep(20);
 const expandedNum = $$('.unit-detail .input.num')[0];
 type(expandedNum, '0', 'set HP 0'); await sleep(20);
@@ -198,6 +206,99 @@ check('  … arc saved', saved?.arcs?.length === 1);
 check('  … NPC standing saved', saved?.npcOverrides?.sk2?.standing === 'hostile');
 check('  … town saved', saved?.towns?.['Bryn Shander']?.visited === true);
 check('  … weather day 2', saved?.weather?.day === 2 && saved?.weather?.current === 'blizzard');
+
+console.log('\n═══ SCENE 7: The fixes — sheets, popups, condensed combat ═══');
+// Sheet portals to <body>, not trapped inside .main
+click(byText('.nav-btn', 'Party'), 'Party tab'); await sleep(20);
+click(byText('button', '+ Add character'), 'open add sheet'); await sleep(20);
+const scrim = document.querySelector('.sheet-scrim');
+check('sheet portals to <body> (above bottom nav)', scrim?.parentElement === document.body);
+click($('.sheet-close'), 'close sheet'); await sleep(20);
+
+// Global NPC popup from an arc chip
+click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
+click(byText('.sub-tab', 'Arcs'), 'Arcs sub-tab'); await sleep(20);
+click(byText('.arc-card .npc-chip', 'Sephek'), 'arc chip → NPC popup'); await sleep(30);
+check('persistent NPC popup opens from arc chip', bodyHas('Secrets (DM only)'));
+click($('.sheet-close'), 'close popup'); await sleep(20);
+
+// Arc form: dropdown linking
+click(byText('button', '+ New arc'), 'new arc'); await sleep(20);
+const linkSel = document.querySelector('.sheet select.input') as HTMLSelectElement;
+check('NPC link dropdown present', !!linkSel);
+if (linkSel) {
+  const opt = [...linkSel.options].find((o) => o.textContent?.includes('Duvessa'));
+  linkSel.value = opt!.value;
+  linkSel.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(20);
+}
+check('linked chip appears with unlink ✕', !!document.querySelector('.sheet .npc-chip.linked .npc-chip-x'));
+click($('.sheet-close'), 'discard arc'); await sleep(20);
+
+console.log('\n═══ SCENE 8: Weather controls ═══');
+click(byText('.sub-tab', 'Weather'), 'Weather sub-tab'); await sleep(20);
+check('roll weather button', !!byText('button', 'Roll weather'));
+const dayInput = document.querySelector('.day-edit .input.num') as HTMLInputElement;
+dayInput.value = '12';
+dayInput.dispatchEvent(new Event('input', { bubbles: true }));
+await sleep(30);
+check('day editable — strip shows Day 12', bodyHas('Day 12'));
+
+console.log('\n═══ SCENE 9: Quests ═══');
+click(byText('.sub-tab', 'Quests'), 'Quests sub-tab'); await sleep(20);
+check('module quests seeded', bodyHas('Foaming Mugs'));
+const questBadge = document.querySelector('.card.quest .standing') as HTMLElement;
+const before = questBadge.textContent;
+questBadge.click(); await sleep(20);
+check('quest status advances on tap', document.querySelector('.card.quest .standing')?.textContent !== before);
+click(byText('button', '+ Custom quest'), 'custom quest form'); await sleep(20);
+type($$('.card .input')[0], 'Find the lost sled dogs', 'quest name'); await sleep(20);
+click(byText('button', 'Add quest'), 'add quest'); await sleep(20);
+check('custom quest appears', bodyHas('Find the lost sled dogs'));
+
+console.log('\n═══ SCENE 10: Travel — Bryn Shander to Targos ═══');
+click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
+check('journey planner shows estimate', bodyHas('Estimated 1 day'));
+click(byText('button', 'Set out ✦'), 'set out'); await sleep(20);
+check('journey active', bodyHas('Day 1 of 1'));
+click(byText('button', 'Arrive at Targos'), 'arrive'); await sleep(30);
+check('arrival logged', bodyHas('Arrived at Targos'));
+check('weather day advanced with travel', bodyHas('Day 13'));
+click(byText('.sub-tab', 'Towns'), 'Towns'); await sleep(20);
+check('Targos marked visited (2/10)', bodyHas('Towns (2/10)'));
+
+console.log('\n═══ SCENE 11: Session prep & debrief ═══');
+click(byText('.nav-btn', 'Session'), 'Session tab'); await sleep(20);
+click(byText('button', '+ New session'), 'new session'); await sleep(20);
+type($$('.sheet .input')[0], 'S1 — Cold welcome in Targos', 'title'); await sleep(20);
+click(byText('.sheet .cond-chip', 'planned'), 'status planned'); await sleep(20);
+type($$('.sheet textarea')[0], 'The party arrives as the lake men pull a frozen body ashore', 'hook'); await sleep(20);
+const sessSel = document.querySelector('.sheet select.input') as HTMLSelectElement;
+if (sessSel) {
+  const opt = [...sessSel.options].find((o) => o.textContent?.includes('Markham'));
+  sessSel.value = opt!.value;
+  sessSel.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(20);
+}
+click(byText('.sheet button', 'Create session'), 'create session'); await sleep(30);
+check('session card renders', bodyHas('Cold welcome in Targos'));
+check('planned badge', !!document.querySelector('.standing.s-planned'));
+check('session NPC chip', !!byText('.session-card .npc-chip', 'Markham'));
+
+click(byText('.sub-tab', 'Progress'), 'Progress'); await sleep(20);
+check('7 chapters render', $$('.card.chapter').length === 7);
+click(byText('.milestone', 'Party arrives'), 'toggle milestone'); await sleep(20);
+check('milestone marked', !!document.querySelector('.milestone.done'));
+check('chapter counter 1/4', bodyHas('1/4 milestones'));
+
+console.log('\n═══ SCENE 12: Final persistence audit ═══');
+await sleep(600);
+const saved2 = JSON.parse(localStorage.getItem('fmdm_state_v1') ?? 'null');
+check('quests persisted (39 seed + 1 custom)', saved2?.quests?.length === 40, String(saved2?.quests?.length));
+check('session persisted', saved2?.sessions?.length === 1);
+check('chapter milestone persisted', saved2?.chapters?.[0]?.milestones?.[0]?.done === true);
+check('travel log persisted', (saved2?.travel?.log?.length ?? 0) >= 2);
+check('weather day 13 persisted', saved2?.weather?.day === 13);
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);
