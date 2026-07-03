@@ -214,7 +214,7 @@ export interface SessionEntry {
   debrief: string;
 }
 
-export interface Milestone { label: string; done: boolean; }
+export interface Milestone { label: string; done: boolean; notes?: string; }
 
 export interface Chapter {
   id: number;

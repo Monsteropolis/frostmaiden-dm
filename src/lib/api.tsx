@@ -113,3 +113,99 @@ export function ApiMonsterPanel({ index, name }: { index: string; name: string }
     </div>
   );
 }
+
+// ---------------------------------------------------------------- lists & details
+
+export interface ApiListItem { index: string; name: string; level?: number; }
+
+const listUrls: Record<string, string> = {
+  monsters: 'https://www.dnd5eapi.co/api/2014/monsters',
+  spells: 'https://www.dnd5eapi.co/api/2014/spells',
+  'magic-items': 'https://www.dnd5eapi.co/api/2014/magic-items',
+  equipment: 'https://www.dnd5eapi.co/api/2014/equipment',
+};
+
+const listMem = new Map<string, ApiListItem[]>();
+
+export async function getApiList(kind: keyof typeof listUrls): Promise<ApiListItem[] | null> {
+  if (listMem.has(kind)) return listMem.get(kind)!;
+  try {
+    const cached = await get(`list:${kind}`);
+    if (cached) { listMem.set(kind, cached); return cached; }
+  } catch { /* idb unavailable */ }
+  try {
+    const res = await fetch(listUrls[kind]);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const list: ApiListItem[] = (data.results ?? []).map((r: Record<string, unknown>) =>
+      ({ index: String(r.index), name: String(r.name), level: typeof r.level === 'number' ? r.level : undefined }));
+    listMem.set(kind, list);
+    try { await set(`list:${kind}`, list); } catch { /* ignore */ }
+    return list;
+  } catch { return null; }
+}
+
+export interface ApiDetail {
+  index: string;
+  name: string;
+  desc?: string[] | string;
+  higher_level?: string[];
+  range?: string;
+  components?: string[];
+  material?: string;
+  duration?: string;
+  casting_time?: string;
+  level?: number;
+  school?: { name: string };
+  classes?: { name: string }[];
+  rarity?: { name: string };
+  equipment_category?: { name: string };
+  cost?: { quantity: number; unit: string };
+  weight?: number;
+  damage?: { damage_dice?: string; damage_type?: { name: string } };
+  properties?: { name: string }[];
+}
+
+const detailMem = new Map<string, ApiDetail>();
+
+export async function getApiDetail(kind: keyof typeof listUrls, index: string): Promise<ApiDetail | null> {
+  const key = `${kind}:${index}`;
+  if (detailMem.has(key)) return detailMem.get(key)!;
+  try {
+    const cached = await get(`d:${key}`);
+    if (cached) { detailMem.set(key, cached); return cached; }
+  } catch { /* idb unavailable */ }
+  try {
+    const res = await fetch(`${listUrls[kind]}/${index}`);
+    if (!res.ok) return null;
+    const m = (await res.json()) as ApiDetail;
+    detailMem.set(key, m);
+    try { await set(`d:${key}`, m); } catch { /* ignore */ }
+    return m;
+  } catch { return null; }
+}
+
+export function DetailBody({ d }: { d: ApiDetail }) {
+  const descs = Array.isArray(d.desc) ? d.desc : d.desc ? [d.desc] : [];
+  return (
+    <>
+      <div class="npc-statline">
+        {d.level !== undefined && <span>{d.level === 0 ? 'Cantrip' : `Level ${d.level}`}</span>}
+        {d.school && <span>{d.school.name}</span>}
+        {d.casting_time && <span>{d.casting_time}</span>}
+        {d.range && <span>{d.range}</span>}
+        {d.duration && <span>{d.duration}</span>}
+        {d.components && <span>{d.components.join(' ')}</span>}
+        {d.rarity && <span>{d.rarity.name}</span>}
+        {d.equipment_category && <span>{d.equipment_category.name}</span>}
+        {d.cost && <span>{d.cost.quantity} {d.cost.unit}</span>}
+        {d.weight !== undefined && <span>{d.weight} lb</span>}
+        {d.damage?.damage_dice && <span>{d.damage.damage_dice} {d.damage.damage_type?.name ?? ''}</span>}
+      </div>
+      {d.material && <p class="stat-fine">Material: {d.material}</p>}
+      {descs.map((p) => <p class="read" style={{ margin: '8px 0' }}>{p}</p>)}
+      {(d.higher_level ?? []).map((p) => <p class="read" style={{ margin: '8px 0' }}><strong>At higher levels.</strong> {p}</p>)}
+      {d.classes && d.classes.length > 0 && <p class="stat-fine">Classes: {d.classes.map((c) => c.name).join(', ')}</p>}
+    </>
+  );
+}

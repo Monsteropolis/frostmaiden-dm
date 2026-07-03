@@ -91,4 +91,4 @@ The signature element is **the thread**: a single garnet hairline beneath the he
 2. ✅ **Table core** — Party (PCs + allies), Initiative/Combat tracker, Encounters
 3. **NPCs, Towns, Arcs** — relationship system, quick updates, thread linking
 4. **Campaign layer** — Sessions, Quests, Travel, Weather system
-5. **Compendium + hardening** — 5e API with offline caching, polish
+5. ✅ **Compendium + hardening** — browsable bestiary/spells/items with offline caching, editable encounters with location filters, milestone editor, ambient snowfall + frost VFX

@@ -965,3 +965,117 @@ details.loc summary::marker { color: var(--frost-deep); }
   background: linear-gradient(90deg, var(--frost-deep), var(--frost));
   transition: width 0.3s var(--ease);
 }
+
+/* ============================================================
+   PHASE 5 — VFX: falling snow + glistening frost
+   ============================================================ */
+
+/* Ambient snowfall — gentle, GPU-cheap, honors reduced motion */
+.starfield .flake {
+  position: absolute;
+  top: -3%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff, var(--frost) 60%, transparent 75%);
+  animation: snowfall linear infinite;
+  will-change: transform;
+}
+@keyframes snowfall {
+  0% { transform: translate3d(0, -4dvh, 0); }
+  100% { transform: translate3d(var(--drift, 0px), 106dvh, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .starfield .flake { display: none; }
+}
+
+/* Glistening frost — a slow ice glint that sweeps across selected things */
+.cond-chip.on,
+.btn.primary,
+.unit.turn,
+.standing-picker .pick.current,
+.round-chip {
+  position: relative;
+  overflow: hidden;
+}
+.cond-chip.on::after,
+.btn.primary::after,
+.unit.turn::after,
+.standing-picker .pick.current::after,
+.round-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgba(205, 226, 236, 0.16) 45%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(205, 226, 236, 0.16) 55%,
+    transparent 70%);
+  background-size: 260% 100%;
+  animation: frost-glint 5.5s ease-in-out infinite;
+}
+.unit.turn::after { animation-duration: 4s; }
+@keyframes frost-glint {
+  0%, 55% { background-position: 130% 0; }
+  85%, 100% { background-position: -130% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cond-chip.on::after, .btn.primary::after, .unit.turn::after,
+  .standing-picker .pick.current::after, .round-chip::after { animation: none; opacity: 0; }
+}
+
+/* Frost-tinted category filter chips (encounter locations) */
+.cond-chip.frosty.on { border-color: var(--frost); color: var(--frost); box-shadow: 0 0 8px rgba(155,215,232,0.18); }
+
+/* Sticky combat command bar */
+.combat-toolbar.sticky {
+  position: sticky;
+  top: calc(var(--header-h) + 37px); /* below header + weather strip */
+  z-index: 90;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  margin: 0 -16px 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.combat-toolbar.sticky::-webkit-scrollbar { display: none; }
+.combat-toolbar.sticky .btn { flex-shrink: 0; }
+.turn-now {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  flex-shrink: 1;
+}
+.next-mini { border-color: var(--thread); color: var(--ink); background: var(--thread-deep); }
+.round-chip.idle { background: var(--panel); border-color: var(--border-strong); animation: none; }
+
+/* Milestone rows with separate toggle + label buttons */
+.milestone-row { display: flex; align-items: center; gap: 2px; }
+.ms-toggle {
+  width: 40px; height: 40px;
+  flex-shrink: 0;
+  background: none; border: none;
+  cursor: pointer;
+  color: var(--silver-dim);
+  -webkit-tap-highlight-color: transparent;
+}
+.milestone-row .milestone { flex: 1; min-height: 40px; padding: 7px 2px; }
+.ms-has-notes { color: var(--frost-deep); font-size: 11px; }
+.ms-quest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ms-quest:last-child { border-bottom: 0; }
+.ms-quest-name { font-family: var(--font-read); font-size: 13.5px; color: var(--ink-dim); }
+.ms-quest-name.resolved { text-decoration: line-through; color: var(--ink-faint); }

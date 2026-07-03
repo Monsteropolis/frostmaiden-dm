@@ -1,18 +1,12 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { state, patch } from '../state/store';
-import { SessionEntry, SessionStatus } from '../state/schema';
+import { SessionEntry, SessionStatus, Milestone, QuestStatus } from '../state/schema';
 import { Sheet, ConfirmBtn, Field } from '../components/ui';
-import { CREATURES } from '../data';
+import { CREATURES, EQUIPMENT, MAGIC_ITEMS, SeedCreature } from '../data';
 import { NpcRegistry, allNpcs, openNpc } from './npcs';
 import { NpcLinkPicker } from './world';
-
-function PhaseNote({ n, text }: { n: number; text: string }) {
-  return (
-    <p class="phase-note">
-      <span class="star-mark">✦</span> {text} — arrives in Phase {n}
-    </p>
-  );
-}
+import { MonsterPanel } from './combat';
+import { getApiList, getApiDetail, ApiListItem, ApiDetail, ApiMonsterPanel, DetailBody } from '../lib/api';
 
 // ---------------------------------------------------------------- sessions
 
@@ -107,13 +101,64 @@ function SessionsPanel() {
 
 // ---------------------------------------------------------------- progress
 
+function MilestoneSheet({ ci, mi, onClose }: { ci: number; mi: number; onClose: () => void }) {
+  const ch = state.value.chapters[ci];
+  const m: Milestone | undefined = ch?.milestones[mi];
+  if (!m) return null;
+  const relatedQuests = state.value.quests.filter((q) => q.chapter === ch.id);
+  const nextStatus: Record<QuestStatus, QuestStatus> = {
+    dormant: 'active', active: 'escalating', escalating: 'resolved', resolved: 'dormant',
+  };
+  const upd = (fn: (mm: Milestone) => void) =>
+    patch((d) => { const x = d.chapters[ci]?.milestones[mi]; if (x) fn(x); });
+
+  return (
+    <Sheet open title={`Ch${ch.id} · Milestone`} onClose={onClose}>
+      <Field label="Milestone">
+        <input class="input" value={m.label}
+          onChange={(e) => upd((x) => { x.label = (e.target as HTMLInputElement).value; })} />
+      </Field>
+      <Field label="Notes — what this means at your table">
+        <textarea class="input" rows={3} placeholder="Session refs, how it resolved, what changed…"
+          value={m.notes ?? ''}
+          onChange={(e) => upd((x) => { x.notes = (e.target as HTMLTextAreaElement).value; })} />
+      </Field>
+
+      {relatedQuests.length > 0 && (
+        <div class="npc-block">
+          <div class="field-label">Chapter {ch.id} quests — tap status to advance</div>
+          {relatedQuests.map((q) => (
+            <div class="ms-quest">
+              <span class={`ms-quest-name${q.status === 'resolved' ? ' resolved' : ''}`}>{q.name}</span>
+              <button class={`standing q-${q.status}`}
+                style={{ background: 'none', cursor: 'pointer', minHeight: '34px', flexShrink: 0 }}
+                onClick={() => patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.status = nextStatus[x.status]; })}
+              >{q.status}</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div class="row-actions" style={{ justifyContent: 'space-between', marginTop: '14px' }}>
+        <ConfirmBtn label="Delete milestone" confirmLabel="Delete?" class="mini ghost danger"
+          onConfirm={() => { patch((d) => { d.chapters[ci].milestones.splice(mi, 1); }); onClose(); }} />
+        <button class={`btn ${m.done ? '' : 'primary'}`}
+          onClick={() => { upd((x) => { x.done = !x.done; }); }}>
+          {m.done ? 'Reopen ○' : 'Complete ✦'}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 function ProgressPanel() {
   const chapters = state.value.chapters;
+  const [openMs, setOpenMs] = useState<{ ci: number; mi: number } | null>(null);
   return (
     <>
       {chapters.map((c, ci) => {
         const done = c.milestones.filter((m) => m.done).length;
-        const complete = done === c.milestones.length;
+        const complete = done === c.milestones.length && c.milestones.length > 0;
         return (
           <div class={`card chapter ${complete ? 'complete' : ''}`}>
             <div class="unit-top">
@@ -125,15 +170,26 @@ function ProgressPanel() {
             </div>
             <div class="milestones">
               {c.milestones.map((m, mi) => (
-                <button class={`milestone${m.done ? ' done' : ''}`}
-                  onClick={() => patch((d) => { d.chapters[ci].milestones[mi].done = !d.chapters[ci].milestones[mi].done; })}>
-                  <span class="ms-mark">{m.done ? '✦' : '○'}</span> {m.label}
-                </button>
+                <div class="milestone-row">
+                  <button class="ms-toggle" aria-label={m.done ? 'Reopen' : 'Complete'}
+                    onClick={() => patch((d) => { d.chapters[ci].milestones[mi].done = !d.chapters[ci].milestones[mi].done; })}>
+                    <span class="ms-mark">{m.done ? '✦' : '○'}</span>
+                  </button>
+                  <button class={`milestone${m.done ? ' done' : ''}`} onClick={() => setOpenMs({ ci, mi })}>
+                    {m.label}{m.notes ? <span class="ms-has-notes"> ✎</span> : null}
+                  </button>
+                </div>
               ))}
+              <button class="btn mini ghost" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                onClick={() => {
+                  patch((d) => { d.chapters[ci].milestones.push({ label: 'New milestone', done: false }); });
+                  setOpenMs({ ci, mi: c.milestones.length });
+                }}>+ Milestone</button>
             </div>
           </div>
         );
       })}
+      {openMs && <MilestoneSheet ci={openMs.ci} mi={openMs.mi} onClose={() => setOpenMs(null)} />}
     </>
   );
 }
@@ -161,29 +217,145 @@ export function SessionScreen() {
 
 // ---------------------------------------------------------------- Compendium
 
+function RimeCreatureCard({ c }: { c: SeedCreature }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="card unit">
+      <div class="unit-top" onClick={() => setOpen(!open)}>
+        <span class="entity-emoji">{String(c.emoji)}</span>
+        <div class="unit-id">
+          <div class="unit-name">{String(c.name)}</div>
+          <div class="unit-meta">CR {String(c.cr)} · AC {String(c.ac)} · {String(c.hp)} hp</div>
+        </div>
+      </div>
+      {open && (
+        <div class="unit-detail">
+          {String(c.lore || '') && <p class="read" style={{ marginBottom: '8px' }}>{String(c.lore)}</p>}
+          <MonsterPanel srcId={c.id} name={String(c.name)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApiBrowser({ kind, placeholder, levelFilter }: {
+  kind: 'monsters' | 'spells' | 'magic-items' | 'equipment';
+  placeholder: string;
+  levelFilter?: boolean;
+}) {
+  const [list, setList] = useState<ApiListItem[] | null | 'loading'>('loading');
+  const [q, setQ] = useState('');
+  const [lvl, setLvl] = useState<number | 'all'>('all');
+  const [openIdx, setOpenIdx] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ApiDetail | null | 'loading'>(null);
+
+  useEffect(() => { let live = true; getApiList(kind).then((r) => live && setList(r)); return () => { live = false; }; }, [kind]);
+  useEffect(() => {
+    if (!openIdx || kind === 'monsters') return;
+    let live = true;
+    setDetail('loading');
+    getApiDetail(kind, openIdx).then((r) => live && setDetail(r));
+    return () => { live = false; };
+  }, [openIdx]);
+
+  if (list === 'loading') return <p class="stat-fine">Loading the library…</p>;
+  if (!list) return <div class="card"><p class="read">The 5e library needs one online visit to download — after that it lives on your phone.</p></div>;
+
+  const shown = list
+    .filter((x) => (!q.trim() || x.name.toLowerCase().includes(q.toLowerCase())) && (lvl === 'all' || x.level === lvl))
+    .slice(0, 40);
+  const openItem = list.find((x) => x.index === openIdx);
+
+  return (
+    <>
+      <input class="input" placeholder={placeholder} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      {levelFilter && (
+        <div class="chip-row" style={{ margin: '10px 0' }}>
+          <button class={`cond-chip${lvl === 'all' ? ' on' : ''}`} onClick={() => setLvl('all')}>All</button>
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+            <button class={`cond-chip${lvl === n ? ' on' : ''}`} onClick={() => setLvl(n)}>{n === 0 ? 'C' : n}</button>
+          ))}
+        </div>
+      )}
+      <div class="creature-list" style={{ marginTop: levelFilter ? 0 : '10px', maxHeight: '420px' }}>
+        {shown.map((x) => (
+          <button class="creature-add" onClick={() => setOpenIdx(x.index)}>
+            <span>{x.name}</span>
+            {x.level !== undefined && <span class="cr">{x.level === 0 ? 'cantrip' : `lvl ${x.level}`}</span>}
+          </button>
+        ))}
+        {shown.length === 0 && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
+      </div>
+
+      {openIdx && openItem && (
+        <Sheet open title={openItem.name} onClose={() => { setOpenIdx(null); setDetail(null); }}>
+          {kind === 'monsters'
+            ? <ApiMonsterPanel index={openIdx} name={openItem.name} />
+            : detail === 'loading'
+              ? <p class="stat-fine">Fetching…</p>
+              : detail
+                ? <DetailBody d={detail} />
+                : <p class="stat-fine">Unavailable offline — open once with internet to cache it.</p>}
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+function ItemsPanel() {
+  const [openRime, setOpenRime] = useState<string | null>(null);
+  const rimeItems = [...(MAGIC_ITEMS as Record<string, unknown>[]), ...(EQUIPMENT as Record<string, unknown>[])];
+  const open = rimeItems.find((i) => i.index === openRime);
+  return (
+    <>
+      <div class="field-label">Rime module items</div>
+      <div class="chip-row" style={{ marginBottom: '14px' }}>
+        {rimeItems.map((i) => (
+          <button class="chip npc-chip" onClick={() => setOpenRime(String(i.index))}>✦ {String(i.name)}</button>
+        ))}
+      </div>
+      <div class="field-label">5e magic items</div>
+      <ApiBrowser kind="magic-items" placeholder="Search magic items…" />
+      {open && (
+        <Sheet open title={String(open.name)} onClose={() => setOpenRime(null)}>
+          <div class="npc-statline">
+            {(open.rarity as { name?: string } | undefined)?.name && <span>{String((open.rarity as { name: string }).name)}</span>}
+            {(open.equipment_category as { name?: string } | undefined)?.name && <span>{String((open.equipment_category as { name: string }).name)}</span>}
+            {(open.cost as { quantity?: number; unit?: string } | undefined)?.quantity !== undefined && <span>{String((open.cost as { quantity: number; unit: string }).quantity)} {String((open.cost as { quantity: number; unit: string }).unit)}</span>}
+          </div>
+          {((open.desc as string[]) ?? []).map((p) => <p class="read" style={{ margin: '8px 0' }}>{p}</p>)}
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 export function CompendiumScreen() {
-  const [sub, setSub] = useState<'npcs' | 'bestiary'>('npcs');
+  const [sub, setSub] = useState<'npcs' | 'bestiary' | 'spells' | 'items'>('npcs');
 
   return (
     <div>
       <p class="screen-kicker">Lore</p>
       <h1 class="screen-title">Compendium</h1>
 
-      <div class="sub-tabs">
+      <div class="sub-tabs scroll">
         <button class={`sub-tab${sub === 'npcs' ? ' active' : ''}`} onClick={() => setSub('npcs')}>NPCs</button>
         <button class={`sub-tab${sub === 'bestiary' ? ' active' : ''}`} onClick={() => setSub('bestiary')}>Bestiary</button>
+        <button class={`sub-tab${sub === 'spells' ? ' active' : ''}`} onClick={() => setSub('spells')}>Spells</button>
+        <button class={`sub-tab${sub === 'items' ? ' active' : ''}`} onClick={() => setSub('items')}>Items</button>
       </div>
 
       {sub === 'npcs' && <NpcRegistry />}
       {sub === 'bestiary' && (
         <>
-          <div class="card">
-            <h3>{CREATURES.length} Rime creatures ready</h3>
-            <p class="read">Full stat blocks live inside the combat tracker — expand any monster's row. Bandits and other 5e monsters now fetch their stat blocks automatically (cached for offline). The browsable bestiary and spell library arrive with Phase 5.</p>
-          </div>
-          <PhaseNote n={5} text="Browsable bestiary, spells, and equipment via the 5e API" />
+          <div class="field-label">Creatures of the Rime</div>
+          {CREATURES.map((c) => <RimeCreatureCard key={c.id} c={c} />)}
+          <div class="field-label" style={{ marginTop: '14px' }}>5e Monster Manual</div>
+          <ApiBrowser kind="monsters" placeholder="Search monsters…" />
         </>
       )}
+      {sub === 'spells' && <ApiBrowser kind="spells" placeholder="Search spells…" levelFilter />}
+      {sub === 'items' && <ItemsPanel />}
     </div>
   );
 }

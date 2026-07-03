@@ -132,12 +132,12 @@ click(byText('.sheet button', 'All (3)'), 'add whole party'); await sleep(20);
 click(byText('.sheet button', 'Done'), 'close add sheet'); await sleep(20);
 check('7 combatants total', $$('.combat-row').length === foes + 3, `${$$('.combat-row').length}`);
 
-click(byText('button', 'Roll init (foes)'), 'roll foe initiative'); await sleep(20);
+click(byText('button', '🎲 Init'), 'roll foe initiative'); await sleep(20);
 // set party inits manually
 const initInputs = $$('.combat-row .input.num');
 check('init inputs present', initInputs.length >= 7);
 click(byText('button', 'Begin combat'), 'begin combat'); await sleep(20);
-check('round 1 begins', bodyHas('Round 1'));
+check('round 1 begins', bodyHas('R1'));
 check('active turn marked', $$('.unit.turn').length === 1);
 click(byText('button', 'Next turn'), 'next turn'); await sleep(20);
 
@@ -181,9 +181,9 @@ check('confirm armed', bodyHas('Remove?'));
 click(byText('.unit-detail .btn', 'Remove?'), 'remove (confirm)'); await sleep(20);
 check('combatant removed', $$('.combat-row').length === foes + 3, `${$$('.combat-row').length} (was ${foes + 4} with crag cat)`);
 
-// end combat two-tap
-click(byText('button', 'End combat'), 'end combat (arm)'); await sleep(20);
-click(byText('button', 'End?'), 'end combat (confirm)'); await sleep(20);
+// end combat two-tap (sticky bar)
+click(byText('.combat-toolbar.sticky button', 'End'), 'end combat (arm)'); await sleep(20);
+click(byText('.combat-toolbar.sticky button', 'End?'), 'end combat (confirm)'); await sleep(20);
 check('tracker cleared', bodyHas('No one has drawn steel'));
 
 console.log('\n═══ SCENE 5: The storm rolls in ═══');
@@ -287,7 +287,7 @@ check('session NPC chip', !!byText('.session-card .npc-chip', 'Markham'));
 
 click(byText('.sub-tab', 'Progress'), 'Progress'); await sleep(20);
 check('7 chapters render', $$('.card.chapter').length === 7);
-click(byText('.milestone', 'Party arrives'), 'toggle milestone'); await sleep(20);
+click($('.ms-toggle'), 'toggle first milestone'); await sleep(20);
 check('milestone marked', !!document.querySelector('.milestone.done'));
 check('chapter counter 1/4', bodyHas('1/4 milestones'));
 
@@ -299,6 +299,80 @@ check('session persisted', saved2?.sessions?.length === 1);
 check('chapter milestone persisted', saved2?.chapters?.[0]?.milestones?.[0]?.done === true);
 check('travel log persisted', (saved2?.travel?.log?.length ?? 0) >= 2);
 check('weather day 13 persisted', saved2?.weather?.day === 13);
+
+console.log('\n═══ SCENE 13: Phase 5 — the five requests ═══');
+// (1) Sticky combat command bar with Next reachable at top
+click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(20);
+click(byText('button', '+ Add combatants'), 'add'); await sleep(20);
+type($('.sheet .input'), 'yeti', 'search yeti'); await sleep(20);
+click(byText('.creature-add', 'Yeti'), 'add yeti'); await sleep(20);
+click(byText('.creature-add', 'Yeti'), 'add second yeti'); await sleep(20);
+click(byText('.sheet button', 'Done'), 'done'); await sleep(20);
+check('sticky command bar renders', !!document.querySelector('.combat-toolbar.sticky'));
+const topNext = byText('.combat-toolbar.sticky button', 'Begin ▸');
+check('Begin/Next in top bar', !!topNext);
+click(topNext, 'begin from top bar'); await sleep(20);
+check('round starts from top control', bodyHas('R1'));
+check('active combatant named in bar', !!document.querySelector('.turn-now'));
+click(byText('.combat-toolbar.sticky button', 'Next ▸'), 'next from top'); await sleep(30);
+check('bottom turn bar also present', !!document.querySelector('.turn-bar .turn-btn'));
+click(byText('.combat-toolbar.sticky button', 'End'), 'end (arm)'); await sleep(20);
+click(byText('.combat-toolbar.sticky button', 'End?'), 'end (confirm)'); await sleep(20);
+
+// (2) Sidekick recruited removed from towns
+click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
+click(byText('.sub-tab', 'Towns'), 'Towns'); await sleep(20);
+click(byText('.unit-name', 'Bryn Shander'), 'expand town'); await sleep(20);
+check('sidekick chip removed', !bodyHas('Sidekick recruited'));
+click(byText('.unit-name', 'Bryn Shander'), 'collapse town'); await sleep(20);
+
+// (3) Milestone popup with chapter quests
+click(byText('.nav-btn', 'Session'), 'Session'); await sleep(20);
+click(byText('.sub-tab', 'Progress'), 'Progress'); await sleep(20);
+click(byText('.milestone', 'Cold-Hearted Killer'), 'open milestone sheet'); await sleep(30);
+check('milestone sheet opens', bodyHas('what this means at your table'));
+check('chapter quests listed inside', bodyHas('Foaming Mugs'));
+const msQuestBadge = document.querySelector('.ms-quest .standing') as HTMLElement;
+const b4 = msQuestBadge?.textContent;
+msQuestBadge?.click(); await sleep(20);
+check('quest advances from milestone sheet', document.querySelector('.ms-quest .standing')?.textContent !== b4);
+click(byText('.sheet button', 'Complete ✦'), 'complete milestone'); await sleep(20);
+click($('.sheet-close'), 'close sheet'); await sleep(20);
+check('milestone crossed off', $$('.milestone.done').length >= 2);
+check('+ Milestone button exists', !!byText('button', '+ Milestone'));
+
+// (4) Encounter category filters + copy/edit
+click(byText('.nav-btn', 'Combat'), 'Combat'); await sleep(20);
+click(byText('.sub-tab', 'Encounters'), 'Encounters'); await sleep(20);
+check('category filter chips', !!byText('.cond-chip.frosty', 'travel') && !!byText('.cond-chip.frosty', 'social'));
+const allCount = $$('.card h3').length;
+click(byText('.cond-chip.frosty', 'social'), 'filter social'); await sleep(20);
+check('category filter narrows list', $$('.card h3').length < allCount);
+click(byText('.cond-chip.frosty', 'Anywhere'), 'reset filter'); await sleep(20);
+click(byText('.card button', 'Copy & edit'), 'copy a seeded encounter'); await sleep(30);
+check('copy-edit sheet opens', bodyHas('Copy of'));
+click(byText('.sheet button', 'Save encounter'), 'save copy'); await sleep(30);
+check('copy saved as yours', bodyHas('✦ yours'));
+check('edit button on custom', !!byText('.card button', 'Edit'));
+
+// (5) VFX present
+check('snowfall flakes render', $$('.starfield .flake').length >= 10);
+
+console.log('\n═══ SCENE 14: Compendium — bestiary, spells, items ═══');
+click(byText('.nav-btn', 'Lore'), 'Lore'); await sleep(20);
+click(byText('.sub-tab', 'Bestiary'), 'Bestiary'); await sleep(20);
+check('Rime creatures listed', bodyHas('Chardalyn Dragon') && bodyHas('Chwinga'));
+click(byText('.unit-name', 'Crag Cat'), 'expand crag cat'); await sleep(20);
+check('full stat block inline', bodyHas('Nondetection'));
+await sleep(400);
+check('5e browser offline fallback graceful', bodyHas('online visit') || bodyHas('Loading the library'));
+click(byText('.sub-tab', 'Spells'), 'Spells'); await sleep(400);
+check('spells tab renders without crash', bodyHas('Spells'));
+click(byText('.sub-tab', 'Items'), 'Items'); await sleep(30);
+check('Rime items chips', bodyHas('Psi Crystal') && bodyHas('Snowshoes'));
+click(byText('.npc-chip', 'Psi Crystal'), 'open rime item'); await sleep(20);
+check('item sheet with description', bodyHas('psionic energy'));
+click($('.sheet-close'), 'close item'); await sleep(20);
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

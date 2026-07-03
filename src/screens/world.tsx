@@ -91,7 +91,6 @@ function TownCard({ town }: { town: (typeof TOWNS)[number] }) {
           </div>
           <div class="unit-meta">
             {String(town.population)} <span class="sep">·</span> Speaker: {String(town.speaker)}
-            {st.sidekickRecruited && <> <span class="sep">·</span> ✦ sidekick</>}
           </div>
           {st.activeQuest && <div class="npc-lastseen">✦ {st.activeQuest}</div>}
         </div>
@@ -108,9 +107,6 @@ function TownCard({ town }: { town: (typeof TOWNS)[number] }) {
           <div class="chip-row" style={{ margin: '12px 0' }}>
             <button class={`cond-chip${st.visited ? ' on' : ''}`} onClick={() => upd((t) => { t.visited = !t.visited; })}>
               {st.visited ? '✦ Visited' : 'Mark visited'}
-            </button>
-            <button class={`cond-chip${st.sidekickRecruited ? ' on' : ''}`} onClick={() => upd((t) => { t.sidekickRecruited = !t.sidekickRecruited; })}>
-              Sidekick recruited
             </button>
           </div>
 

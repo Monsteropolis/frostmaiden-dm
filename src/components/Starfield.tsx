@@ -21,6 +21,15 @@ const STARS = Array.from({ length: 56 }, (_, i) => ({
   delay: rand() * 5,
 }));
 
+const FLAKES = Array.from({ length: 18 }, () => ({
+  left: rand() * 100,
+  size: 2 + rand() * 2.5,
+  duration: 9 + rand() * 9,
+  delay: rand() * 12,
+  drift: (rand() - 0.5) * 80,
+  opacity: 0.25 + rand() * 0.4,
+}));
+
 export function Starfield() {
   return (
     <div class="starfield" aria-hidden="true">
@@ -34,6 +43,20 @@ export function Starfield() {
             height: `${s.size}px`,
             opacity: s.opacity,
             animationDelay: `${s.delay}s`,
+          }}
+        />
+      ))}
+      {FLAKES.map((f) => (
+        <span
+          class="flake"
+          style={{
+            left: `${f.left}%`,
+            width: `${f.size}px`,
+            height: `${f.size}px`,
+            opacity: f.opacity,
+            animationDuration: `${f.duration}s`,
+            animationDelay: `-${f.delay}s`,
+            '--drift': `${f.drift}px`,
           }}
         />
       ))}

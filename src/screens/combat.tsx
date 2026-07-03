@@ -75,7 +75,7 @@ function parseAttack(desc: string): { bonus?: number; dmg?: string } {
   return { bonus: bonus ? parseInt(bonus, 10) : undefined, dmg: dmg?.replace(/\s/g, '') };
 }
 
-function MonsterPanel({ srcId, name }: { srcId?: string; name: string }) {
+export function MonsterPanel({ srcId, name }: { srcId?: string; name: string }) {
   const m = creatureById(srcId);
   if (!m) return null;
   const traits = (m.traits ?? []) as { n: string; d: string }[];
@@ -276,32 +276,41 @@ function Tracker() {
     });
   };
 
+  const active = sorted.find((c) => c.id === activeId);
+
   return (
     <>
       {cb.combatants.length === 0 ? (
-        <div class="card">
-          <p class="read">No one has drawn steel yet. Add the party and whatever the Dale sends against them.</p>
-        </div>
+        <>
+          <div class="card">
+            <p class="read">No one has drawn steel yet. Add the party and whatever the Dale sends against them.</p>
+          </div>
+          <button class="btn primary wide" onClick={() => setAdding(true)}>+ Add combatants</button>
+        </>
       ) : (
         <>
-          <div class="combat-toolbar">
-            {cb.active && <span class="round-chip">Round {cb.round}</span>}
-            <button class="btn mini ghost" onClick={rollInit}>Roll init (foes)</button>
-            <ConfirmBtn label="End combat" confirmLabel="End?" class="mini ghost danger"
+          {/* Sticky command bar — next turn is reachable from anywhere in the list */}
+          <div class="combat-toolbar sticky">
+            {cb.active
+              ? <span class="round-chip">R{cb.round}</span>
+              : <span class="round-chip idle">Ready</span>}
+            {cb.active && active && <span class="turn-now">{active.emoji} {active.name}</span>}
+            <button class="btn mini next-mini" onClick={nextTurn}>{cb.active ? 'Next ▸' : 'Begin ▸'}</button>
+            <button class="btn mini ghost" onClick={() => setAdding(true)}>+ Add</button>
+            <button class="btn mini ghost" onClick={rollInit}>🎲 Init</button>
+            <ConfirmBtn label="End" confirmLabel="End?" class="mini ghost danger"
               onConfirm={() => patch((s) => { s.combat = { active: false, round: 0, turn: 0, combatants: [] }; })} />
           </div>
           {sorted.map((c) => <CombatRow key={c.id} c={c} active={c.id === activeId} />)}
+          <div class="combat-pad" />
+          <div class="turn-bar">
+            {cb.active && <span class="round-chip">R{cb.round}</span>}
+            <button class="btn primary turn-btn" onClick={nextTurn}>
+              {cb.active ? 'Next turn ✦' : 'Begin combat'}
+            </button>
+          </div>
         </>
       )}
-
-      <div class="combat-actions">
-        <button class="btn wide" onClick={() => setAdding(true)}>+ Add combatants</button>
-        {cb.combatants.length > 0 && (
-          <button class="btn primary wide turn-btn" onClick={nextTurn}>
-            {cb.active ? `Next turn ✦ R${cb.round}` : 'Begin combat'}
-          </button>
-        )}
-      </div>
 
       {adding && <AddCombatants open onClose={() => setAdding(false)} />}
     </>
@@ -376,15 +385,15 @@ function EncounterTables({ goTracker }: { goTracker: () => void }) {
   );
 }
 
-function PresetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [f, setF] = useState<EncounterPreset>({
+function PresetForm({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: EncounterPreset }) {
+  const [f, setF] = useState<EncounterPreset>(existing ?? {
     id: '', name: '', type: 'combat', category: 'travel', difficulty: 'medium', desc: '', combatants: [], custom: true,
   });
   const setC = (i: number, k: keyof PresetCombatant, v: unknown) =>
     setF((prev) => ({ ...prev, combatants: prev.combatants.map((c, j) => (j === i ? { ...c, [k]: v } : c)) }));
 
   return (
-    <Sheet open={open} title="New encounter" onClose={onClose}>
+    <Sheet open={open} title={existing ? (existing.custom ? `Edit ${existing.name}` : `Copy of ${existing.name}`) : 'New encounter'} onClose={onClose}>
       <Field label="Name"><input class="input" value={f.name} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, name: v })); })()} /></Field>
       <div class="field-row">
         <Field label="Category"><input class="input" value={f.category} onInput={(e) => (() => { const v = (e.target as HTMLInputElement).value; setF((prev) => ({ ...prev, category: v })); })()} /></Field>
@@ -410,20 +419,29 @@ function PresetForm({ open, onClose }: { open: boolean; onClose: () => void }) {
       <button class="btn ghost" onClick={() => setF((prev) => ({ ...prev, combatants: [...prev.combatants, { srcType: 'custom', count: '1', emoji: '👾', name: '', hp: 10, ac: 12 }] }))}>+ Combatant</button>
 
       <button class="btn primary wide" disabled={!f.name.trim()} onClick={() => {
-        patch((s) => { s.encounterPresets.push({ ...f, id: `ep${s.seq++}` }); });
+        if (existing && existing.custom) {
+          patch((s) => { const i = s.encounterPresets.findIndex((x) => x.id === existing.id); if (i >= 0) s.encounterPresets[i] = f; });
+        } else {
+          patch((s) => { s.encounterPresets.push({ ...f, id: `ep${s.seq++}`, custom: true }); });
+        }
         onClose();
-      }}>Save encounter</button>
+      }}>{existing?.custom ? 'Save changes' : 'Save encounter'}</button>
     </Sheet>
   );
 }
 
 function Encounters({ goTracker }: { goTracker: () => void }) {
   const [diff, setDiff] = useState<Difficulty | 'all'>('all');
+  const [cat, setCat] = useState<string>('all');
   const [view, setView] = useState<'presets' | 'tables'>('presets');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<EncounterPreset | null>(null);
 
   const all = [...seedPresets(), ...state.value.encounterPresets];
-  const shown = all.filter((e) => diff === 'all' || e.difficulty === diff);
+  const cats = [...new Set(all.map((e) => e.category))].sort();
+  const shown = all.filter((e) =>
+    (diff === 'all' || e.difficulty === diff) &&
+    (cat === 'all' || e.category === cat));
 
   return (
     <>
@@ -436,10 +454,16 @@ function Encounters({ goTracker }: { goTracker: () => void }) {
 
       {view === 'presets' && (
         <>
-          <div class="chip-row" style={{ marginBottom: '12px' }}>
+          <div class="chip-row" style={{ marginBottom: '8px' }}>
             <button class={`cond-chip${diff === 'all' ? ' on' : ''}`} onClick={() => setDiff('all')}>All</button>
             {DIFF_ORDER.map((x) => (
               <button class={`cond-chip${diff === x ? ' on' : ''}`} onClick={() => setDiff(x)}>{x}</button>
+            ))}
+          </div>
+          <div class="chip-row" style={{ marginBottom: '12px' }}>
+            <button class={`cond-chip frosty${cat === 'all' ? ' on' : ''}`} onClick={() => setCat('all')}>Anywhere</button>
+            {cats.map((x) => (
+              <button class={`cond-chip frosty${cat === x ? ' on' : ''}`} onClick={() => setCat(x)}>{x}</button>
             ))}
           </div>
 
@@ -465,17 +489,19 @@ function Encounters({ goTracker }: { goTracker: () => void }) {
                   }}>Load into tracker →</button>
                 </>
               )}
-              {e.custom && (
-                <div class="row-actions">
+              <div class="row-actions">
+                <button class="btn mini ghost" onClick={() => setEditing(e)}>{e.custom ? 'Edit' : 'Copy & edit'}</button>
+                {e.custom && (
                   <ConfirmBtn label="Delete" confirmLabel="Delete?" class="mini ghost danger"
                     onConfirm={() => patch((s) => { s.encounterPresets = s.encounterPresets.filter((x) => x.id !== e.id); })} />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
 
           <button class="btn primary wide" onClick={() => setCreating(true)}>+ New encounter</button>
-          {creating && <PresetForm open={creating} onClose={() => setCreating(false)} />}
+          {creating && <PresetForm key="new" open onClose={() => setCreating(false)} />}
+          {editing && <PresetForm key={editing.id} open existing={editing} onClose={() => setEditing(null)} />}
         </>
       )}
     </>
