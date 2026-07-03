@@ -10,7 +10,7 @@ import { allNpcs, openNpc } from './npcs';
 
 // ---------------------------------------------------------------- weather
 
-function WeatherPanel() {
+export function WeatherControls() {
   const wx = state.value.weather;
   const order: WeatherId[] = ['clear', 'overcast', 'light_snow', 'heavy_snow', 'blizzard', 'aurils_wrath'];
   const setWeather = (id: WeatherId) => patch((d) => {
@@ -21,9 +21,7 @@ function WeatherPanel() {
 
   return (
     <>
-      <div class="card">
-        <h3>Current conditions</h3>
-        <div class="chip-row" style={{ marginTop: '10px' }}>
+        <div class="chip-row">
           {order.map((id) => (
             <button
               class="btn"
@@ -49,6 +47,16 @@ function WeatherPanel() {
             d.weather.log.push({ day: d.weather.day, weather: d.weather.current });
           })}>New day →</button>
         </div>
+    </>
+  );
+}
+
+function WeatherPanel() {
+  return (
+    <>
+      <div class="card">
+        <h3>Current conditions</h3>
+        <WeatherControls />
       </div>
 
       <div class="card">
@@ -395,6 +403,7 @@ function TravelPanel() {
 
   const advance = () => patch((d) => {
     const jj = d.travel.activeJourney; if (!jj) return;
+    d.travel.rations = Math.max(0, d.travel.rations - d.travel.partySize);
     d.weather.day++;
     d.weather.log.push({ day: d.weather.day, weather: d.weather.current });
     d.travel.log.push({ day: d.weather.day, text: `${jj.origin} → ${jj.dest}: day ${jj.day} of ${jj.totalDays} — ${WEATHER[d.weather.current].name}` });
@@ -462,6 +471,40 @@ function TravelPanel() {
           }}>Set out ✦</button>
         </div>
       )}
+
+      <div class="card">
+        <h3>Supplies</h3>
+        <div class="supply-row">
+          <span class="field-label" style={{ margin: 0 }}>Rations</span>
+          <button class="hp-btn" onClick={() => patch((d) => { d.travel.rations = Math.max(0, d.travel.rations - 1); })}>−</button>
+          <span class={`supply-n${state.value.travel.rations < state.value.travel.partySize ? ' low' : ''}`}>{state.value.travel.rations}</span>
+          <button class="hp-btn" onClick={() => patch((d) => { d.travel.rations++; })}>+</button>
+          <span class="field-label" style={{ margin: '0 0 0 12px' }}>Party</span>
+          <NumInput w="60px" value={state.value.travel.partySize} min={1}
+            onInput={(n) => patch((d) => { d.travel.partySize = Math.max(1, n); })} />
+        </div>
+        <p class="stat-fine">Each travel day consumes one ration per party member automatically.
+          {state.value.travel.rations < state.value.travel.partySize && ' ⚠ Not enough for another day — foraging (WIS/Survival) or going hungry (exhaustion) awaits.'}</p>
+      </div>
+
+      <div class="card">
+        <h3>Travel rules of the Dale</h3>
+        <details class="loc"><summary>Overland pace</summary>
+          <p class="read" style={{ fontSize: '13px' }}>On foot in snow: the map distances assume a normal pace. Cautious pace takes half again as long but lets the party use Stealth and spot danger sooner. Dogsleds halve travel time on open snow but the dogs must rest 1 hour for every hour they pull.</p>
+        </details>
+        <details class="loc"><summary>Extreme cold (CON saves)</summary>
+          <p class="read" style={{ fontSize: '13px' }}>When the temperature drops (heavy snow, blizzards, or Auril's whim), a creature exposed to the cold must succeed on a DC 10 CON save at the end of each hour or gain one level of exhaustion. Creatures with cold resistance/immunity automatically succeed, as do those wearing cold weather gear.</p>
+        </details>
+        <details class="loc"><summary>Blizzards</summary>
+          <p class="read" style={{ fontSize: '13px' }}>Visibility drops to 30 feet; ranged attacks and Wisdom (Perception) checks relying on sight or hearing have disadvantage. A creature not wearing goggles or a scarf makes CON saves against the cold with disadvantage. It's easy to get separated — consider a DC 15 Survival check to stay together off-trail.</p>
+        </details>
+        <details class="loc"><summary>Deep snow & frigid water</summary>
+          <p class="read" style={{ fontSize: '13px' }}>Deep snow is difficult terrain without snowshoes (each foot costs 2 extra feet). A creature immersed in frigid water can survive a number of minutes equal to its CON score before suffering one level of exhaustion per additional minute.</p>
+        </details>
+        <details class="loc"><summary>Mountain travel</summary>
+          <p class="read" style={{ fontSize: '13px' }}>Kelvin's Cairn and other climbs are difficult terrain at best; count each mile as two. Above the treeline there is no forage and no shelter — plan rations and a heat source or pay in exhaustion.</p>
+        </details>
+      </div>
 
       {state.value.travel.log.length > 0 && (
         <div class="card">

@@ -976,12 +976,7 @@ details.loc summary::marker { color: var(--frost-deep); }
   top: -3%;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #fff, var(--frost) 60%, transparent 75%);
-  animation: snowfall linear infinite;
   will-change: transform;
-}
-@keyframes snowfall {
-  0% { transform: translate3d(0, -4dvh, 0); }
-  100% { transform: translate3d(var(--drift, 0px), 106dvh, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .starfield .flake { display: none; }
@@ -1079,3 +1074,121 @@ details.loc summary::marker { color: var(--frost-deep); }
 .ms-quest:last-child { border-bottom: 0; }
 .ms-quest-name { font-family: var(--font-read); font-size: 13.5px; color: var(--ink-dim); }
 .ms-quest-name.resolved { text-decoration: line-through; color: var(--ink-faint); }
+
+/* ============================================================
+   ROUND 6 — winds of fate, reference lists, cond editor,
+   monster builder, supplies
+   ============================================================ */
+
+/* The wind: every flake falls AND sways; gust flakes streak sideways */
+.starfield .flake {
+  animation-name: snowdrift, snowsway;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+@keyframes snowdrift {
+  0% { transform: translate3d(0, -4dvh, 0); }
+  100% { transform: translate3d(var(--drift, 60px), 106dvh, 0); }
+}
+@keyframes snowsway {
+  0%, 100% { margin-left: 0; }
+  50% { margin-left: 9px; }
+}
+.starfield .flake.gust {
+  border-radius: 40%;
+  filter: blur(0.4px);
+  animation-name: snowgust, snowsway;
+}
+@keyframes snowgust {
+  0% { transform: translate3d(-8vw, -4dvh, 0); }
+  100% { transform: translate3d(calc(var(--drift, 60px) * 2.2), 106dvh, 0); }
+}
+
+/* Aurora breathes — the cosmic sky is alive but never distracting */
+.aurora {
+  animation: aurora-breathe 16s ease-in-out infinite;
+}
+@keyframes aurora-breathe {
+  0%, 100% { opacity: 0.85; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(-2%); }
+}
+
+/* The thread beneath the header shimmers faintly — fate never sleeps */
+.thread-rule {
+  background-size: 220% 100%;
+  animation: thread-drift 14s linear infinite;
+}
+@keyframes thread-drift {
+  0% { background-position: 0% 0; }
+  100% { background-position: 220% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora, .thread-rule { animation: none; }
+}
+
+/* Tappable weather strip */
+.weather-strip.tappable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.weather-strip.tappable:active { background: color-mix(in srgb, var(--surface) 80%, transparent); }
+
+/* Reference lists (spells, items) — page-flow, no inner scroll trap */
+.ref-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+/* Bestiary CR badge */
+.cr-badge {
+  min-width: 44px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--silver);
+}
+
+/* Collapsible condition editor */
+.cond-editor { margin: 4px 0 10px; }
+.cond-active { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cond-tag.rm {
+  cursor: pointer;
+  background: none;
+  min-height: 30px;
+  padding: 3px 9px;
+  font-size: 11px;
+}
+.cond-add {
+  background: none;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 5px 12px;
+  min-height: 32px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cond-add:active { color: var(--frost); border-color: var(--frost-deep); }
+
+/* Monster builder trait rows */
+.trait-edit {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.trait-edit .trait-desc { grid-column: 1 / -1; font-family: var(--font-read); }
+
+/* breathing room before primary save buttons */
+.form-gap { height: 18px; }
+
+/* Supplies */
+.supply-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+.supply-n { font-size: 22px; font-weight: 700; color: var(--silver); min-width: 44px; text-align: center; }
+.supply-n.low { color: var(--thread); }

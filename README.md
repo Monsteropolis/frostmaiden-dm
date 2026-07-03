@@ -87,6 +87,9 @@ The signature element is **the thread**: a single garnet hairline beneath the he
 
 ## Phase roadmap
 
+**Round 6 (post-launch)** — unified bestiary (Rime + custom + full 5e with CR filters and a stat-block builder), sidekicks/allies restructure with statblock-backed recruits, collapsible conditions, full-catalog spells/items with category shelves (scroll-trap fix), travel rules & supplies, tappable weather strip, wind-driven snow VFX.
+
+
 1. ✅ **Foundation** — shell, design system, storage + migrations, PWA, seed data
 2. ✅ **Table core** — Party (PCs + allies), Initiative/Combat tracker, Encounters
 3. **NPCs, Towns, Arcs** — relationship system, quick updates, thread linking

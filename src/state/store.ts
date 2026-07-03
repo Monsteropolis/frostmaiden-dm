@@ -48,7 +48,14 @@ function seedQuests(s: AppState): AppState {
   return s;
 }
 
-export const state = signal<AppState>(seedQuests(load()));
+function normalize(s: AppState): AppState {
+  for (const a of s.sidekicks) if (!a.category) a.category = 'sidekick';
+  if (typeof s.travel.rations !== 'number') s.travel.rations = 10;
+  if (typeof s.travel.partySize !== 'number') s.travel.partySize = 4;
+  return s;
+}
+
+export const state = signal<AppState>(normalize(seedQuests(load())));
 
 let saveTimer: number | undefined;
 

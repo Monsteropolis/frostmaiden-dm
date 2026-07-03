@@ -1,11 +1,12 @@
 import { useState } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { Combatant, PresetCombatant, Difficulty, EncounterPreset } from '../state/schema';
-import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
+import { Sheet, ConfirmBtn, Field, NumInput, CondEditor } from '../components/ui';
 import { d, rollCount, rollD20, rollDamage, showRoll } from '../lib/dice';
 import { CREATURES, ENCOUNTERS, ENC_TABLES, SeedCreature } from '../data';
-import { ApiMonsterPanel } from '../lib/api';
-import { HpBar, ConditionGrid } from './party';
+import { ApiMonsterPanel, getApiMonster } from '../lib/api';
+import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById } from './monsters';
+import { HpBar } from './party';
 
 // ---------------------------------------------------------------- helpers
 
@@ -143,12 +144,13 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
             <NumInput w="76px" value={c.hp} onInput={(n) => applyHp(c.id, 'set', n)} />
             <button class="btn" onClick={() => applyHp(c.id, 'full')}>Full</button>
           </div>
-          <ConditionGrid current={c.conditions} onToggle={(cond) => patch((s) => {
+          <CondEditor current={c.conditions} onToggle={(cond) => patch((s) => {
             const x = s.combat.combatants.find((y) => y.id === c.id); if (!x) return;
             x.conditions = x.conditions.includes(cond) ? x.conditions.filter((z) => z !== cond) : [...x.conditions, cond];
           })} />
           {c.srcType === 'monster' && <MonsterPanel srcId={c.srcId} name={c.name} />}
           {c.srcType === 'api' && c.srcId && <ApiMonsterPanel index={c.srcId} name={c.name} />}
+          {c.srcType === 'custommon' && customMonsterById(c.srcId) && <StatPanel m={customMonsterById(c.srcId)!} />}
           <div class="row-actions">
             <ConfirmBtn label="Remove" confirmLabel="Remove?" class="ghost danger"
               onConfirm={() => patch((s) => {
@@ -167,8 +169,34 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
 function AddCombatants({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [custom, setCustom] = useState({ name: '', emoji: '👾', hp: 10, ac: 12, count: '1' });
+  const [building, setBuilding] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const { all: bestiary, apiStatus: bApi, progress: bProgress } = useBestiary();
   const s = state.value;
   const inTracker = new Set(s.combat.combatants.map((c) => `${c.srcType}:${c.srcId}`));
+
+  const pushMon = (name: string, emoji: string, hp: number, ac: number, initMod: number, srcType: 'monster' | 'api' | 'custommon', srcId: string) =>
+    patch((d) => {
+      const count = d.combat.combatants.filter((x) => x.srcId === srcId).length;
+      d.combat.combatants.push({ id: cid(), name: count ? `${name} ${count + 1}` : name, emoji, hp, maxHp: hp, ac, init: null, initMod, conditions: [], srcType, srcId });
+    });
+
+  const addFromBestiary = async (e: BestiaryEntry) => {
+    if (e.src === 'rime') {
+      const c = creatureById(e.srcId)!;
+      pushMon(String(c.name), String(c.emoji), Number(c.hp), Number(c.ac), abilityMod(c.dex), 'monster', e.srcId);
+    } else if (e.src === 'custom') {
+      const m = customMonsterById(e.srcId)!;
+      pushMon(m.name, m.emoji, m.hp, m.ac, abilityMod(m.dex), 'custommon', e.srcId);
+    } else {
+      setBusy(e.key);
+      const d = await getApiMonster(e.srcId);
+      setBusy(null);
+      const hp = d?.hit_points ?? 10;
+      const ac = Array.isArray(d?.armor_class) ? d!.armor_class[0]?.value ?? 12 : (d?.armor_class as number | undefined) ?? 12;
+      pushMon(e.name, '👾', hp, ac, abilityMod(d?.dexterity), 'api', e.srcId);
+    }
+  };
 
   const addPc = (pcId?: string) => patch((d) => {
     for (const p of d.party) {
@@ -178,9 +206,9 @@ function AddCombatants({ open, onClose }: { open: boolean; onClose: () => void }
     }
   });
 
-  const matches = q.trim()
-    ? CREATURES.filter((c) => String(c.name).toLowerCase().includes(q.toLowerCase()))
-    : CREATURES;
+  const matches = (q.trim()
+    ? bestiary.filter((e) => e.name.toLowerCase().includes(q.toLowerCase()))
+    : bestiary.filter((e) => e.src !== 'api')).slice(0, 60);
 
   return (
     <Sheet open={open} title="Add combatants" onClose={onClose}>
@@ -209,19 +237,23 @@ function AddCombatants({ open, onClose }: { open: boolean; onClose: () => void }
         </>
       )}
 
-      <div class="field-label">Rime bestiary</div>
-      <input class="input" placeholder="Search creatures…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      <div class="field-label">Bestiary — Rime, yours, and the full 5e library</div>
+      <input class="input" placeholder="Search all monsters…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      {bApi === 'loading' && <p class="stat-fine">Downloading the 5e bestiary… {bProgress}% (one time)</p>}
+      {bApi === null && <p class="stat-fine">5e library needs one online visit — Rime & custom monsters below.</p>}
       <div class="creature-list">
-        {matches.map((c) => (
-          <button class="creature-add" onClick={() => patch((d) => {
-            const count = d.combat.combatants.filter((x) => x.srcId === c.id).length;
-            d.combat.combatants.push({ id: cid(), name: count ? `${c.name} ${count + 1}` : String(c.name), emoji: String(c.emoji), hp: Number(c.hp), maxHp: Number(c.hp), ac: Number(c.ac), init: null, initMod: abilityMod(c.dex), conditions: [], srcType: 'monster', srcId: c.id });
-          })}>
-            <span>{String(c.emoji)} {String(c.name)}</span>
-            <span class="cr">CR {String(c.cr)} · {String(c.hp)} hp</span>
+        {matches.map((e) => (
+          <button class="creature-add" disabled={busy === e.key} onClick={() => addFromBestiary(e)}>
+            <span>{e.emoji} {e.name}{e.src === 'custom' ? ' ✦' : ''}</span>
+            <span class="cr">{busy === e.key ? 'adding…' : `CR ${e.crLabel}${e.hp ? ` · ${e.hp} hp` : ''}`}</span>
           </button>
         ))}
+        {matches.length === 0 && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
       </div>
+      <button class="btn ghost" style={{ marginTop: '8px' }} onClick={() => setBuilding(true)}>+ New monster (full stat block)</button>
+      {building && <MonsterForm open onClose={() => setBuilding(false)} onCreated={(m) => {
+        patch((d) => { d.combat.combatants.push({ id: cid(), name: m.name, emoji: m.emoji, hp: m.hp, maxHp: m.hp, ac: m.ac, init: null, initMod: abilityMod(m.dex), conditions: [], srcType: 'custommon', srcId: m.id }); });
+      }} />}
 
       <div class="field-label" style={{ marginTop: '14px' }}>Quick custom</div>
       <div class="field-row">
@@ -403,7 +435,7 @@ function PresetForm({ open, onClose, existing }: { open: boolean; onClose: () =>
           </select>
         </Field>
       </div>
-      <Field label="Description"><textarea class="input" rows={2} value={f.desc} onInput={(e) => (() => { const v = (e.target as HTMLTextAreaElement).value; setF((prev) => ({ ...prev, desc: v })); })()} /></Field>
+      <Field label="Description"><textarea class="input" rows={6} value={f.desc} onInput={(e) => (() => { const v = (e.target as HTMLTextAreaElement).value; setF((prev) => ({ ...prev, desc: v })); })()} /></Field>
 
       <div class="field-label">Combatants</div>
       {f.combatants.map((c, i) => (
@@ -418,6 +450,7 @@ function PresetForm({ open, onClose, existing }: { open: boolean; onClose: () =>
       ))}
       <button class="btn ghost" onClick={() => setF((prev) => ({ ...prev, combatants: [...prev.combatants, { srcType: 'custom', count: '1', emoji: '👾', name: '', hp: 10, ac: 12 }] }))}>+ Combatant</button>
 
+      <div class="form-gap" />
       <button class="btn primary wide" disabled={!f.name.trim()} onClick={() => {
         if (existing && existing.custom) {
           patch((s) => { const i = s.encounterPresets.findIndex((x) => x.id === existing.id); if (i >= 0) s.encounterPresets[i] = f; });
@@ -454,6 +487,7 @@ function Encounters({ goTracker }: { goTracker: () => void }) {
 
       {view === 'presets' && (
         <>
+          <button class="btn primary wide" style={{ marginBottom: '12px' }} onClick={() => setCreating(true)}>+ New encounter</button>
           <div class="chip-row" style={{ marginBottom: '8px' }}>
             <button class={`cond-chip${diff === 'all' ? ' on' : ''}`} onClick={() => setDiff('all')}>All</button>
             {DIFF_ORDER.map((x) => (
@@ -489,17 +523,16 @@ function Encounters({ goTracker }: { goTracker: () => void }) {
                   }}>Load into tracker →</button>
                 </>
               )}
-              <div class="row-actions">
-                <button class="btn mini ghost" onClick={() => setEditing(e)}>{e.custom ? 'Edit' : 'Copy & edit'}</button>
-                {e.custom && (
+              {e.custom && (
+                <div class="row-actions">
+                  <button class="btn mini ghost" onClick={() => setEditing(e)}>Edit</button>
                   <ConfirmBtn label="Delete" confirmLabel="Delete?" class="mini ghost danger"
                     onConfirm={() => patch((s) => { s.encounterPresets = s.encounterPresets.filter((x) => x.id !== e.id); })} />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ))}
 
-          <button class="btn primary wide" onClick={() => setCreating(true)}>+ New encounter</button>
           {creating && <PresetForm key="new" open onClose={() => setCreating(false)} />}
           {editing && <PresetForm key={editing.id} open existing={editing} onClose={() => setEditing(null)} />}
         </>

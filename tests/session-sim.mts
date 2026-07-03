@@ -62,11 +62,13 @@ check('Brienne card shows class/AC', bodyHas('Paladin'));
 
 // expand Brienne, toggle a condition + inspiration
 click(byText('.unit-name', 'Brienne'), 'expand Brienne'); await sleep(20);
+click(byText('.cond-add', '+ Condition'), 'open condition picker'); await sleep(20);
 click(byText('.cond-chip', 'Frightened'), 'toggle Frightened'); await sleep(20);
-check('condition tag appears', $$('.cond-tag').some((t) => t.textContent === 'Frightened'));
+check('condition tag appears', $$('.cond-tag').some((t) => (t.textContent ?? '').includes('Frightened')));
+check('condition grid auto-hides after pick', !byText('.cond-chip', 'Blinded'));
 click($('.inspo'), 'inspiration star'); await sleep(20);
 check('inspiration lit', !!$('.inspo.on'));
-click(byText('.cond-chip', 'Frightened'), 'untoggle Frightened'); await sleep(20);
+click(byText('.cond-tag.rm', 'Frightened'), 'remove via tag'); await sleep(20);
 
 console.log('\n═══ SCENE 2: Bryn Shander — town + NPC bookkeeping ═══');
 click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
@@ -349,10 +351,15 @@ const allCount = $$('.card h3').length;
 click(byText('.cond-chip.frosty', 'social'), 'filter social'); await sleep(20);
 check('category filter narrows list', $$('.card h3').length < allCount);
 click(byText('.cond-chip.frosty', 'Anywhere'), 'reset filter'); await sleep(20);
-click(byText('.card button', 'Copy & edit'), 'copy a seeded encounter'); await sleep(30);
-check('copy-edit sheet opens', bodyHas('Copy of'));
-click(byText('.sheet button', 'Save encounter'), 'save copy'); await sleep(30);
-check('copy saved as yours', bodyHas('✦ yours'));
+check('Copy & edit removed', !byText('button', 'Copy & edit'));
+const newEncBtn = byText('button', '+ New encounter');
+check('+ New encounter present (top)', !!newEncBtn);
+click(newEncBtn, 'open new encounter'); await sleep(30);
+type($$('.sheet .input')[0], 'Wolves on the tundra', 'enc name'); await sleep(20);
+check('description box is roomy', (document.querySelector('.sheet textarea') as HTMLTextAreaElement)?.rows >= 5);
+check('form gap before save', !!document.querySelector('.sheet .form-gap'));
+click(byText('.sheet button', 'Save encounter'), 'save'); await sleep(30);
+check('custom encounter saved', bodyHas('Wolves on the tundra') && bodyHas('✦ yours'));
 check('edit button on custom', !!byText('.card button', 'Edit'));
 
 // (5) VFX present
@@ -362,7 +369,7 @@ console.log('\n═══ SCENE 14: Compendium — bestiary, spells, items ══
 click(byText('.nav-btn', 'Lore'), 'Lore'); await sleep(20);
 click(byText('.sub-tab', 'Bestiary'), 'Bestiary'); await sleep(20);
 check('Rime creatures listed', bodyHas('Chardalyn Dragon') && bodyHas('Chwinga'));
-click(byText('.unit-name', 'Crag Cat'), 'expand crag cat'); await sleep(20);
+click(byText('.cr-name', 'Crag Cat'), 'expand crag cat'); await sleep(20);
 check('full stat block inline', bodyHas('Nondetection'));
 await sleep(400);
 check('5e browser offline fallback graceful', bodyHas('online visit') || bodyHas('Loading the library'));
@@ -373,6 +380,87 @@ check('Rime items chips', bodyHas('Psi Crystal') && bodyHas('Snowshoes'));
 click(byText('.npc-chip', 'Psi Crystal'), 'open rime item'); await sleep(20);
 check('item sheet with description', bodyHas('psionic energy'));
 click($('.sheet-close'), 'close item'); await sleep(20);
+
+console.log('\n═══ SCENE 15: The unified bestiary ═══');
+click(byText('.nav-btn', 'Lore'), 'Lore'); await sleep(20);
+click(byText('.sub-tab', 'Bestiary'), 'Bestiary'); await sleep(400);
+check('CR filter chips', !!byText('.cond-chip', 'CR 0–1') && !!byText('.cond-chip', '13+'));
+check('source filter chips', !!byText('.cond-chip.frosty', '❄ Rime'));
+check('offline note graceful', bodyHas('online visit') || bodyHas('Downloading the 5e bestiary'));
+check('rime entries with CR badges', $$('.cr-badge').length >= 15);
+type($('.input'), 'yeti', 'search yeti'); await sleep(20);
+check('search narrows', $$('.cr-badge').length <= 3 && bodyHas('Yeti'));
+click(byText('.cr-name', 'Yeti'), 'expand yeti card'); await sleep(20);
+check('collapsible stat block inline', bodyHas('Keen Smell') || bodyHas('Chilling Gaze'));
+type($('.input'), '', 'clear'); await sleep(20);
+click(byText('button', '+ New monster'), 'monster builder'); await sleep(20);
+const mInputs = $$('.sheet .input');
+type(mInputs[1], 'Rime Wraith', 'name'); await sleep(20);
+click(byText('.sheet button', 'Create monster'), 'create'); await sleep(30);
+click(byText('.cond-chip.frosty', '✦ Yours'), 'filter yours'); await sleep(20);
+check('custom monster in bestiary', bodyHas('Rime Wraith'));
+click(byText('.cond-chip.frosty', 'Everything'), 'reset'); await sleep(20);
+
+console.log('\n═══ SCENE 16: Items & spells — no scroll traps ═══');
+click(byText('.sub-tab', 'Items'), 'Items'); await sleep(20);
+check('item mode chips', !!byText('.cond-chip.frosty', 'Magic items') && !!byText('.cond-chip.frosty', 'Shop goods'));
+click(byText('.cond-chip.frosty', 'Shop goods'), 'shop goods'); await sleep(400);
+check('gear categories offered', bodyHas('General goods') && bodyHas('Mounts'));
+check('offline shelf note', bodyHas('online visit'));
+check('ref-list has no height cap', !document.querySelector('.ref-list[style*="max-height"]'));
+click(byText('.sub-tab', 'Spells'), 'Spells'); await sleep(400);
+check('spell list uses page flow', !document.querySelector('.creature-list') || !!document.querySelector('.ref-list') || bodyHas('online visit'));
+
+console.log('\n═══ SCENE 17: Sidekicks & allies ═══');
+click(byText('.nav-btn', 'Party'), 'Party'); await sleep(20);
+check('three party tabs', !!byText('.sub-tab', 'Sidekicks') && !!byText('.sub-tab', 'Allies'));
+click(byText('.sub-tab', 'Sidekicks'), 'Sidekicks'); await sleep(20);
+click(byText('button', '+ Add sidekick'), 'add sidekick'); await sleep(20);
+type($$('.sheet .input')[1], 'Korrik', 'name'); await sleep(20);
+click(byText('.sheet .cond-chip', 'Expert'), 'class Expert'); await sleep(20);
+const linkSel2 = document.querySelector('.sheet select.input') as HTMLSelectElement;
+check('linked-to dropdown', !!linkSel2);
+if (linkSel2) {
+  const opt = [...linkSel2.options].find((o) => o.textContent?.includes('Wick'));
+  if (opt) { linkSel2.value = opt.value; linkSel2.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(20);
+}
+click(byText('.sheet button', 'Add ally'), 'save sidekick'); await sleep(30);
+check('sidekick card with class + link', bodyHas('Korrik') && bodyHas("Wick's"));
+
+click(byText('.sub-tab', 'Allies'), 'Allies'); await sleep(20);
+click(byText('button', '+ Recruit ally'), 'recruit'); await sleep(300);
+check('recruit sheet: NPCs + monsters', bodyHas('NPCs') && bodyHas('Monsters'));
+click(byText('.sheet .npc-chip', 'Vellynne'), 'recruit Vellynne'); await sleep(30);
+check('NPC ally recruited', bodyHas('Vellynne'));
+click(byText('.cr-name', 'Vellynne') ?? byText('.unit-name', 'Vellynne'), 'expand ally'); await sleep(20);
+check('NPC ally links to sheet', !!byText('button', 'Open NPC sheet'));
+
+console.log('\n═══ SCENE 18: Weather from the strip + travel rules ═══');
+click($('.weather-strip.tappable'), 'tap weather strip'); await sleep(30);
+check('weather sheet opens from strip', bodyHas('Roll weather') && bodyHas('New day'));
+click($('.sheet-close'), 'close'); await sleep(20);
+click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
+click(byText('.sub-tab', 'Travel'), 'Travel'); await sleep(20);
+check('supplies tracker', bodyHas('Rations') && !!document.querySelector('.supply-n'));
+check('travel rules reference', bodyHas('Extreme cold') && bodyHas('Deep snow'));
+const rationsBefore = parseInt(document.querySelector('.supply-n')!.textContent!, 10);
+// take a 1-day trip to consume rations
+{
+  const sels = $$('select.input');
+  (sels[1] as HTMLSelectElement).value = 'Targos';
+  sels[1].dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(20);
+}
+click(byText('button', 'Set out ✦'), 'set out'); await sleep(20);
+click(byText('button', 'Arrive at Targos'), 'travel+arrive'); await sleep(30);
+const rationsAfter = parseInt(document.querySelector('.supply-n')!.textContent!, 10);
+check('travel day consumed rations', rationsAfter === rationsBefore - 4, `${rationsBefore}→${rationsAfter}`);
+
+console.log('\n═══ SCENE 19: The winds of fate (VFX) ═══');
+check('26 flakes ride the wind', $$('.starfield .flake').length === 26);
+check('gust flakes present', $$('.starfield .flake.gust').length >= 4);
+check('stars still shine', $$('.starfield .star').length >= 50);
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

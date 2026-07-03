@@ -21,13 +21,15 @@ const STARS = Array.from({ length: 56 }, (_, i) => ({
   delay: rand() * 5,
 }));
 
-const FLAKES = Array.from({ length: 18 }, () => ({
+const FLAKES = Array.from({ length: 26 }, (_, i) => ({
   left: rand() * 100,
-  size: 2 + rand() * 2.5,
-  duration: 9 + rand() * 9,
-  delay: rand() * 12,
-  drift: (rand() - 0.5) * 80,
-  opacity: 0.25 + rand() * 0.4,
+  size: 1.5 + rand() * 2.8,
+  duration: 8 + rand() * 10,
+  delay: rand() * 14,
+  drift: 30 + rand() * 140,           // the wind always blows the same way
+  sway: 2.5 + rand() * 3,
+  opacity: 0.22 + rand() * 0.45,
+  gust: i % 5 === 0,                   // every fifth flake rides a gust
 }));
 
 export function Starfield() {
@@ -48,14 +50,14 @@ export function Starfield() {
       ))}
       {FLAKES.map((f) => (
         <span
-          class="flake"
+          class={`flake${f.gust ? ' gust' : ''}`}
           style={{
             left: `${f.left}%`,
             width: `${f.size}px`,
             height: `${f.size}px`,
             opacity: f.opacity,
-            animationDuration: `${f.duration}s`,
-            animationDelay: `-${f.delay}s`,
+            animationDuration: `${f.duration}s, ${f.sway}s`,
+            animationDelay: `-${f.delay}s, -${f.delay}s`,
             '--drift': `${f.drift}px`,
           }}
         />

@@ -2,11 +2,11 @@ import { useState, useEffect } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { SessionEntry, SessionStatus, Milestone, QuestStatus } from '../state/schema';
 import { Sheet, ConfirmBtn, Field } from '../components/ui';
-import { CREATURES, EQUIPMENT, MAGIC_ITEMS, SeedCreature } from '../data';
+import { EQUIPMENT, MAGIC_ITEMS } from '../data';
 import { NpcRegistry, allNpcs, openNpc } from './npcs';
 import { NpcLinkPicker } from './world';
-import { MonsterPanel } from './combat';
-import { getApiList, getApiDetail, ApiListItem, ApiDetail, ApiMonsterPanel, DetailBody } from '../lib/api';
+import { getApiList, getApiCategory, getApiDetail, ApiListItem, ApiDetail, ApiMonsterPanel, DetailBody } from '../lib/api';
+import { useBestiary, BestiaryCard, MonsterForm, CR_FILTERS } from './monsters';
 
 // ---------------------------------------------------------------- sessions
 
@@ -217,105 +217,191 @@ export function SessionScreen() {
 
 // ---------------------------------------------------------------- Compendium
 
-function RimeCreatureCard({ c }: { c: SeedCreature }) {
-  const [open, setOpen] = useState(false);
+function BestiaryPanel() {
+  const [q, setQ] = useState('');
+  const [crF, setCrF] = useState<number | 'all'>('all');
+  const [srcF, setSrcF] = useState<'all' | 'rime' | 'custom'>('all');
+  const [building, setBuilding] = useState(false);
+  const { all, apiStatus, progress } = useBestiary();
+
+  const shown = all.filter((e) =>
+    (!q.trim() || e.name.toLowerCase().includes(q.toLowerCase())) &&
+    (crF === 'all' || CR_FILTERS[crF].test(e.cr)) &&
+    (srcF === 'all' || e.src === srcF));
+
   return (
-    <div class="card unit">
-      <div class="unit-top" onClick={() => setOpen(!open)}>
-        <span class="entity-emoji">{String(c.emoji)}</span>
-        <div class="unit-id">
-          <div class="unit-name">{String(c.name)}</div>
-          <div class="unit-meta">CR {String(c.cr)} · AC {String(c.ac)} · {String(c.hp)} hp</div>
-        </div>
+    <>
+      <input class="input" placeholder="Search all monsters…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      <div class="chip-row" style={{ margin: '10px 0 6px' }}>
+        <button class={`cond-chip${crF === 'all' ? ' on' : ''}`} onClick={() => setCrF('all')}>Any CR</button>
+        {CR_FILTERS.map((f, i) => (
+          <button class={`cond-chip${crF === i ? ' on' : ''}`} onClick={() => setCrF(i)}>{f.label}</button>
+        ))}
       </div>
-      {open && (
-        <div class="unit-detail">
-          {String(c.lore || '') && <p class="read" style={{ marginBottom: '8px' }}>{String(c.lore)}</p>}
-          <MonsterPanel srcId={c.id} name={String(c.name)} />
-        </div>
-      )}
-    </div>
+      <div class="chip-row" style={{ marginBottom: '12px' }}>
+        <button class={`cond-chip frosty${srcF === 'all' ? ' on' : ''}`} onClick={() => setSrcF('all')}>Everything</button>
+        <button class={`cond-chip frosty${srcF === 'rime' ? ' on' : ''}`} onClick={() => setSrcF('rime')}>❄ Rime</button>
+        <button class={`cond-chip frosty${srcF === 'custom' ? ' on' : ''}`} onClick={() => setSrcF('custom')}>✦ Yours</button>
+      </div>
+      {apiStatus === 'loading' && <p class="stat-fine">Downloading the 5e bestiary… {progress}% — one time, then it's yours offline.</p>}
+      {apiStatus === null && <p class="stat-fine">The 5e library needs one online visit; Rime & custom monsters are always here.</p>}
+
+      <button class="btn primary wide" style={{ margin: '4px 0 12px' }} onClick={() => setBuilding(true)}>+ New monster</button>
+      {building && <MonsterForm open onClose={() => setBuilding(false)} />}
+
+      {shown.map((e) => <BestiaryCard key={e.key} e={e} ApiPanel={ApiMonsterPanel} />)}
+      {shown.length === 0 && <p class="phase-note">Nothing in the dark matches that.</p>}
+    </>
   );
 }
 
-function ApiBrowser({ kind, placeholder, levelFilter }: {
-  kind: 'monsters' | 'spells' | 'magic-items' | 'equipment';
-  placeholder: string;
-  levelFilter?: boolean;
-}) {
+// ---------------------------------------------------------------- spells
+
+function SpellsPanel() {
   const [list, setList] = useState<ApiListItem[] | null | 'loading'>('loading');
   const [q, setQ] = useState('');
   const [lvl, setLvl] = useState<number | 'all'>('all');
   const [openIdx, setOpenIdx] = useState<string | null>(null);
   const [detail, setDetail] = useState<ApiDetail | null | 'loading'>(null);
 
-  useEffect(() => { let live = true; getApiList(kind).then((r) => live && setList(r)); return () => { live = false; }; }, [kind]);
+  useEffect(() => { let live = true; getApiList('spells').then((r) => live && setList(r)); return () => { live = false; }; }, []);
   useEffect(() => {
-    if (!openIdx || kind === 'monsters') return;
+    if (!openIdx) return;
     let live = true;
     setDetail('loading');
-    getApiDetail(kind, openIdx).then((r) => live && setDetail(r));
+    getApiDetail('spells', openIdx).then((r) => live && setDetail(r));
     return () => { live = false; };
   }, [openIdx]);
 
   if (list === 'loading') return <p class="stat-fine">Loading the library…</p>;
-  if (!list) return <div class="card"><p class="read">The 5e library needs one online visit to download — after that it lives on your phone.</p></div>;
+  if (!list) return <div class="card"><p class="read">The spell library needs one online visit to download — after that it lives on your phone.</p></div>;
 
-  const shown = list
-    .filter((x) => (!q.trim() || x.name.toLowerCase().includes(q.toLowerCase())) && (lvl === 'all' || x.level === lvl))
-    .slice(0, 40);
+  const shown = list.filter((x) =>
+    (!q.trim() || x.name.toLowerCase().includes(q.toLowerCase())) && (lvl === 'all' || x.level === lvl));
   const openItem = list.find((x) => x.index === openIdx);
 
   return (
     <>
-      <input class="input" placeholder={placeholder} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
-      {levelFilter && (
-        <div class="chip-row" style={{ margin: '10px 0' }}>
-          <button class={`cond-chip${lvl === 'all' ? ' on' : ''}`} onClick={() => setLvl('all')}>All</button>
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-            <button class={`cond-chip${lvl === n ? ' on' : ''}`} onClick={() => setLvl(n)}>{n === 0 ? 'C' : n}</button>
-          ))}
-        </div>
-      )}
-      <div class="creature-list" style={{ marginTop: levelFilter ? 0 : '10px', maxHeight: '420px' }}>
+      <input class="input" placeholder="Search spells…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      <div class="chip-row" style={{ margin: '10px 0' }}>
+        <button class={`cond-chip${lvl === 'all' ? ' on' : ''}`} onClick={() => setLvl('all')}>All</button>
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+          <button class={`cond-chip${lvl === n ? ' on' : ''}`} onClick={() => setLvl(n)}>{n === 0 ? 'C' : n}</button>
+        ))}
+      </div>
+      <div class="ref-list">
         {shown.map((x) => (
           <button class="creature-add" onClick={() => setOpenIdx(x.index)}>
             <span>{x.name}</span>
-            {x.level !== undefined && <span class="cr">{x.level === 0 ? 'cantrip' : `lvl ${x.level}`}</span>}
+            <span class="cr">{x.level === 0 ? 'cantrip' : `lvl ${x.level}`}</span>
           </button>
         ))}
         {shown.length === 0 && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
       </div>
-
       {openIdx && openItem && (
         <Sheet open title={openItem.name} onClose={() => { setOpenIdx(null); setDetail(null); }}>
-          {kind === 'monsters'
-            ? <ApiMonsterPanel index={openIdx} name={openItem.name} />
-            : detail === 'loading'
-              ? <p class="stat-fine">Fetching…</p>
-              : detail
-                ? <DetailBody d={detail} />
-                : <p class="stat-fine">Unavailable offline — open once with internet to cache it.</p>}
+          {detail === 'loading' ? <p class="stat-fine">Fetching…</p>
+            : detail ? <DetailBody d={detail} />
+            : <p class="stat-fine">Unavailable offline — open once with internet to cache it.</p>}
         </Sheet>
       )}
     </>
   );
 }
 
+// ---------------------------------------------------------------- items
+
+type ItemMode = 'rime' | 'magic' | 'gear';
+type CatListItem = ApiListItem & { magic?: boolean };
+
+const MAGIC_CATS: [string, string][] = [
+  ['wondrous-items', 'Wondrous'], ['potion', 'Potions'], ['ring', 'Rings'],
+  ['scroll', 'Scrolls'], ['rod', 'Rods'], ['staff', 'Staffs'], ['wand', 'Wands'],
+  ['weapon', 'Weapons'], ['armor', 'Armor'],
+];
+const GEAR_CATS: [string, string][] = [
+  ['adventuring-gear', 'General goods'], ['weapon', 'Weapons'], ['armor', 'Armor'],
+  ['tools', 'Tools'], ['mounts-and-vehicles', 'Mounts & vehicles'],
+];
+
 function ItemsPanel() {
+  const [mode, setMode] = useState<ItemMode>('rime');
+  const [cat, setCat] = useState<string>('all');
+  const [q, setQ] = useState('');
+  const [list, setList] = useState<CatListItem[] | null | 'loading'>(null);
   const [openRime, setOpenRime] = useState<string | null>(null);
+  const [openApi, setOpenApi] = useState<{ kind: 'magic-items' | 'equipment'; index: string; name: string } | null>(null);
+  const [detail, setDetail] = useState<ApiDetail | null | 'loading'>(null);
+
+  useEffect(() => {
+    if (mode === 'rime') { setList(null); return; }
+    let live = true;
+    setList('loading');
+    const load = async () => {
+      if (cat === 'all' && mode === 'magic') return getApiList('magic-items');
+      if (cat === 'all' && mode === 'gear') return getApiList('equipment');
+      const members = await getApiCategory(cat) as CatListItem[] | null;
+      if (!members) return null;
+      return members.filter((m) => (mode === 'magic' ? m.magic : !m.magic));
+    };
+    load().then((r) => live && setList(r));
+    return () => { live = false; };
+  }, [mode, cat]);
+
+  useEffect(() => {
+    if (!openApi) return;
+    let live = true;
+    setDetail('loading');
+    getApiDetail(openApi.kind, openApi.index).then((r) => live && setDetail(r));
+    return () => { live = false; };
+  }, [openApi]);
+
   const rimeItems = [...(MAGIC_ITEMS as Record<string, unknown>[]), ...(EQUIPMENT as Record<string, unknown>[])];
   const open = rimeItems.find((i) => i.index === openRime);
+  const cats = mode === 'magic' ? MAGIC_CATS : GEAR_CATS;
+  const shown = Array.isArray(list)
+    ? list.filter((x) => !q.trim() || x.name.toLowerCase().includes(q.toLowerCase()))
+    : [];
+
   return (
     <>
-      <div class="field-label">Rime module items</div>
-      <div class="chip-row" style={{ marginBottom: '14px' }}>
-        {rimeItems.map((i) => (
-          <button class="chip npc-chip" onClick={() => setOpenRime(String(i.index))}>✦ {String(i.name)}</button>
-        ))}
+      <div class="chip-row" style={{ marginBottom: '8px' }}>
+        <button class={`cond-chip frosty${mode === 'rime' ? ' on' : ''}`} onClick={() => { setMode('rime'); }}>❄ Rime</button>
+        <button class={`cond-chip frosty${mode === 'magic' ? ' on' : ''}`} onClick={() => { setMode('magic'); setCat('all'); }}>Magic items</button>
+        <button class={`cond-chip frosty${mode === 'gear' ? ' on' : ''}`} onClick={() => { setMode('gear'); setCat('all'); }}>Shop goods</button>
       </div>
-      <div class="field-label">5e magic items</div>
-      <ApiBrowser kind="magic-items" placeholder="Search magic items…" />
+
+      {mode === 'rime' && (
+        <div class="chip-row">
+          {rimeItems.map((i) => (
+            <button class="chip npc-chip" onClick={() => setOpenRime(String(i.index))}>✦ {String(i.name)}</button>
+          ))}
+        </div>
+      )}
+
+      {mode !== 'rime' && (
+        <>
+          <div class="chip-row" style={{ marginBottom: '10px' }}>
+            <button class={`cond-chip${cat === 'all' ? ' on' : ''}`} onClick={() => setCat('all')}>All</button>
+            {cats.map(([idx, label]) => (
+              <button class={`cond-chip${cat === idx ? ' on' : ''}`} onClick={() => setCat(idx)}>{label}</button>
+            ))}
+          </div>
+          <input class="input" placeholder={mode === 'magic' ? 'Search magic items…' : 'Search goods…'} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+          {list === 'loading' && <p class="stat-fine">Loading…</p>}
+          {list === null && <p class="stat-fine">Needs one online visit to download this shelf.</p>}
+          <div class="ref-list" style={{ marginTop: '10px' }}>
+            {shown.map((x) => (
+              <button class="creature-add" onClick={() => setOpenApi({ kind: x.magic || mode === 'magic' ? 'magic-items' : 'equipment', index: x.index, name: x.name })}>
+                <span>{x.name}</span>
+                {x.magic && mode === 'gear' ? <span class="cr">magic</span> : null}
+              </button>
+            ))}
+            {Array.isArray(list) && shown.length === 0 && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
+          </div>
+        </>
+      )}
+
       {open && (
         <Sheet open title={String(open.name)} onClose={() => setOpenRime(null)}>
           <div class="npc-statline">
@@ -324,6 +410,13 @@ function ItemsPanel() {
             {(open.cost as { quantity?: number; unit?: string } | undefined)?.quantity !== undefined && <span>{String((open.cost as { quantity: number; unit: string }).quantity)} {String((open.cost as { quantity: number; unit: string }).unit)}</span>}
           </div>
           {((open.desc as string[]) ?? []).map((p) => <p class="read" style={{ margin: '8px 0' }}>{p}</p>)}
+        </Sheet>
+      )}
+      {openApi && (
+        <Sheet open title={openApi.name} onClose={() => { setOpenApi(null); setDetail(null); }}>
+          {detail === 'loading' ? <p class="stat-fine">Fetching…</p>
+            : detail ? <DetailBody d={detail} />
+            : <p class="stat-fine">Unavailable offline — open once with internet to cache it.</p>}
         </Sheet>
       )}
     </>
@@ -346,15 +439,8 @@ export function CompendiumScreen() {
       </div>
 
       {sub === 'npcs' && <NpcRegistry />}
-      {sub === 'bestiary' && (
-        <>
-          <div class="field-label">Creatures of the Rime</div>
-          {CREATURES.map((c) => <RimeCreatureCard key={c.id} c={c} />)}
-          <div class="field-label" style={{ marginTop: '14px' }}>5e Monster Manual</div>
-          <ApiBrowser kind="monsters" placeholder="Search monsters…" />
-        </>
-      )}
-      {sub === 'spells' && <ApiBrowser kind="spells" placeholder="Search spells…" levelFilter />}
+      {sub === 'bestiary' && <BestiaryPanel />}
+      {sub === 'spells' && <SpellsPanel />}
       {sub === 'items' && <ItemsPanel />}
     </div>
   );

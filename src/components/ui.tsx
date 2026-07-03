@@ -91,3 +91,31 @@ export function NumInput({ value, onInput, min, max, w }: {
     />
   );
 }
+
+
+// --- Collapsible condition editor -------------------------------------------
+// Active conditions show as removable tags; the full grid stays hidden
+// behind "+ Condition" so cards stay compact when nothing's in play.
+
+import { CONDITIONS } from '../state/schema';
+
+export function CondEditor({ current, onToggle }: { current: string[]; onToggle: (c: string) => void }) {
+  const [pick, setPick] = useState(false);
+  return (
+    <div class="cond-editor">
+      <div class="cond-active">
+        {current.map((c) => (
+          <button class="cond-tag rm" onClick={() => onToggle(c)} aria-label={`Remove ${c}`}>{c} ✕</button>
+        ))}
+        <button class="cond-add" onClick={() => setPick(!pick)}>{pick ? '− Hide' : '+ Condition'}</button>
+      </div>
+      {pick && (
+        <div class="cond-grid" style={{ marginTop: '8px' }}>
+          {CONDITIONS.filter((c) => !current.includes(c)).map((c) => (
+            <button class="cond-chip" onClick={() => { onToggle(c); setPick(false); }}>{c}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

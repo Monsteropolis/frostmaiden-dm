@@ -1,7 +1,11 @@
 import { useState } from 'preact/hooks';
 import { state, patch } from '../state/store';
-import { PC, Ally, CONDITIONS, AllyAttack } from '../state/schema';
-import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
+import { PC, Ally, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
+import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod } from './monsters';
+import { ApiMonsterPanel, getApiMonster } from '../lib/api';
+import { CREATURES } from '../data';
+import { allNpcs, openNpc } from './npcs';
+import { Sheet, ConfirmBtn, Field, NumInput, CondEditor } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
 
 // ---------------------------------------------------------------- helpers
@@ -111,7 +115,7 @@ function PcCard({ pc }: { pc: PC }) {
             </div>
           )}
 
-          <ConditionGrid
+          <CondEditor
             current={pc.conditions}
             onToggle={(c) => patch((s) => {
               const p = s.party.find((x) => x.id === pc.id); if (!p) return;
@@ -187,7 +191,11 @@ function AllyCard({ ally }: { ally: Ally }) {
         <span class="entity-emoji">{ally.emoji}</span>
         <div class="unit-id">
           <div class="unit-name">{ally.name}</div>
-          <div class="unit-meta">{ally.kind} {ally.level ? `· L${ally.level}` : ''} <span class="sep">·</span> AC {ally.ac}{ally.location ? <><span class="sep">·</span> {ally.location}</> : null}</div>
+          <div class="unit-meta">
+            {ally.sidekickClass ?? ally.kind}{ally.level ? ` · L${ally.level}` : ''} <span class="sep">·</span> AC {ally.ac}
+            {ally.linkedPcId && (() => { const p = state.value.party.find((x) => x.id === ally.linkedPcId); return p ? <> <span class="sep">·</span> ✦ {p.name}'s</> : null; })()}
+            {ally.location ? <><span class="sep">·</span> {ally.location}</> : null}
+          </div>
           <CondSummary conditions={ally.conditions} />
         </div>
         <div class="hp-ctl" onClick={(e) => e.stopPropagation()}>
@@ -205,14 +213,22 @@ function AllyCard({ ally }: { ally: Ally }) {
             <button class="btn" onClick={() => patch((s) => { const a = s.sidekicks.find((x) => x.id === ally.id); if (a) a.hp = a.maxHp; })}>Full</button>
           </div>
 
-          <div class="score-row">
-            {(Object.entries(ally.scores) as [string, number][]).map(([k, v]) => (
-              <button class="score" onClick={() => rollD20(`${ally.name} — ${k.toUpperCase()}`, Math.floor((v - 10) / 2))}>
-                <span class="score-k">{k.toUpperCase()}</span>
-                <span class="score-v">{v}</span>
-              </button>
-            ))}
-          </div>
+          {!ally.srcType && (
+            <div class="score-row">
+              {(Object.entries(ally.scores) as [string, number][]).map(([k, v]) => (
+                <button class="score" onClick={() => rollD20(`${ally.name} — ${k.toUpperCase()}`, Math.floor((v - 10) / 2))}>
+                  <span class="score-k">{k.toUpperCase()}</span>
+                  <span class="score-v">{v}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {ally.srcType === 'monster' && (() => { const c = CREATURES.find((x) => x.id === ally.srcId); return c ? <StatPanel m={rimeAsStatBlock(c)} /> : null; })()}
+          {ally.srcType === 'custommon' && customMonsterById(ally.srcId) && <StatPanel m={customMonsterById(ally.srcId)!} />}
+          {ally.srcType === 'api' && ally.srcId && <ApiMonsterPanel index={ally.srcId} name={ally.name} />}
+          {ally.srcType === 'npc' && ally.srcId && (
+            <button class="btn mini ghost" style={{ margin: '8px 0' }} onClick={() => openNpc(ally.srcId!)}>Open NPC sheet →</button>
+          )}
 
           {ally.attacks.length > 0 && (
             <div class="attack-list">
@@ -226,7 +242,7 @@ function AllyCard({ ally }: { ally: Ally }) {
             </div>
           )}
 
-          <ConditionGrid current={ally.conditions} onToggle={(c) => patch((s) => {
+          <CondEditor current={ally.conditions} onToggle={(c) => patch((s) => {
             const a = s.sidekicks.find((x) => x.id === ally.id); if (!a) return;
             a.conditions = a.conditions.includes(c) ? a.conditions.filter((x) => x !== c) : [...a.conditions, c];
           })} />
@@ -248,9 +264,11 @@ function AllyCard({ ally }: { ally: Ally }) {
 
 // ---------------------------------------------------------------- Ally form
 
-function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: Ally }) {
+const SIDEKICK_CLASSES: SidekickClass[] = ['Warrior', 'Expert', 'Spellcaster'];
+
+function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: boolean; onClose: () => void; existing?: Ally; category?: 'sidekick' | 'ally' }) {
   const blank: Ally = existing ?? {
-    id: '', name: '', emoji: '🐺', kind: '', level: 1, hp: 11, maxHp: 11, ac: 13, initMod: 2,
+    id: '', name: '', emoji: '🐺', kind: '', category, level: 1, hp: 11, maxHp: 11, ac: 13, initMod: 2,
     scores: { str: 12, dex: 14, con: 12, int: 3, wis: 12, cha: 6 },
     attacks: [], conditions: [], location: '', notes: '',
   };
@@ -266,9 +284,26 @@ function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => v
         <Field label="Name"><input class="input" value={f.name} onInput={(e) => set('name', (e.target as HTMLInputElement).value)} /></Field>
       </div>
       <div class="field-row">
-        <Field label="Kind (e.g. Wolf, Expert sidekick)"><input class="input" value={f.kind} onInput={(e) => set('kind', (e.target as HTMLInputElement).value)} /></Field>
+        <Field label="Kind (e.g. Wolf, Goliath scout)"><input class="input" value={f.kind} onInput={(e) => set('kind', (e.target as HTMLInputElement).value)} /></Field>
         <Field label="Level"><NumInput value={f.level} min={0} onInput={(n) => set('level', n)} /></Field>
       </div>
+      {(f.category ?? 'sidekick') === 'sidekick' && (
+        <>
+          <div class="field-label">Sidekick class (Tasha's)</div>
+          <div class="chip-row" style={{ marginBottom: '12px' }}>
+            {SIDEKICK_CLASSES.map((c) => (
+              <button class={`cond-chip${f.sidekickClass === c ? ' on' : ''}`} onClick={() => setF((prev) => ({ ...prev, sidekickClass: prev.sidekickClass === c ? undefined : c }))}>{c}</button>
+            ))}
+          </div>
+          <Field label="Linked to (whose sidekick)">
+            <select class="input" value={f.linkedPcId ?? ''}
+              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; setF((prev) => ({ ...prev, linkedPcId: v || undefined })); }}>
+              <option value="">— the whole party —</option>
+              {state.value.party.map((p) => <option value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+        </>
+      )}
       <div class="field-row">
         <Field label="Max HP"><NumInput value={f.maxHp} min={1} onInput={(n) => set('maxHp', n)} /></Field>
         <Field label="AC"><NumInput value={f.ac} onInput={(n) => set('ac', n)} /></Field>
@@ -309,12 +344,93 @@ function AllyForm({ open, onClose, existing }: { open: boolean; onClose: () => v
   );
 }
 
+
+// ---------------------------------------------------------------- ally recruitment
+
+function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const [building, setBuilding] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const { all: bestiary, apiStatus, progress } = useBestiary();
+
+  const recruit = (a: Partial<Ally> & { name: string; emoji: string; maxHp: number; ac: number }) =>
+    patch((d) => {
+      d.sidekicks.push({
+        id: `sk${d.seq++}`, kind: a.kind ?? '', category: 'ally', level: a.level ?? 0,
+        hp: a.maxHp, maxHp: a.maxHp, ac: a.ac, initMod: a.initMod ?? 0,
+        scores: a.scores ?? { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+        attacks: [], conditions: [], location: '', notes: '',
+        name: a.name, emoji: a.emoji, srcType: a.srcType, srcId: a.srcId,
+      });
+    });
+
+  const fromBestiary = async (e: BestiaryEntry) => {
+    if (e.src === 'rime') {
+      const c = CREATURES.find((x) => x.id === e.srcId)!;
+      recruit({ name: String(c.name), emoji: String(c.emoji), maxHp: Number(c.hp), ac: Number(c.ac), initMod: abilityMod(c.dex), srcType: 'monster', srcId: e.srcId, kind: String(c.type) });
+    } else if (e.src === 'custom') {
+      const m = customMonsterById(e.srcId)!;
+      recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: e.srcId, kind: m.type });
+    } else {
+      setBusy(e.key);
+      const d = await getApiMonster(e.srcId);
+      setBusy(null);
+      const hp = d?.hit_points ?? 10;
+      const ac = Array.isArray(d?.armor_class) ? d!.armor_class[0]?.value ?? 12 : (d?.armor_class as number | undefined) ?? 12;
+      recruit({ name: e.name, emoji: '👾', maxHp: hp, ac, initMod: abilityMod(d?.dexterity), srcType: 'api', srcId: e.srcId, kind: String(d?.type ?? '') });
+    }
+    onClose();
+  };
+
+  const npcs = allNpcs();
+  const matches = (q.trim()
+    ? bestiary.filter((e) => e.name.toLowerCase().includes(q.toLowerCase()))
+    : bestiary.filter((e) => e.src !== 'api')).slice(0, 50);
+  const npcMatches = q.trim() ? npcs.filter((n) => n.name.toLowerCase().includes(q.toLowerCase())) : npcs.slice(0, 8);
+
+  return (
+    <Sheet open={open} title="Recruit an ally" onClose={onClose}>
+      <input class="input" placeholder="Search monsters & NPCs…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      {apiStatus === 'loading' && <p class="stat-fine">Downloading the 5e bestiary… {progress}%</p>}
+
+      <div class="field-label" style={{ marginTop: '10px' }}>NPCs</div>
+      <div class="chip-row" style={{ marginBottom: '10px' }}>
+        {npcMatches.map((n) => (
+          <button class="chip npc-chip" onClick={() => {
+            const s = n.seed;
+            recruit({ name: n.name, emoji: n.emoji, maxHp: s?.hp ?? 10, ac: s?.ac ?? 12, srcType: 'npc', srcId: n.id, kind: n.role });
+            onClose();
+          }}>{n.emoji} {n.name}</button>
+        ))}
+      </div>
+
+      <div class="field-label">Monsters</div>
+      <div class="creature-list">
+        {matches.map((e) => (
+          <button class="creature-add" disabled={busy === e.key} onClick={() => fromBestiary(e)}>
+            <span>{e.emoji} {e.name}{e.src === 'custom' ? ' ✦' : ''}</span>
+            <span class="cr">{busy === e.key ? 'adding…' : `CR ${e.crLabel}`}</span>
+          </button>
+        ))}
+      </div>
+      <button class="btn ghost" style={{ marginTop: '10px' }} onClick={() => setBuilding(true)}>+ Build a stat block</button>
+      {building && <MonsterForm open onClose={() => setBuilding(false)} onCreated={(m) => {
+        recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: m.id, kind: m.type });
+        onClose();
+      }} />}
+    </Sheet>
+  );
+}
+
 // ---------------------------------------------------------------- Screen
 
 export function PartyScreen() {
-  const [sub, setSub] = useState<'pcs' | 'allies'>('pcs');
+  const [sub, setSub] = useState<'pcs' | 'sidekicks' | 'allies'>('pcs');
   const [adding, setAdding] = useState(false);
+  const [recruiting, setRecruiting] = useState(false);
   const { party, sidekicks } = state.value;
+  const sk = sidekicks.filter((a) => (a.category ?? 'sidekick') === 'sidekick');
+  const allies = sidekicks.filter((a) => a.category === 'ally');
 
   return (
     <div>
@@ -323,7 +439,8 @@ export function PartyScreen() {
 
       <div class="sub-tabs">
         <button class={`sub-tab${sub === 'pcs' ? ' active' : ''}`} onClick={() => setSub('pcs')}>Characters ({party.length})</button>
-        <button class={`sub-tab${sub === 'allies' ? ' active' : ''}`} onClick={() => setSub('allies')}>Allies ({sidekicks.length})</button>
+        <button class={`sub-tab${sub === 'sidekicks' ? ' active' : ''}`} onClick={() => setSub('sidekicks')}>Sidekicks ({sk.length})</button>
+        <button class={`sub-tab${sub === 'allies' ? ' active' : ''}`} onClick={() => setSub('allies')}>Allies ({allies.length})</button>
       </div>
 
       {sub === 'pcs' && (
@@ -337,14 +454,25 @@ export function PartyScreen() {
         </>
       )}
 
+      {sub === 'sidekicks' && (
+        <>
+          {sk.length === 0 && (
+            <div class="card"><p class="read">Tasha's sidekicks — Warriors, Experts, and Spellcasters who level alongside a hero.</p></div>
+          )}
+          {sk.map((a) => <AllyCard key={a.id} ally={a} />)}
+          <button class="btn primary wide" onClick={() => setAdding(true)}>+ Add sidekick</button>
+          {adding && <AllyForm key="add-sk" open category="sidekick" onClose={() => setAdding(false)} />}
+        </>
+      )}
+
       {sub === 'allies' && (
         <>
-          {sidekicks.length === 0 && (
-            <div class="card"><p class="read">Sidekicks, mounts, and hirelings — every friend the Dale allows.</p></div>
+          {allies.length === 0 && (
+            <div class="card"><p class="read">Recruited creatures and friendly faces — pull any stat block from the bestiary or an NPC into the party's corner.</p></div>
           )}
-          {sidekicks.map((a) => <AllyCard key={a.id} ally={a} />)}
-          <button class="btn primary wide" onClick={() => setAdding(true)}>+ Add ally</button>
-          {adding && <AllyForm key="add-ally" open onClose={() => setAdding(false)} />}
+          {allies.map((a) => <AllyCard key={a.id} ally={a} />)}
+          <button class="btn primary wide" onClick={() => setRecruiting(true)}>+ Recruit ally</button>
+          {recruiting && <RecruitAllySheet open onClose={() => setRecruiting(false)} />}
         </>
       )}
     </div>

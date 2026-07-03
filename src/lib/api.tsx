@@ -209,3 +209,58 @@ export function DetailBody({ d }: { d: ApiDetail }) {
     </>
   );
 }
+
+// ---------------------------------------------------------------- CR-tagged monster list & categories
+
+export interface CrListItem extends ApiListItem { cr: number; }
+
+const CR_BUCKETS = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 30];
+let crListMem: CrListItem[] | null = null;
+
+/** Full monster list with CR attached (one-time bucket fetch, cached forever). */
+export async function getMonstersWithCr(onProgress?: (pct: number) => void): Promise<CrListItem[] | null> {
+  if (crListMem) return crListMem;
+  try {
+    const cached = await get('list:monsters-cr');
+    if (cached) { crListMem = cached; return cached; }
+  } catch { /* idb unavailable */ }
+  const out: CrListItem[] = [];
+  try {
+    for (let i = 0; i < CR_BUCKETS.length; i++) {
+      const cr = CR_BUCKETS[i];
+      const res = await fetch(`https://www.dnd5eapi.co/api/2014/monsters?challenge_rating=${cr}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      for (const r of data.results ?? []) out.push({ index: r.index, name: r.name, cr });
+      onProgress?.(Math.round(((i + 1) / CR_BUCKETS.length) * 100));
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    crListMem = out;
+    try { await set('list:monsters-cr', out); } catch { /* ignore */ }
+    return out;
+  } catch { return null; }
+}
+
+/** Equipment category members, e.g. 'weapon', 'armor', 'adventuring-gear', 'potion'. */
+export async function getApiCategory(index: string): Promise<ApiListItem[] | null> {
+  const key = `cat:${index}`;
+  if (listMem.has(key)) return listMem.get(key)!;
+  try {
+    const cached = await get(`list:${key}`);
+    if (cached) { listMem.set(key, cached); return cached; }
+  } catch { /* idb unavailable */ }
+  try {
+    const res = await fetch(`https://www.dnd5eapi.co/api/2014/equipment-categories/${index}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const list: ApiListItem[] = (data.equipment ?? []).map((r: Record<string, unknown>) => {
+      const url = String(r.url ?? '');
+      return { index: String(r.index), name: String(r.name), level: undefined,
+               // magic items live under /magic-items, mundane under /equipment
+               ...(url.includes('magic-items') ? { magic: true } : {}) } as ApiListItem & { magic?: boolean };
+    });
+    listMem.set(key, list);
+    try { await set(`list:${key}`, list); } catch { /* ignore */ }
+    return list;
+  } catch { return null; }
+}

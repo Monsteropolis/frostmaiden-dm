@@ -81,11 +81,19 @@ export interface PC {
 
 export interface AllyAttack { name: string; bonus: number; damage: string; }
 
+export type AllyCategory = 'sidekick' | 'ally';
+export type SidekickClass = 'Warrior' | 'Expert' | 'Spellcaster';
+
 export interface Ally {
   id: string;
   name: string;
   emoji: string;
   kind: string;       // e.g. "Expert sidekick", "Wolf companion"
+  category?: AllyCategory;      // sidekick (Tasha's) vs recruited ally
+  linkedPcId?: string;          // sidekick: which PC they follow
+  sidekickClass?: SidekickClass;
+  srcType?: 'monster' | 'api' | 'npc' | 'custommon';  // ally: statblock source
+  srcId?: string;
   level: number;
   hp: number;
   maxHp: number;
@@ -98,7 +106,7 @@ export interface Ally {
   notes: string;
 }
 
-export type CombatantSrc = 'pc' | 'ally' | 'monster' | 'custom' | 'api';
+export type CombatantSrc = 'pc' | 'ally' | 'monster' | 'custom' | 'api' | 'custommon';
 
 export interface Combatant {
   id: string;
@@ -183,6 +191,24 @@ export function defaultTownStatus(): TownStatus {
   return { visited: false, standing: 'unknown', activeQuest: '', sidekickRecruited: false, notes: '' };
 }
 
+// --- Custom monsters (user-built stat blocks) ----------------------------------
+
+export interface CustomMonster {
+  id: string;
+  name: string;
+  emoji: string;
+  size: string;
+  type: string;
+  cr: string;
+  ac: number;
+  hp: number;
+  speed: string;
+  str: number; dex: number; con: number; int: number; wis: number; cha: number;
+  senses: string;
+  traits: { n: string; d: string }[];
+  actions: { n: string; d: string }[];
+}
+
 // --- Phase 4: sessions, quests, travel ----------------------------------------
 
 export type QuestStatus = 'dormant' | 'active' | 'escalating' | 'resolved';
@@ -257,12 +283,13 @@ export interface AppState {
   arcs: Arc[];
   encounterPresets: EncounterPreset[];
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
-  travel: { activeJourney: Journey | null; log: TravelLogEntry[] };
+  travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number };
   towns: Record<string, TownStatus>;
 
   // NPC system — first-class from the start
   npcOverrides: Record<string, NpcOverride>;
   customNpcs: CustomNpc[];
+  customMonsters: CustomMonster[];
 
   seq: number; // monotonic id counter for user-created entities
 }
@@ -281,10 +308,11 @@ export function defaultState(): AppState {
     arcs: [],
     encounterPresets: [],
     combat: { active: false, round: 0, turn: 0, combatants: [] },
-    travel: { activeJourney: null, log: [] },
+    travel: { activeJourney: null, log: [], rations: 10, partySize: 4 },
     towns: {},
     npcOverrides: {},
     customNpcs: [],
+    customMonsters: [],
     seq: 1,
   };
 }
