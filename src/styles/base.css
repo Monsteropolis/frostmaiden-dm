@@ -1192,3 +1192,31 @@ details.loc summary::marker { color: var(--frost-deep); }
 .supply-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
 .supply-n { font-size: 22px; font-weight: 700; color: var(--silver); min-width: 44px; text-align: center; }
 .supply-n.low { color: var(--thread); }
+
+/* === PHASE 7: PLAYER TV VIEW (DM-side pairing UI) === */
+.tv-btn {
+  display: flex; align-items: center; gap: 6px;
+  min-width: var(--tap); min-height: var(--tap);
+  justify-content: center;
+  background: none; border: none; cursor: pointer;
+  font-size: 18px;
+}
+.tv-pip {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-faint); display: inline-block;
+}
+.tv-pip.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.tv-pip.busy { background: var(--warn); animation: tvPipBlink 1s steps(2, jump-none) infinite; }
+@keyframes tvPipBlink { from { opacity: 1; } to { opacity: 0.25; } }
+.tv-help { color: var(--ink-dim); font-size: 13.5px; line-height: 1.5; }
+.tv-code-input {
+  font-size: 22px; letter-spacing: 0.25em; text-transform: uppercase;
+  font-weight: 700; text-align: center;
+}
+.tv-status-row {
+  display: flex; align-items: center; gap: 8px;
+  margin: 14px 0; font-size: 14px; color: var(--ink-dim);
+}
+.tv-status-detail { color: var(--ink-faint); font-size: 12.5px; }
+.tv-actions { display: flex; gap: 10px; }
+@media (prefers-reduced-motion: reduce) { .tv-pip.busy { animation: none; } }

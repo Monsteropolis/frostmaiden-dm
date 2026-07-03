@@ -3,11 +3,13 @@ import { state } from '../state/store';
 import { WEATHER } from '../state/schema';
 import { Sheet } from './ui';
 import { WeatherControls } from '../screens/world';
+import { TvPanel, tvPipClass } from './TvPanel';
 
 export function Header() {
   const wx = WEATHER[state.value.weather.current];
   const day = state.value.weather.day;
   const [open, setOpen] = useState(false);
+  const [tvOpen, setTvOpen] = useState(false);
 
   return (
     <header class="header">
@@ -17,6 +19,10 @@ export function Header() {
           <span>Frostmaiden</span>
           <span class="sub">DM</span>
         </div>
+        <button class="tv-btn tappable" aria-label="Player TV View" onClick={() => setTvOpen(true)}>
+          <span aria-hidden="true">📺</span>
+          <span class={tvPipClass()} aria-hidden="true" />
+        </button>
       </div>
       <div class="thread-rule" />
       <div class="weather-strip tappable" role="button" tabIndex={0}
@@ -36,6 +42,7 @@ export function Header() {
           <WeatherControls />
         </Sheet>
       )}
+      {tvOpen && <TvPanel onClose={() => setTvOpen(false)} />}
     </header>
   );
 }

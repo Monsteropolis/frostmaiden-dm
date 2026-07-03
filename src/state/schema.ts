@@ -263,6 +263,17 @@ export interface TravelLogEntry { day: number; text: string; }
 
 // --- Root state --------------------------------------------------------------
 
+// --- TV player view (projection settings live in DM state) --------------------
+
+export interface TvSettings {
+  /** Last room code paired with, so reconnect is one tap */
+  lastRoomCode: string;
+  /** Combatant IDs whose names show as "???" on the TV */
+  hiddenCombatantIds: string[];
+  /** Manual "party is at…" shown on the TV when no journey is active */
+  partyLocation: string;
+}
+
 export interface AppState {
   version: number;
   createdAt: string;
@@ -291,6 +302,8 @@ export interface AppState {
   customNpcs: CustomNpc[];
   customMonsters: CustomMonster[];
 
+  tv: TvSettings;
+
   seq: number; // monotonic id counter for user-created entities
 }
 
@@ -313,6 +326,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '' },
     seq: 1,
   };
 }

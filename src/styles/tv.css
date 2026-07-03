@@ -1,0 +1,139 @@
+/* ============================================================
+   PLAYER TV VIEW — Phase 1 shell.
+   Same token file as the DM app (Cosmos ground, Thread scarce,
+   Frost = cold). TV additions: overscan-safe frame, couch-legible
+   type scale (nothing under 28px @1080p), stepped motion only.
+   ============================================================ */
+
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+
+#tv { height: 100%; }
+
+.tv-frame {
+  height: 100vh;
+  display: flex;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(155,215,232,0.06), transparent 60%),
+    var(--bg);
+}
+
+/* 5% overscan-safe margin on all sides */
+.tv-safe {
+  flex: 1;
+  margin: 5vh 5vw;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* --- Pairing screen --------------------------------------------------------- */
+
+.tv-pairing {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.tv-wordmark {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: var(--silver);
+}
+.tv-wordmark .star-mark { color: var(--frost); }
+.tv-pair-label { font-size: 30px; color: var(--ink-dim); }
+.tv-room-code {
+  font-size: 110px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  padding: 12px 48px 12px calc(48px + 0.25em);
+  color: var(--frost);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-shadow: 0 0 24px var(--frost-glow);
+}
+.tv-newcode {
+  font: 600 22px var(--font-ui);
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 22px;
+  cursor: pointer;
+}
+
+/* --- Connection pip (shared with DM panel) ----------------------------------- */
+
+.tv-conn { display: flex; align-items: center; gap: 12px; font-size: 26px; color: var(--ink-dim); }
+.tv-pip {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ink-faint);
+  display: inline-block;
+}
+.tv-pip.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+/* stepped blink, not a fade — frame-based motion rule */
+.tv-pip.busy { background: var(--warn); animation: tvPipBlink 1s steps(2, jump-none) infinite; }
+@keyframes tvPipBlink { from { opacity: 1; } to { opacity: 0.25; } }
+
+/* --- Phase 1 live readout ----------------------------------------------------- */
+
+.tv-readout { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 28px; }
+.tv-readout-head {
+  display: flex;
+  align-items: baseline;
+  gap: 36px;
+  font-size: 30px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.tv-mode {
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--frost);
+}
+.tv-loc { color: var(--ink-dim); margin-left: auto; font-style: italic; font-family: var(--font-read); }
+.tv-readout-head .tv-conn { font-size: 20px; }
+
+.tv-readout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  min-height: 0;
+  overflow: hidden;
+}
+.tv-readout-grid section { min-width: 0; overflow: hidden; }
+.tv-readout-grid h2 {
+  font-size: 24px;
+  letter-spacing: 0.25em;
+  color: var(--silver-dim);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.tv-row {
+  display: flex;
+  gap: 20px;
+  align-items: baseline;
+  font-size: 32px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+.tv-row.tv-active { background: var(--surface); outline: 2px solid var(--thread); }
+.tv-dim { color: var(--ink-faint); font-size: 0.8em; }
+.tv-inspo { color: var(--silver); }
+.tv-down { color: var(--thread); font-weight: 700; }
+.tv-escalating { color: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-pip.busy { animation: none; }
+}
+
+/* ============================================================
+   DM-side TV panel additions (loaded via base.css? no — these
+   classes are also used by TvPanel.tsx in the phone app, so they
+   are duplicated minimally in base.css. Keep TV-only rules here.)
+   ============================================================ */

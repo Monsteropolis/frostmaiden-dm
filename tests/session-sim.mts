@@ -462,5 +462,52 @@ check('26 flakes ride the wind', $$('.starfield .flake').length === 26);
 check('gust flakes present', $$('.starfield .flake.gust').length >= 4);
 check('stars still shine', $$('.starfield .star').length >= 50);
 
+console.log('\n═══ SCENE 20: Player TV projection — nothing secret leaves the phone ═══');
+{
+  const { projectPlayerView, hpState } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+
+  // hpState thresholds
+  check('hpState healthy', hpState(30, 40) === 'healthy');
+  check('hpState bloodied at half', hpState(20, 40) === 'bloodied');
+  check('hpState critical at quarter', hpState(10, 40) === 'critical');
+  check('hpState down at 0', hpState(0, 40) === 'down');
+
+  // Exploration projection off the live session state
+  let pv = projectPlayerView(state.value);
+  check('projection has party', pv.party.length >= 3);
+  check('party PCs carry exact HP', typeof pv.party[0].hp === 'number' && pv.party[0].maxHp > 0);
+  check('quests only active/escalating', pv.quests.every((q) => q.status === 'active' || q.status === 'escalating'));
+  check('no dormant quest leaks', !pv.quests.some((q) => q.name === 'Foaming Mugs') || state.value.quests.find((q) => q.name === 'Foaming Mugs')?.status !== 'dormant');
+  const raw = JSON.stringify(pv);
+  check('no session secrets in payload', !raw.includes('secrets'));
+  check('no DM notes fields in payload', !raw.includes('"notes"') && !raw.includes('nextTrigger'));
+
+  // Combat projection: monsters abstracted, PCs exact, masking works
+  patch((d) => {
+    d.combat = {
+      active: true, round: 2, turn: 1,
+      combatants: [
+        { id: 'cA', name: 'Brienne', emoji: '⚔️', hp: 30, maxHp: 44, ac: 18, init: 17, initMod: 1, conditions: [], srcType: 'pc', srcId: d.party[0]?.id },
+        { id: 'cB', name: 'Crag Cat', emoji: '🐈', hp: 8, maxHp: 34, ac: 13, init: 12, initMod: 3, conditions: [], srcType: 'monster', srcId: 'crag_cat' },
+        { id: 'cC', name: 'Frost Druid', emoji: '🌲', hp: 45, maxHp: 45, ac: 11, init: 8, initMod: 1, conditions: [], srcType: 'monster', srcId: 'frost_druid' },
+      ],
+    };
+    d.tv.hiddenCombatantIds = ['cC'];
+  });
+  pv = projectPlayerView(state.value);
+  check('combat mode engages', pv.mode === 'combat' && pv.combat !== null);
+  const [pc, cat, druid] = pv.combat!.combatants;
+  check('PC combatant keeps exact HP', pc.friendly && pc.hp === 30);
+  check('monster HP abstracted (critical)', cat.hp === null && cat.hpState === 'critical');
+  check('monster AC never in payload', !JSON.stringify(pv).includes('"ac"'));
+  check('hidden monster masked as ???', druid.name === '???' && druid.emoji === '❓');
+  check('active/next flags set', cat.active && druid.next);
+
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; d.tv.hiddenCombatantIds = []; });
+  pv = projectPlayerView(state.value);
+  check('back to exploration when combat ends', pv.mode === 'exploration' && pv.combat === null);
+}
+
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

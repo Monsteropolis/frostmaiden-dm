@@ -4,6 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        tv: 'tv.html',       // Player TV View — second entry, same deploy
+      },
+    },
+  },
   plugins: [
     preact(),
     VitePWA({
