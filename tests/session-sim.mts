@@ -509,5 +509,57 @@ console.log('\n═══ SCENE 20: Player TV projection — nothing secret leave
   check('back to exploration when combat ends', pv.mode === 'exploration' && pv.combat === null);
 }
 
+console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts render ═══');
+{
+  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { render: rts } = await import('preact-render-to-string');
+  const { CombatView, ExplorationView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+
+  // Stage a combat and drive the hide toggle through the real DM UI
+  patch((d) => {
+    d.combat = {
+      active: true, round: 3, turn: 0,
+      combatants: [
+        { id: 'cP', name: 'Brienne', emoji: '🛡️', hp: 30, maxHp: 44, ac: 18, init: 17, initMod: 1, conditions: [], srcType: 'pc', srcId: d.party[0]?.id },
+        { id: 'cM', name: 'Yeti', emoji: '🦍', hp: 51, maxHp: 51, ac: 12, init: 9, initMod: 0, conditions: [], srcType: 'monster', srcId: 'yeti' },
+      ],
+    };
+    d.tv.hiddenCombatantIds = [];
+  });
+  click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);
+  click(byText('.cr-name', 'Yeti'), 'expand Yeti row'); await sleep(20);
+  check('hide toggle only on monsters', !!byText('.tv-hide-btn', 'Hide on TV'));
+  click(byText('.tv-hide-btn', 'Hide on TV'), 'hide Yeti on TV'); await sleep(20);
+  check('combatant id recorded as hidden', state.value.tv.hiddenCombatantIds.includes('cM'));
+  check('toggle now offers reveal', !!byText('.tv-hide-btn', 'Reveal on TV'));
+
+  let pv = projectPlayerView(state.value);
+  const yeti = pv.combat!.combatants.find((c) => c.id === 'cM')!;
+  check('hidden monster masked in projection', yeti.name === '???');
+
+  // Render the actual TV combat view from the projection
+  let html = rts(h(CombatView, { v: pv }));
+  check('TV shows round counter', html.includes('ROUND 3'));
+  check('TV masks hidden monster name', html.includes('???') && !html.includes('Yeti'));
+  check('TV never shows monster AC or exact HP', !html.includes('AC 12') && !html.includes('51'));
+  check('TV shows PC exact HP', html.includes('30/44'));
+  check('TV marks active turn', html.includes('tv-init-row active'));
+  check('TV marks next up', html.includes('NEXT'));
+
+  click(byText('.tv-hide-btn', 'Reveal on TV'), 'reveal Yeti'); await sleep(20);
+  pv = projectPlayerView(state.value);
+  html = rts(h(CombatView, { v: pv }));
+  check('reveal restores name on TV', html.includes('Yeti'));
+  check('monster HP still abstracted after reveal', html.includes('HEALTHY') && !html.includes('51'));
+
+  // Exploration view renders quests + party grid
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; d.tv.hiddenCombatantIds = []; });
+  pv = projectPlayerView(state.value);
+  html = rts(h(ExplorationView, { v: pv }));
+  check('exploration view shows objectives panel', html.includes('OBJECTIVES'));
+  check('exploration view shows party', html.includes('Brienne'));
+}
+
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

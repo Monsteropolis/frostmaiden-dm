@@ -152,6 +152,19 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
           {c.srcType === 'api' && c.srcId && <ApiMonsterPanel index={c.srcId} name={c.name} />}
           {c.srcType === 'custommon' && customMonsterById(c.srcId) && <StatPanel m={customMonsterById(c.srcId)!} />}
           <div class="row-actions">
+            {c.srcType !== 'pc' && c.srcType !== 'ally' && (() => {
+              const hidden = state.value.tv.hiddenCombatantIds.includes(c.id);
+              return (
+                <button class={`btn ghost tv-hide-btn ${hidden ? 'on' : ''}`}
+                  onClick={() => patch((s) => {
+                    const list = s.tv.hiddenCombatantIds;
+                    const i = list.indexOf(c.id);
+                    if (i >= 0) list.splice(i, 1); else list.push(c.id);
+                  })}>
+                  {hidden ? '👁 Reveal on TV' : '🖵 Hide on TV'}
+                </button>
+              );
+            })()}
             <ConfirmBtn label="Remove" confirmLabel="Remove?" class="ghost danger"
               onConfirm={() => patch((s) => {
                 const i = s.combat.combatants.findIndex((x) => x.id === c.id);

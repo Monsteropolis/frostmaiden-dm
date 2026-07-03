@@ -1220,3 +1220,6 @@ details.loc summary::marker { color: var(--frost-deep); }
 .tv-status-detail { color: var(--ink-faint); font-size: 12.5px; }
 .tv-actions { display: flex; gap: 10px; }
 @media (prefers-reduced-motion: reduce) { .tv-pip.busy { animation: none; } }
+
+/* TV hide/reveal toggle in combat rows */
+.tv-hide-btn.on { color: var(--frost); border-color: var(--frost-deep); }

@@ -1,14 +1,14 @@
 // ============================================================
 // TV APP (player side) — purely presentational. Hosts a room,
 // waits for the DM's phone, renders whatever PlayerView arrives.
-// Phase 1 ships the pairing screen + a structured live readout;
-// Phase 2 replaces the readout with the real combat/exploration
-// layouts. No DM state, no logic duplication — render only.
+// Phase 2: real combat + exploration layouts, frame-based motion
+// (turn flash, round pulse — all steps(), no easing). No DM
+// state, no logic duplication — render only.
 // ============================================================
 
 import { signal } from '@preact/signals';
-import { useEffect } from 'preact/hooks';
-import { PlayerView } from './projection';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { PlayerView, PvCombatant, PvPc, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
 
@@ -40,7 +40,7 @@ function newCode() {
   boot();
 }
 
-// --- UI ------------------------------------------------------------------------
+// ---------------------------------------------------------------- shared bits
 
 function StatusPip() {
   const s = status.value;
@@ -58,6 +58,167 @@ function StatusPip() {
   );
 }
 
+const HP_LABEL: Record<HpState, string> = {
+  healthy: 'HEALTHY', bloodied: 'BLOODIED', critical: 'CRITICAL', down: 'DOWN',
+};
+
+function HpPill({ s }: { s: HpState }) {
+  return <span class={`tv-hp-pill ${s}`}>{HP_LABEL[s]}</span>;
+}
+
+function TvHpBar({ hp, max }: { hp: number; max: number }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (hp / max) * 100)) : 0;
+  const state: HpState = hp <= 0 ? 'down' : pct <= 25 ? 'critical' : pct <= 50 ? 'bloodied' : 'healthy';
+  return (
+    <div class={`tv-hpbar ${state}`}>
+      <div class="tv-hpbar-fill" style={{ width: `${pct}%` }} />
+      <span class="tv-hpbar-num">{hp}/{max}</span>
+    </div>
+  );
+}
+
+function CondChips({ conds }: { conds: string[] }) {
+  if (!conds.length) return null;
+  return (
+    <span class="tv-conds">
+      {conds.map((c) => <span class="tv-cond" key={c}>{c}</span>)}
+    </span>
+  );
+}
+
+function TopStrip({ v }: { v: PlayerView }) {
+  return (
+    <div class="tv-strip">
+      <span class="tv-strip-loc">{v.location}</span>
+      <span class="tv-strip-mode">{v.mode === 'combat' ? '⚔ COMBAT' : '✦ EXPLORATION'}</span>
+      <span class="tv-strip-wx">
+        {v.weather.icon} {v.weather.name}
+        {v.weather.conSave && <span class="tv-consave">✦ CON SAVE</span>}
+        <span class="tv-strip-day">Day {v.day}</span>
+      </span>
+      <StatusPip />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- combat mode
+
+function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
+  return (
+    <div class={`tv-init-row ${c.active ? 'active' : ''} ${flash && c.active ? 'flash' : ''} ${c.hpState === 'down' ? 'down' : ''}`}>
+      <span class="tv-init-marker">{c.active ? '▶' : c.next ? '›' : ''}</span>
+      <span class="tv-init-num">{c.init ?? '—'}</span>
+      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
+      <CondChips conds={c.conditions} />
+      <span class="tv-init-hp">
+        {c.friendly && c.hp !== null && c.maxHp !== null
+          ? <TvHpBar hp={c.hp} max={c.maxHp} />
+          : <HpPill s={c.hpState} />}
+      </span>
+    </div>
+  );
+}
+
+function PartyCard({ p }: { p: PvPc }) {
+  return (
+    <div class={`tv-pc ${p.down ? 'down' : ''}`}>
+      <div class="tv-pc-head">
+        <span class="tv-pc-name">{p.name}{p.inspiration && <span class="tv-inspo" title="Inspiration">✦</span>}</span>
+        <span class="tv-pc-cls">{p.cls}</span>
+      </div>
+      <TvHpBar hp={p.hp} max={p.maxHp} />
+      <div class="tv-pc-foot">
+        <CondChips conds={p.conditions} />
+        {p.down && (
+          <span class="tv-deathsaves">
+            {[0, 1, 2].map((i) => <span class={`ds ${i < p.deathS ? 'ok' : ''}`}>●</span>)}
+            <span class="ds-sep">·</span>
+            {[0, 1, 2].map((i) => <span class={`ds ${i < p.deathF ? 'bad' : ''}`}>●</span>)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CombatView({ v, flash = false, roundPulse = false }: {
+  v: PlayerView; flash?: boolean; roundPulse?: boolean;
+}) {
+  const combat = v.combat!;
+  return (
+    <div class="tv-combat">
+      <section class="tv-init">
+        <div class="tv-panel-head">
+          <h2>INITIATIVE</h2>
+          <span class={`tv-round ${roundPulse ? 'pulse' : ''}`}>ROUND {combat.round}</span>
+        </div>
+        <div class="tv-init-list">
+          {combat.combatants.map((c) => <InitRow c={c} flash={flash} key={c.id} />)}
+        </div>
+      </section>
+      <section class="tv-party">
+        <div class="tv-panel-head"><h2>PARTY</h2></div>
+        {v.party.map((p) => <PartyCard p={p} key={p.id} />)}
+        {v.allies.map((a) => (
+          <div class="tv-ally" key={a.id}>
+            <span>{a.emoji} {a.name}</span>
+            <CondChips conds={a.conditions} />
+            <HpPill s={a.hpState} />
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- exploration
+
+export function ExplorationView({ v }: { v: PlayerView }) {
+  const j = v.travel;
+  return (
+    <div class="tv-explore">
+      <section class="tv-party wide">
+        <div class="tv-panel-head"><h2>PARTY</h2></div>
+        <div class="tv-pc-grid">
+          {v.party.map((p) => <PartyCard p={p} key={p.id} />)}
+        </div>
+        {v.allies.length > 0 && (
+          <div class="tv-ally-row">
+            {v.allies.map((a) => (
+              <div class="tv-ally" key={a.id}>
+                <span>{a.emoji} {a.name}</span>
+                <HpPill s={a.hpState} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <section class="tv-quests">
+        <div class="tv-panel-head"><h2>OBJECTIVES</h2></div>
+        {j && (
+          <div class="tv-journey">
+            <span class="tv-journey-route">{j.origin} → {j.dest}</span>
+            <div class="tv-journey-bar">
+              <div class="tv-journey-fill" style={{ width: `${Math.min(100, (j.day / Math.max(1, j.totalDays)) * 100)}%` }} />
+            </div>
+            <span class="tv-journey-days">Day {j.day} of {j.totalDays}</span>
+          </div>
+        )}
+        {v.quests.length === 0 && <p class="tv-dim">No active objectives</p>}
+        {v.quests.map((q) => (
+          <div class={`tv-quest ${q.status === 'escalating' ? 'escalating' : ''}`} key={q.id}>
+            <span class="tv-quest-mark">{q.status === 'escalating' ? '⚠' : q.mainHook ? '✦' : '·'}</span>
+            <span class="tv-quest-name">{q.name}</span>
+            {q.town && <span class="tv-quest-town">{q.town}</span>}
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- pairing
+
 function PairingScreen() {
   return (
     <div class="tv-pairing">
@@ -70,71 +231,55 @@ function PairingScreen() {
   );
 }
 
-// Phase 1 readout — structured proof of live sync. Replaced by real
-// combat/exploration layouts in Phase 2.
-function LiveReadout({ v }: { v: PlayerView }) {
-  return (
-    <div class="tv-readout">
-      <div class="tv-readout-head">
-        <span class="tv-mode">{v.mode.toUpperCase()}</span>
-        <span>{v.weather.icon} {v.weather.name}{v.weather.conSave ? ' · ✦ CON save' : ''}</span>
-        <span>Day {v.day}</span>
-        <span class="tv-loc">{v.location}</span>
-        <StatusPip />
-      </div>
-
-      <div class="tv-readout-grid">
-        <section>
-          <h2>PARTY</h2>
-          {v.party.length === 0 && <p class="tv-dim">No party yet</p>}
-          {v.party.map((p) => (
-            <div class="tv-row" key={p.id}>
-              <strong>{p.name}</strong>
-              <span>{p.hp}/{p.maxHp} HP</span>
-              {p.inspiration && <span class="tv-inspo">✦</span>}
-              {p.conditions.length > 0 && <span class="tv-dim">{p.conditions.join(', ')}</span>}
-              {p.down && <span class="tv-down">DOWN {p.deathS}✓ {p.deathF}✗</span>}
-            </div>
-          ))}
-          {v.allies.map((a) => (
-            <div class="tv-row tv-dim" key={a.id}>
-              <span>{a.emoji} {a.name}</span><span>{a.hpState}</span>
-            </div>
-          ))}
-        </section>
-
-        <section>
-          <h2>{v.combat ? `COMBAT — ROUND ${v.combat.round}` : 'QUESTS'}</h2>
-          {v.combat
-            ? v.combat.combatants.map((c) => (
-                <div class={`tv-row ${c.active ? 'tv-active' : ''}`} key={c.id}>
-                  <span>{c.active ? '▶' : c.next ? '›' : ' '}</span>
-                  <span>{c.emoji} {c.name}</span>
-                  <span>{c.friendly ? `${c.hp}/${c.maxHp}` : c.hpState}</span>
-                  <span class="tv-dim">init {c.init ?? '—'}</span>
-                </div>
-              ))
-            : v.quests.map((q) => (
-                <div class="tv-row" key={q.id}>
-                  <span class={q.status === 'escalating' ? 'tv-escalating' : ''}>
-                    {q.status === 'escalating' ? '⚠' : '·'} {q.name}
-                  </span>
-                  {q.town && <span class="tv-dim">{q.town}</span>}
-                </div>
-              ))}
-        </section>
-      </div>
-    </div>
-  );
-}
+// ---------------------------------------------------------------- root
 
 export function TvApp() {
   useEffect(() => { boot(); return () => transport?.close(); }, []);
   const v = view.value;
+
+  // Frame-based spectacle triggers: flash on turn change, pulse on round change.
+  const [flash, setFlash] = useState(false);
+  const [roundPulse, setRoundPulse] = useState(false);
+  const prevActive = useRef<string | null>(null);
+  const prevRound = useRef<number>(-1);
+
+  useEffect(() => {
+    const activeId = v?.combat?.combatants.find((c) => c.active)?.id ?? null;
+    if (activeId && prevActive.current && activeId !== prevActive.current) {
+      setFlash(true);
+      const t = setTimeout(() => setFlash(false), 600);
+      return () => clearTimeout(t);
+    }
+    prevActive.current = activeId;
+  }, [v?.combat?.combatants.find((c) => c.active)?.id]);
+
+  useEffect(() => {
+    const activeId = v?.combat?.combatants.find((c) => c.active)?.id ?? null;
+    prevActive.current = activeId;
+  }, [v]);
+
+  useEffect(() => {
+    const r = v?.combat?.round ?? -1;
+    if (r > 0 && prevRound.current > 0 && r !== prevRound.current) {
+      setRoundPulse(true);
+      const t = setTimeout(() => setRoundPulse(false), 800);
+      prevRound.current = r;
+      return () => clearTimeout(t);
+    }
+    prevRound.current = r;
+  }, [v?.combat?.round]);
+
   return (
     <div class="tv-frame">
       <div class="tv-safe">
-        {v && status.value !== 'error' ? <LiveReadout v={v} /> : <PairingScreen />}
+        {v && status.value !== 'error' ? (
+          <>
+            <TopStrip v={v} />
+            {v.mode === 'combat' && v.combat
+              ? <CombatView v={v} flash={flash} roundPulse={roundPulse} />
+              : <ExplorationView v={v} />}
+          </>
+        ) : <PairingScreen />}
       </div>
     </div>
   );

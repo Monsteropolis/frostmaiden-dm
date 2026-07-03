@@ -137,3 +137,140 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
    classes are also used by TvPanel.tsx in the phone app, so they
    are duplicated minimally in base.css. Keep TV-only rules here.)
    ============================================================ */
+
+/* === PHASE 2: COMBAT & EXPLORATION LAYOUTS === */
+
+/* --- Top strip -------------------------------------------------------------- */
+.tv-strip {
+  display: flex; align-items: baseline; gap: 40px;
+  font-size: 28px; padding-bottom: 16px; margin-bottom: 28px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.tv-strip-loc { font-family: var(--font-read); font-style: italic; color: var(--ink-dim); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-strip-mode { font-weight: 700; letter-spacing: 0.22em; color: var(--frost); }
+.tv-strip-wx { display: flex; align-items: baseline; gap: 16px; }
+.tv-strip-day { color: var(--ink-faint); font-size: 24px; }
+.tv-consave {
+  color: var(--thread); font-weight: 700; font-size: 22px; letter-spacing: 0.1em;
+  border: 1px solid var(--thread-deep); border-radius: 6px; padding: 2px 10px;
+}
+.tv-strip .tv-conn { font-size: 18px; }
+
+/* --- Panels ------------------------------------------------------------------ */
+.tv-combat { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; flex: 1; min-height: 0; }
+.tv-explore { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; flex: 1; min-height: 0; }
+.tv-combat section, .tv-explore section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 1px solid var(--frost-edge);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.tv-panel-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;
+}
+.tv-panel-head h2 { margin: 0; font-size: 24px; letter-spacing: 0.3em; color: var(--silver-dim); font-weight: 600; }
+.tv-round { font-size: 30px; font-weight: 700; letter-spacing: 0.15em; color: var(--frost); }
+/* 2-frame stepped pulse on round change — no easing */
+.tv-round.pulse { animation: tvRoundPulse 0.8s steps(2, jump-none); }
+@keyframes tvRoundPulse { from { color: var(--ink); text-shadow: 0 0 18px var(--frost-glow); } to { color: var(--frost); text-shadow: none; } }
+
+/* --- Initiative rail ---------------------------------------------------------- */
+.tv-init-list { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.tv-init-row {
+  display: flex; align-items: center; gap: 18px;
+  font-size: 32px; padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+}
+.tv-init-row.active { background: var(--panel); border-color: var(--thread); }
+/* 3-frame stepped flash when the turn changes */
+.tv-init-row.flash { animation: tvTurnFlash 0.6s steps(3, jump-none); }
+@keyframes tvTurnFlash {
+  from { background: var(--thread-deep); border-color: var(--thread); }
+  to   { background: var(--panel); border-color: var(--thread); }
+}
+.tv-init-row.down { opacity: 0.45; }
+.tv-init-row.down .tv-init-name { text-decoration: line-through; }
+.tv-init-marker { width: 34px; color: var(--thread); font-size: 28px; text-align: center; }
+.tv-init-num { width: 52px; text-align: right; color: var(--ink-faint); font-weight: 700; }
+.tv-init-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.tv-next-tag {
+  margin-left: 14px; font-size: 18px; letter-spacing: 0.2em; font-weight: 700;
+  color: var(--frost); border: 1px solid var(--frost-deep); border-radius: 6px; padding: 2px 8px;
+  vertical-align: middle;
+}
+.tv-init-hp { flex-shrink: 0; min-width: 190px; display: flex; justify-content: flex-end; }
+
+/* --- HP pills & bars ----------------------------------------------------------- */
+.tv-hp-pill {
+  font-size: 20px; font-weight: 700; letter-spacing: 0.18em;
+  padding: 4px 14px; border-radius: 6px; border: 1px solid;
+}
+.tv-hp-pill.healthy  { color: var(--ok); border-color: var(--ok); }
+.tv-hp-pill.bloodied { color: var(--warn); border-color: var(--warn); }
+.tv-hp-pill.critical { color: var(--thread); border-color: var(--thread); }
+/* 2-frame blink — critical demands attention, framewise */
+.tv-hp-pill.critical { animation: tvCritBlink 1.2s steps(2, jump-none) infinite; }
+@keyframes tvCritBlink { from { opacity: 1; } to { opacity: 0.45; } }
+.tv-hp-pill.down { color: var(--ink-faint); border-color: var(--ink-faint); }
+
+.tv-hpbar {
+  position: relative; width: 190px; height: 30px;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px;
+  overflow: hidden;
+}
+.tv-hpbar-fill { height: 100%; background: var(--ok); }
+.tv-hpbar.bloodied .tv-hpbar-fill { background: var(--warn); }
+.tv-hpbar.critical .tv-hpbar-fill, .tv-hpbar.down .tv-hpbar-fill { background: var(--thread); }
+.tv-hpbar-num {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: var(--ink); text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+/* --- Conditions ----------------------------------------------------------------- */
+.tv-conds { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.tv-cond {
+  font-size: 18px; color: var(--frost); border: 1px solid var(--frost-deep);
+  border-radius: 6px; padding: 2px 10px; letter-spacing: 0.05em;
+}
+
+/* --- Party panel ------------------------------------------------------------------ */
+.tv-party { gap: 6px; }
+.tv-pc { padding: 12px 4px; border-bottom: 1px solid var(--border); }
+.tv-pc:last-child { border-bottom: none; }
+.tv-pc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.tv-pc-name { font-size: 30px; font-weight: 600; }
+.tv-pc-cls { font-size: 20px; color: var(--ink-faint); }
+.tv-pc .tv-hpbar { width: 100%; }
+.tv-pc-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; min-height: 26px; }
+.tv-pc.down .tv-pc-name { color: var(--thread); }
+.tv-inspo { color: var(--silver); margin-left: 10px; }
+.tv-deathsaves { display: inline-flex; gap: 6px; align-items: center; font-size: 22px; }
+.tv-deathsaves .ds { color: var(--ink-faint); }
+.tv-deathsaves .ds.ok { color: var(--ok); }
+.tv-deathsaves .ds.bad { color: var(--thread); }
+.tv-deathsaves .ds-sep { color: var(--ink-faint); }
+.tv-ally { display: flex; align-items: center; gap: 16px; font-size: 24px; color: var(--ink-dim); padding: 8px 4px; }
+.tv-ally span:first-child { flex: 1; }
+
+/* --- Exploration ---------------------------------------------------------------------- */
+.tv-pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 32px; }
+.tv-ally-row { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 12px; }
+.tv-quest { display: flex; align-items: baseline; gap: 14px; font-size: 27px; padding: 9px 4px; }
+.tv-quest-mark { width: 30px; text-align: center; color: var(--silver-dim); }
+.tv-quest.escalating .tv-quest-mark, .tv-quest.escalating .tv-quest-name { color: var(--warn); }
+.tv-quest-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-quest-town { font-size: 20px; color: var(--ink-faint); }
+.tv-journey { padding: 6px 4px 16px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.tv-journey-route { font-size: 28px; font-weight: 600; color: var(--frost); }
+.tv-journey-bar { height: 14px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }
+.tv-journey-fill { height: 100%; background: var(--frost-deep); }
+.tv-journey-days { font-size: 20px; color: var(--ink-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-init-row.flash, .tv-round.pulse, .tv-hp-pill.critical { animation: none; }
+}
