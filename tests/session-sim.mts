@@ -557,7 +557,7 @@ console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts rende
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; d.tv.hiddenCombatantIds = []; });
   pv = projectPlayerView(state.value);
   html = rts(h(ExplorationView, { v: pv }));
-  check('exploration view shows objectives panel', html.includes('OBJECTIVES'));
+  check('exploration view shows threads', html.includes('THREADS'));
   check('exploration view shows party', html.includes('Brienne'));
 }
 
@@ -617,7 +617,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   // -- DM gold controls exist and write state
   click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
   click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
-  check('gold row renders', bodyHas('Gold') && $$('.px-icon').length >= 1);
+  check('gold row renders', bodyHas('Gold 🪙'));
   click(byText('button', '+10'), 'gold +10'); await sleep(20);
   check('gold incremented', state.value.travel.gold === 10, `${state.value.travel.gold}`);
 
@@ -646,7 +646,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
 
   const html = rts(h(ExplorationView, { v: pv }));
   check('TV: party column present', html.includes('tv-party-col'));
-  check('TV: ally nested under its PC', html.includes('tv-ally nested') && html.includes('Grit'));
+  check('TV: ally nested under its PC', html.includes('tv-roster-ally') && html.includes('Grit'));
   check('TV: scene art renders', html.includes('tv-scene-art'));
   check('TV: gold on the ledger', html.includes('137') && html.includes('GOLD'));
   check('TV: rations on the ledger', html.includes('RATIONS'));
@@ -786,18 +786,19 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   check('projection: youtubeId travels', pv.youtubeId === 'jfKfPfyJRdk');
 
   const combatHtml = rts(h(CombatView, { v: pv, flash: false, roundPulse: false }));
-  const initList = combatHtml.split('tv-party')[0];
-  check('TV combat: init rows have NO pips', !initList.includes('tv-deathsaves'));
-  check('TV combat: ally nested under PC in party panel', combatHtml.includes('tv-ally nested'));
-  check('TV combat: downed ally shows pips in party panel', combatHtml.split('tv-party')[1]?.includes('tv-deathsaves') ?? false);
+  check('TV combat: no party panel — initiative is the focus', !combatHtml.includes('tv-party'));
+  check('TV combat: downed ally pips live in the init row', combatHtml.includes('tv-deathsaves'));
+  check('TV combat: scene card sets the mood', combatHtml.includes('tv-scene-art'));
 
+  const { AmbiencePlayer } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
   const exploreHtml = rts(h(ExplorationView, { v: pv }));
-  check('TV explore: downed ally pips under its PC', exploreHtml.includes('tv-ally nested down'));
-  check('TV explore: ambience player renders', exploreHtml.includes('tv-ambience-frame') && exploreHtml.includes('jfKfPfyJRdk'));
-  check('TV explore: pixel ledger icons', exploreHtml.includes('tv-px-icon'));
-  check('TV explore: idle party on pixel scene', rts(h(ExplorationView, { v: { ...pv, sceneId: 'camp' } })).includes('tv-idle-party'));
-  check('TV explore: no idle party on module art', !rts(h(ExplorationView, { v: { ...pv, sceneId: 'mon-yeti' } })).includes('tv-idle-party'));
-  check('TV explore: player hidden when id empty', !rts(h(ExplorationView, { v: { ...pv, youtubeId: '' } })).includes('tv-ambience-frame'));
+  check('TV explore: downed ally pips under its PC', exploreHtml.includes('tv-roster-ally down'));
+  check('TV explore: emoji ledger inside the party column', exploreHtml.includes('🪙') && exploreHtml.includes('tv-roster-ledger'));
+  check('TV explore: threads list replaces objectives', exploreHtml.includes('THREADS') && !exploreHtml.includes('OBJECTIVES'));
+  check('TV explore: player NOT inside the view (root-mounted)', !exploreHtml.includes('tv-yt-frame'));
+  const playerHtml = rts(h(AmbiencePlayer, { v: pv }));
+  check('root player renders iframe once id is set', playerHtml.includes('tv-yt-frame') && playerHtml.includes('jfKfPfyJRdk'));
+  check('root player absent when id empty', rts(h(AmbiencePlayer, { v: { ...pv, youtubeId: '' } })) === '');
 
   // -- phone: tracker pips for the downed ally; party tab editor
   click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);

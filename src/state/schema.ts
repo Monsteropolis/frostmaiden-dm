@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -277,8 +277,10 @@ export interface TvSettings {
   partyLocation: string;
   /** Pixel-art scene shown on the TV. 'auto' derives from weather/journey. */
   sceneId: string;
-  /** YouTube video id for the TV's ambience player ('' = hidden) */
+  /** YouTube video id for the TV's ambience player ('' = off) */
   youtubeId: string;
+  /** true → the player occupies the scene slot; false → audio-only in the background */
+  mediaVisible: boolean;
 }
 
 export interface AppState {
@@ -333,7 +335,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
-    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '' },
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false },
     seq: 1,
   };
 }

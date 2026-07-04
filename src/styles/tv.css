@@ -464,41 +464,90 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tvfx-mote.thread { background: var(--thread); box-shadow: 0 0 6px var(--thread); }
 @keyframes tvfxMoteFlicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-/* pixel icon chips in the ledger */
-.tv-px-icon {
-  display: inline-block; width: 32px; height: 32px;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  align-self: center;
+/* ambience player — root-mounted, overlays the scene slot when visible,
+   collapses to a speck (still playing) when hidden */
+.tv-yt {
+  position: fixed; z-index: 40;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  border-top-color: var(--frost-edge);
+  background: #000;
+  transition: none;
 }
-
-/* the idle pixel party at the foot of the scene (pixel scenes only) */
-.tv-idle-party {
-  position: absolute; left: 4%; bottom: 76px;
-  display: flex; gap: 26px; align-items: flex-end;
-}
-.tv-idle-char {
-  width: 16px; height: 24px;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  transform: scale(3);
-  transform-origin: bottom center;
-  animation: tvIdleBob 1.4s steps(1, jump-none) infinite;
-}
-@keyframes tvIdleBob {
-  0%, 100% { background-position-y: 0; }
-  50% { background-position-y: -24px; }
-}
-
-/* ambience player — small, unobtrusive, above the objectives */
-.tv-ambience { padding: 0 !important; flex-shrink: 0; overflow: hidden; align-self: flex-end; }
-.tv-ambience-frame { display: block; width: 320px; height: 180px; border: 0; }
+.tv-yt-frame { display: block; width: 100%; height: 100%; border: 0; }
 
 /* ally down state — thread-marked like PCs */
 .tv-ally.down .tv-ally-name { color: var(--thread); }
 .tv-ally .tv-deathsaves { margin-left: 12px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tvfx-cloud, .tvfx-mote, .tv-idle-char { animation: none; }
+  .tvfx-cloud, .tvfx-mote, 
   .tvfx-mote { display: none; }
 }
+
+/* === PHASE 9: initiative-first combat, roster exploration, threads === */
+
+/* combat: the order is the focal element; the scene sets the mood */
+.tv-combat { grid-template-columns: 3fr 2fr !important; }
+.tv-combat .tv-scene { flex: none; min-height: 0; }
+.tv-init { min-height: 0; overflow: hidden; }
+.tv-init-list { min-height: 0; overflow: hidden; }
+.tv-init-row .tv-deathsaves { margin: 0 28px 0 auto; }        /* breathing room, never hugging the name */
+.tv-init-row .tv-deathsaves + .tv-init-hp { margin-left: 0; }
+.tv-init-more {
+  font-family: var(--font-px);
+  font-size: 20px; color: var(--ink-faint);
+  text-align: center; padding: 10px 0 2px;
+  letter-spacing: 0.14em;
+}
+
+/* exploration: compact roster, one line per soul */
+.tv-explore { grid-template-columns: minmax(360px, 31%) 1fr !important; }
+.tv-roster { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+.tv-roster-pc { padding: 8px 0 6px; border-bottom: 1px solid var(--border); }
+.tv-roster-pc.down .tv-roster-name { color: var(--thread); text-decoration: line-through; text-decoration-thickness: 2px; }
+.tv-roster-row { display: flex; align-items: center; gap: 16px; }
+.tv-roster-name {
+  font-size: 30px; font-weight: 700; color: var(--ink);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tv-roster-hp { margin-left: auto; flex: 0 0 44%; }
+.tv-roster-hp .tv-hpbar { height: 28px; }
+.tv-roster-ally {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 0 2px 14px;
+  font-size: 22px; color: var(--ink-dim);
+}
+.tv-roster-ally.down .tv-roster-name { color: var(--thread); }
+.tv-roster-ally .tv-roster-name { font-size: 22px; font-weight: 400; }
+.tv-roster-ally .tv-hp-pill { margin-left: auto; }
+.tv-roster-ally .tv-deathsaves { margin-left: 8px; }
+
+/* the ledger at the roster's feet */
+.tv-roster-ledger {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 20px 28px;
+  padding-top: 14px; margin-top: 6px;
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.tv-roster-ledger .tv-res { font-size: 28px; }
+.tv-roster-ledger .tv-res.journey { margin-left: 0; width: 100%; }
+.tv-roster-ledger .tv-res.journey .tv-journey-bar { flex: 1; width: auto; }
+
+/* threads — a quiet list under the red bar, then the scene owns the rest */
+.tv-main-col { gap: 18px !important; }
+.tv-threads {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 6px 34px;
+  padding: 2px 6px 0;
+  flex-shrink: 0;
+}
+.tv-threads-head {
+  font-family: var(--font-px);
+  font-size: 19px; letter-spacing: 0.14em; color: var(--ink-faint);
+  margin-right: 6px;
+}
+.tv-thread { font-size: 24px; color: var(--ink-dim); white-space: nowrap; }
+.tv-thread.escalating { color: var(--thread); }
+.tv-thread-mark { color: var(--silver); margin-right: 8px; }
+.tv-thread.escalating .tv-thread-mark { color: var(--thread); }

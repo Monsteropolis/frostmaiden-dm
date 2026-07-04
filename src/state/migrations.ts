@@ -29,6 +29,12 @@ const migrations: Record<number, Migration> = {
     if (typeof tv.youtubeId !== 'string') tv.youtubeId = '';
     return { ...s, sidekicks, tv, version: 3 };
   },
+  // v3 → v4: youtube show/hide toggle (audio keeps playing when hidden).
+  3: (s) => {
+    const tv = { ...(s.tv as Record<string, unknown> ?? {}) };
+    if (typeof tv.mediaVisible !== 'boolean') tv.mediaVisible = false;
+    return { ...s, tv, version: 4 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

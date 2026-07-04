@@ -118,13 +118,20 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             if (id) patch((d) => { d.tv.youtubeId = id; });
           }}>Play</button>
           {state.value.tv.youtubeId && (
-            <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; }); }}>Stop</button>
+            <button class="btn" onClick={() => patch((d) => { d.tv.mediaVisible = !d.tv.mediaVisible; })}>
+              {state.value.tv.mediaVisible ? '🖼 Show scene' : '📺 Show video'}
+            </button>
+          )}
+          {state.value.tv.youtubeId && (
+            <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; d.tv.mediaVisible = false; }); }}>Stop</button>
           )}
         </div>
         <p class="stat-fine">
           {state.value.tv.youtubeId
-            ? `Playing on TV: ${state.value.tv.youtubeId} — it starts muted (browser rule); one click on the TV player unmutes.`
-            : 'The player appears on the TV in exploration mode and starts muted — one click on the TV unmutes it.'}
+            ? state.value.tv.mediaVisible
+              ? `Video is on the TV screen (${state.value.tv.youtubeId}). It starts muted — one click on the TV player unmutes.`
+              : `Playing in the background (${state.value.tv.youtubeId}) — the scene stays on screen. Toggle to show the video.`
+            : 'The player shares the scene slot on the TV: show it for visuals, hide it to keep music playing under the scene art.'}
         </p>
       </div>
 
