@@ -301,7 +301,10 @@ function Tracker() {
 
   const rollInit = () => patch((s) => {
     for (const c of s.combat.combatants) {
-      if (c.srcType === 'monster' || c.srcType === 'custom') c.init = d(20) + c.initMod;
+      // Roll for everything the DM controls (players roll their own).
+      // Exclusion, not inclusion — an earlier bug listed 'monster'|'custom'
+      // and silently skipped 'api' and 'custommon' enemies.
+      if (c.srcType !== 'pc' && c.srcType !== 'ally') c.init = d(20) + c.initMod;
     }
   });
 

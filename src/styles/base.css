@@ -1223,3 +1223,24 @@ details.loc summary::marker { color: var(--frost-deep); }
 
 /* TV hide/reveal toggle in combat rows */
 .tv-hide-btn.on { color: var(--frost); border-color: var(--frost-deep); }
+
+/* === NPC PORTRAITS (pixel chips for built-in NPCs) === */
+.npc-portrait {
+  width: 28px; height: 56px;
+  flex-shrink: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  align-self: center;
+  /* atlas is 476×56 — natural size, cells addressed by background-position */
+}
+.entity-row .npc-portrait { margin: -8px 1px; } /* sprite is tall; don't grow the row */
+.npc-portrait-wrap.lg { display: inline-block; }
+.npc-portrait-wrap.lg .npc-portrait {
+  display: block;
+  width: 28px; height: 56px;
+  transform: scale(1.6);
+  transform-origin: top left;
+  margin: 0 22px 34px 4px; /* reserve space for the 1.6× scale overflow */
+}
+.npc-head-id { display: flex; align-items: flex-start; gap: 10px; }
+.npc-head-id .unit-meta { display: block; margin-top: 6px; }

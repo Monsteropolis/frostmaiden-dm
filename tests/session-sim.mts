@@ -561,5 +561,54 @@ console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts rende
   check('exploration view shows party', html.includes('Brienne'));
 }
 
+console.log('\n═══ SCENE 22: Init roll covers all enemy sources + NPC portraits ═══');
+{
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+
+  // The bug: 🎲 Init only rolled srcType 'monster'|'custom', silently
+  // skipping 'api' and 'custommon'. Stage one combatant of every source.
+  patch((d) => {
+    d.combat = {
+      active: false, round: 0, turn: 0,
+      combatants: [
+        { id: 'iP', name: 'PC', emoji: '🛡️', hp: 20, maxHp: 20, ac: 15, init: null, initMod: 2, conditions: [], srcType: 'pc', srcId: d.party[0]?.id },
+        { id: 'iA', name: 'Ally', emoji: '🐺', hp: 11, maxHp: 11, ac: 13, init: null, initMod: 1, conditions: [], srcType: 'ally', srcId: 'x' },
+        { id: 'iM', name: 'RimeMon', emoji: '🦍', hp: 30, maxHp: 30, ac: 12, init: null, initMod: 0, conditions: [], srcType: 'monster', srcId: 'yeti' },
+        { id: 'iC', name: 'QuickMon', emoji: '👹', hp: 10, maxHp: 10, ac: 10, init: null, initMod: 0, conditions: [], srcType: 'custom' },
+        { id: 'iAPI', name: 'ApiMon', emoji: '💀', hp: 22, maxHp: 22, ac: 13, init: null, initMod: 1, conditions: [], srcType: 'api', srcId: 'skeleton' },
+        { id: 'iCM', name: 'BuiltMon', emoji: '🐉', hp: 40, maxHp: 40, ac: 16, init: null, initMod: 2, conditions: [], srcType: 'custommon', srcId: 'cm1' },
+      ],
+    };
+  });
+  click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);
+  click(byText('.sub-tab', 'Tracker'), 'Tracker sub-tab'); await sleep(20);
+  click(byText('button', '🎲 Init'), 'roll initiative'); await sleep(20);
+
+  const cbs = state.value.combat.combatants;
+  const get = (id: string) => cbs.find((c) => c.id === id)!;
+  check('rime monster rolled', get('iM').init !== null);
+  check('quick custom rolled', get('iC').init !== null);
+  check('API monster rolled (was the bug)', get('iAPI').init !== null);
+  check('built custom monster rolled (was the bug)', get('iCM').init !== null);
+  check('PC untouched — players roll their own', get('iP').init === null);
+  check('ally untouched — players roll their own', get('iA').init === null);
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+
+  // NPC portraits: built-in NPCs get a pixel chip, custom NPCs keep emoji
+  const { hasPortrait } = await import('/home/claude/frostmaiden-dm/src/lib/portraits.tsx');
+  check('built-in NPC has portrait', hasPortrait('ds') && hasPortrait('au') && hasPortrait('sk2'));
+  check('unknown id falls back', !hasPortrait('npc999'));
+  patch((d) => {
+    d.customNpcs.push({
+      id: `npc${d.seq++}`, name: 'Test Hermit', emoji: '🧙', role: 'Hermit', town: '',
+      race: '', personality: '', wants: '', fears: '', secrets: '', inventory: '', threads: '',
+    });
+  });
+  click(byText('.nav-btn', 'Lore'), 'Lore tab'); await sleep(20);
+  click(byText('.sub-tab', 'NPCs'), 'NPCs sub-tab'); await sleep(30);
+  check('portrait chips render in NPC list', $$('.npc-portrait').length >= 10, `${$$('.npc-portrait').length} chips`);
+  check('custom NPC keeps emoji fallback', $$('.entity-emoji').length >= 1);
+}
+
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);
