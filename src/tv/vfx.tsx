@@ -41,10 +41,35 @@ const FLAKE_POOL = Array.from({ length: 90 }, (_, i) => ({
   gust: i % 5 === 0,
 }));
 
-const SNOW_COUNT: Record<string, number> = {
-  clear: 0, overcast: 8, light_snow: 26, heavy_snow: 55,
-  blizzard: 90, magical_storm: 70,
+// The storm decides everything: how many flakes, how fast they fall,
+// whether clouds crowd the sky, whether Auril's magic rides the wind.
+const WX: Record<string, { flakes: number; speed: number; clouds: number; motes: number }> = {
+  clear:         { flakes: 5,  speed: 1.4, clouds: 0, motes: 0 },  // a few flakes fluttering
+  overcast:      { flakes: 10, speed: 1.2, clouds: 4, motes: 0 },  // cloudy, heavy sky
+  light_snow:    { flakes: 26, speed: 1,   clouds: 1, motes: 0 },
+  heavy_snow:    { flakes: 55, speed: 0.8, clouds: 2, motes: 0 },
+  blizzard:      { flakes: 90, speed: 0.45, clouds: 3, motes: 0 }, // driven hard
+  magical_storm: { flakes: 60, speed: 0.7, clouds: 2, motes: 14 }, // Auril's wrath
 };
+
+// drifting pixel clouds for overcast skies — deterministic like everything else
+const CLOUD_POOL = Array.from({ length: 4 }, (_, i) => ({
+  top: 3 + rand() * 22,
+  width: 220 + rand() * 260,
+  duration: 90 + rand() * 80,
+  delay: rand() * 120,
+  opacity: 0.10 + rand() * 0.10,
+  flip: i % 2 === 1,
+}));
+
+// motes of Auril's magic — thread-garnet and frost sparks spiraling down
+const MOTE_POOL = Array.from({ length: 14 }, (_, i) => ({
+  left: rand() * 100,
+  duration: 9 + rand() * 8,
+  delay: rand() * 12,
+  sway: 1.2 + rand() * 1.6,
+  thread: i % 3 === 0,             // every third burns garnet; the rest frost-violet
+}));
 
 // Winks of magic — pixel stars that flare rarely at fated spots.
 const WINKS = Array.from({ length: 9 }, () => ({
@@ -56,9 +81,23 @@ const WINKS = Array.from({ length: 9 }, () => ({
 }));
 
 export function TvBackdrop({ weatherId }: { weatherId: string }) {
-  const flakes = FLAKE_POOL.slice(0, SNOW_COUNT[weatherId] ?? 20);
+  const wx = WX[weatherId] ?? WX.light_snow;
+  const flakes = FLAKE_POOL.slice(0, wx.flakes);
+  const clouds = CLOUD_POOL.slice(0, wx.clouds);
+  const motes = MOTE_POOL.slice(0, wx.motes);
   return (
     <div class="tvfx" aria-hidden="true">
+      {clouds.map((c) => (
+        <span
+          class={`tvfx-cloud${c.flip ? ' flip' : ''}`}
+          style={{
+            top: `${c.top}%`, width: `${c.width}px`,
+            opacity: c.opacity,
+            animationDuration: `${c.duration}s`,
+            animationDelay: `-${c.delay}s`,
+          }}
+        />
+      ))}
       {STARS.map((s) => (
         <span
           class={`tvfx-star${s.twinkle ? ' tw' : ''}`}
@@ -76,9 +115,19 @@ export function TvBackdrop({ weatherId }: { weatherId: string }) {
           style={{
             left: `${f.left}%`, width: `${f.size}px`, height: `${f.size}px`,
             opacity: f.opacity,
-            animationDuration: `${f.duration}s, ${f.sway}s`,
+            animationDuration: `${f.duration * wx.speed}s, ${f.sway * wx.speed}s`,
             animationDelay: `-${f.delay}s, -${f.delay}s`,
-            '--drift': `${f.drift}px`,
+            '--drift': `${f.drift * (wx.speed < 0.7 ? 1.8 : 1)}px`,
+          }}
+        />
+      ))}
+      {motes.map((m) => (
+        <span
+          class={`tvfx-mote${m.thread ? ' thread' : ''}`}
+          style={{
+            left: `${m.left}%`,
+            animationDuration: `${m.duration}s, ${m.sway}s, 0.7s`,
+            animationDelay: `-${m.delay}s, -${m.delay}s, ${m.delay % 0.7}s`,
           }}
         />
       ))}

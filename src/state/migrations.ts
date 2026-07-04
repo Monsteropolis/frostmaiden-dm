@@ -20,6 +20,15 @@ const migrations: Record<number, Migration> = {
     if (typeof tv.sceneId !== 'string') tv.sceneId = 'auto';
     return { ...s, travel, tv, version: 2 };
   },
+  // v2 → v3: death saves on allies/sidekicks, YouTube ambience id on tv.
+  2: (s) => {
+    const sidekicks = ((s.sidekicks as Record<string, unknown>[]) ?? []).map((a) => ({
+      deathS: 0, deathF: 0, ...a,
+    }));
+    const tv = { ...(s.tv as Record<string, unknown> ?? {}) };
+    if (typeof tv.youtubeId !== 'string') tv.youtubeId = '';
+    return { ...s, sidekicks, tv, version: 3 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

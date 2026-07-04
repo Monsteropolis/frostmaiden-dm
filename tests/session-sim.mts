@@ -617,7 +617,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   // -- DM gold controls exist and write state
   click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
   click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
-  check('gold row renders', bodyHas('Gold 🪙'));
+  check('gold row renders', bodyHas('Gold') && $$('.px-icon').length >= 1);
   click(byText('button', '+10'), 'gold +10'); await sleep(20);
   check('gold incremented', state.value.travel.gold === 10, `${state.value.travel.gold}`);
 
@@ -735,6 +735,99 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
   check('TV: art scenes get contain fit', rts(h(ExplorationView, { v: { ...pvE, sceneId: 'mon-yeti' } })).includes('fit-contain'));
   check('TV: pixel scenes keep cover fit', !rts(h(ExplorationView, { v: { ...pvE, sceneId: 'town' } })).includes('fit-contain'));
   patch((d) => { const pc = d.party[0]; if (pc) { pc.hp = pc.maxHp; pc.deathS = 0; pc.deathF = 0; } });
+}
+
+console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moods, idle party ═══');
+{
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { migrate } = await import('/home/claude/frostmaiden-dm/src/state/migrations.ts');
+  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { parseYouTubeId } = await import('/home/claude/frostmaiden-dm/src/components/TvPanel.tsx');
+  const { render: rts } = await import('preact-render-to-string');
+  const { ExplorationView, CombatView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+  const { TvBackdrop } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
+
+  // -- migration v2 → v3
+  const v2 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
+  v2.version = 2;
+  (v2.sidekicks as Record<string, unknown>[]).forEach((a) => { delete a.deathS; delete a.deathF; });
+  delete (v2.tv as Record<string, unknown>).youtubeId;
+  const m3 = migrate(v2);
+  check('v2→v3 sidekicks gain saves', m3.sidekicks.every((a) => a.deathS === 0 && a.deathF === 0));
+  check('v2→v3 tv gains youtubeId', m3.tv.youtubeId === '');
+
+  // -- YouTube id parsing
+  check('parse watch url', parseYouTubeId('https://www.youtube.com/watch?v=jfKfPfyJRdk') === 'jfKfPfyJRdk');
+  check('parse youtu.be url', parseYouTubeId('https://youtu.be/jfKfPfyJRdk?t=10') === 'jfKfPfyJRdk');
+  check('parse bare id', parseYouTubeId('jfKfPfyJRdk') === 'jfKfPfyJRdk');
+  check('reject garbage', parseYouTubeId('not a video') === null);
+
+  // -- a downed linked ally: saves flow party ↔ tracker ↔ TV
+  patch((d) => {
+    d.sidekicks.push({
+      id: 'skD', name: 'Brindle', emoji: '🐕', kind: 'Dog', category: 'sidekick',
+      linkedPcId: d.party[0]?.id, level: 1, hp: 0, maxHp: 8, ac: 12, initMod: 1,
+      scores: { str: 10, dex: 12, con: 10, int: 3, wis: 12, cha: 6 },
+      attacks: [], conditions: [], deathS: 1, deathF: 2, location: '', notes: '',
+    } as never);
+    d.combat = {
+      active: true, round: 1, turn: 0,
+      combatants: [
+        { id: 'caA', name: 'Brindle', emoji: '🐕', hp: 0, maxHp: 8, ac: 12, init: 9, initMod: 1, conditions: [], srcType: 'ally', srcId: 'skD' },
+        { id: 'caM', name: 'Wolf', emoji: '🐺', hp: 11, maxHp: 11, ac: 13, init: 8, initMod: 1, conditions: [], srcType: 'monster', srcId: 'crag_cat' },
+      ],
+    };
+    d.tv.youtubeId = 'jfKfPfyJRdk';
+  });
+
+  const pv = projectPlayerView(state.value);
+  const brindle = pv.allies.find((a) => a.id === 'skD')!;
+  check('projection: downed ally carries saves', brindle.down && brindle.deathS === 1 && brindle.deathF === 2);
+  check('projection: youtubeId travels', pv.youtubeId === 'jfKfPfyJRdk');
+
+  const combatHtml = rts(h(CombatView, { v: pv, flash: false, roundPulse: false }));
+  const initList = combatHtml.split('tv-party')[0];
+  check('TV combat: init rows have NO pips', !initList.includes('tv-deathsaves'));
+  check('TV combat: ally nested under PC in party panel', combatHtml.includes('tv-ally nested'));
+  check('TV combat: downed ally shows pips in party panel', combatHtml.split('tv-party')[1]?.includes('tv-deathsaves') ?? false);
+
+  const exploreHtml = rts(h(ExplorationView, { v: pv }));
+  check('TV explore: downed ally pips under its PC', exploreHtml.includes('tv-ally nested down'));
+  check('TV explore: ambience player renders', exploreHtml.includes('tv-ambience-frame') && exploreHtml.includes('jfKfPfyJRdk'));
+  check('TV explore: pixel ledger icons', exploreHtml.includes('tv-px-icon'));
+  check('TV explore: idle party on pixel scene', rts(h(ExplorationView, { v: { ...pv, sceneId: 'camp' } })).includes('tv-idle-party'));
+  check('TV explore: no idle party on module art', !rts(h(ExplorationView, { v: { ...pv, sceneId: 'mon-yeti' } })).includes('tv-idle-party'));
+  check('TV explore: player hidden when id empty', !rts(h(ExplorationView, { v: { ...pv, youtubeId: '' } })).includes('tv-ambience-frame'));
+
+  // -- phone: tracker pips for the downed ally; party tab editor
+  click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);
+  click(byText('.sub-tab', 'Tracker'), 'Tracker sub-tab'); await sleep(20);
+  check('tracker: inline pips on downed ally', $$('.ds-inline').length >= 1);
+  click($('.combat-row .cr-grid'), 'expand downed ally'); await sleep(20);
+  check('tracker: editor for ally saves', $$('.death-saves-row').length === 1);
+  const okPips = $$('.death-saves-row .ds-pip:not(.fail)');
+  click(okPips[1], 'mark second save'); await sleep(20);
+  check('tracker edit writes to sidekick record', state.value.sidekicks.find((a) => a.id === 'skD')?.deathS === 2);
+
+  // -- weather moods
+  const clear = rts(h(TvBackdrop, { weatherId: 'clear' }));
+  const over = rts(h(TvBackdrop, { weatherId: 'overcast' }));
+  const bliz = rts(h(TvBackdrop, { weatherId: 'blizzard' }));
+  const wrath = rts(h(TvBackdrop, { weatherId: 'magical_storm' }));
+  const count = (html: string, cls: string) => (html.match(new RegExp(`class="${cls}`, 'g')) ?? []).length;
+  check('clear: a few flakes flutter', count(clear, 'tvfx-flake') === 5, `${count(clear, 'tvfx-flake')}`);
+  check('clear: no clouds', count(clear, 'tvfx-cloud') === 0);
+  check('overcast: cloudy sky', count(over, 'tvfx-cloud') === 4);
+  check('blizzard: heavy snow', count(bliz, 'tvfx-flake') === 90);
+  check("Auril's wrath: magic motes", count(wrath, 'tvfx-mote') === 14);
+  check('wrath motes include thread-garnet', wrath.includes('tvfx-mote thread'));
+
+  // cleanup
+  patch((d) => {
+    d.sidekicks = d.sidekicks.filter((a) => a.id !== 'skD');
+    d.combat = { active: false, round: 0, turn: 0, combatants: [] };
+    d.tv.youtubeId = '';
+  });
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

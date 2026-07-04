@@ -51,6 +51,9 @@ export interface PvAlly {
   conditions: string[];
   /** PC this ally follows — TV nests them under that PC's card */
   linkedPcId: string | null;
+  down: boolean;
+  deathS: number;
+  deathF: number;
 }
 
 export interface PvCombatant {
@@ -102,6 +105,8 @@ export interface PlayerView {
   resources: PvResources;
   /** Concrete scene id — 'auto' is resolved on the phone before sending */
   sceneId: string;
+  /** YouTube ambience video id ('' = no player) */
+  youtubeId: string;
   party: PvPc[];
   allies: PvAlly[];
   combat: { round: number; combatants: PvCombatant[] } | null;
@@ -171,6 +176,7 @@ export function projectPlayerView(s: AppState): PlayerView {
     travel: j ? { origin: j.origin, dest: j.dest, day: j.day, totalDays: j.totalDays } : null,
     resources: { gold: s.travel.gold ?? 0, rations: s.travel.rations, partySize: s.travel.partySize },
     sceneId: resolveScene(s.tv?.sceneId ?? 'auto', { journeying: !!j, weatherId: s.weather.current }).id,
+    youtubeId: s.tv?.youtubeId ?? '',
 
     party: s.party.map((p) => ({
       id: p.id, name: p.name, cls: p.cls,
@@ -186,6 +192,9 @@ export function projectPlayerView(s: AppState): PlayerView {
       hpState: hpState(a.hp, a.maxHp),
       conditions: a.conditions,
       linkedPcId: a.linkedPcId ?? null,
+      down: a.hp <= 0,
+      deathS: a.deathS ?? 0,
+      deathF: a.deathF ?? 0,
     })),
 
     combat: inCombat

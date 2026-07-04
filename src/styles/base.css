@@ -1253,3 +1253,12 @@ details.loc summary::marker { color: var(--frost-deep); }
   border: 1px solid var(--thread-deep); border-radius: var(--radius-sm);
 }
 .ds-group { display: flex; align-items: center; gap: 8px; }
+
+/* pixel gold icon in Supplies (atlas cell 0) */
+.px-icon {
+  display: inline-block; width: 20px; height: 20px;
+  background-repeat: no-repeat; background-size: 100px 20px;
+  background-position: 0 0;
+  image-rendering: pixelated; vertical-align: -4px;
+}
+.px-gold-label { display: inline-flex; align-items: center; gap: 4px; }

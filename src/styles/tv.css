@@ -436,3 +436,69 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   .tvfx-star.tw, .tvfx-flake, .tvfx-aurora, .tvfx-wink, .tv-strip::after { animation: none; }
   .tvfx-flake, .tvfx-wink { display: none; }
 }
+
+/* === PHASE 8: idle life, ambience, weather moods === */
+
+/* drifting pixel clouds (overcast and worse) */
+.tvfx-cloud {
+  position: absolute; left: -320px; height: 46px;
+  background:
+    radial-gradient(ellipse 42% 90% at 30% 62%, var(--silver) 60%, transparent 61%),
+    radial-gradient(ellipse 34% 74% at 58% 48%, var(--silver) 60%, transparent 61%),
+    radial-gradient(ellipse 30% 60% at 80% 64%, var(--silver) 60%, transparent 61%);
+  animation: tvfxCloudDrift linear infinite;
+}
+.tvfx-cloud.flip { transform: scaleX(-1); }
+@keyframes tvfxCloudDrift { from { transform: translateX(0); } to { transform: translateX(calc(100vw + 640px)); } }
+
+/* Auril's wrath — motes of magic spiraling down, stepped flicker */
+.tvfx-mote {
+  position: absolute; top: -10px; width: 3px; height: 3px;
+  background: var(--frost);
+  box-shadow: 0 0 6px var(--frost);
+  animation-name: tvfxFall, tvfxSway, tvfxMoteFlicker;
+  animation-timing-function: linear, ease-in-out, steps(2, jump-none);
+  animation-iteration-count: infinite, infinite, infinite;
+  --drift: 120px;
+}
+.tvfx-mote.thread { background: var(--thread); box-shadow: 0 0 6px var(--thread); }
+@keyframes tvfxMoteFlicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* pixel icon chips in the ledger */
+.tv-px-icon {
+  display: inline-block; width: 32px; height: 32px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  align-self: center;
+}
+
+/* the idle pixel party at the foot of the scene (pixel scenes only) */
+.tv-idle-party {
+  position: absolute; left: 4%; bottom: 76px;
+  display: flex; gap: 26px; align-items: flex-end;
+}
+.tv-idle-char {
+  width: 16px; height: 24px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(3);
+  transform-origin: bottom center;
+  animation: tvIdleBob 1.4s steps(1, jump-none) infinite;
+}
+@keyframes tvIdleBob {
+  0%, 100% { background-position-y: 0; }
+  50% { background-position-y: -24px; }
+}
+
+/* ambience player — small, unobtrusive, above the objectives */
+.tv-ambience { padding: 0 !important; flex-shrink: 0; overflow: hidden; align-self: flex-end; }
+.tv-ambience-frame { display: block; width: 320px; height: 180px; border: 0; }
+
+/* ally down state — thread-marked like PCs */
+.tv-ally.down .tv-ally-name { color: var(--thread); }
+.tv-ally .tv-deathsaves { margin-left: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tvfx-cloud, .tvfx-mote, .tv-idle-char { animation: none; }
+  .tvfx-mote { display: none; }
+}

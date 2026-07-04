@@ -12,6 +12,14 @@ import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/b
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 
+/** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
+export function parseYouTubeId(input: string): string | null {
+  const t = input.trim();
+  if (/^[\w-]{11}$/.test(t)) return t;
+  const m = t.match(/(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   idle: 'Not connected',
   connecting: 'Connecting…',
@@ -32,6 +40,7 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
   const saved = state.value.tv.lastRoomCode;
   const [code, setCode] = useState(saved);
   const [catF, setCatF] = useState<SceneCat | 'all'>('all');
+  const [yt, setYt] = useState(state.value.tv.youtubeId);
   const status = tvStatus.value;
   const live = status === 'open' || status === 'connecting' || status === 'reconnecting';
 
@@ -92,6 +101,31 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <p class="stat-fine">Auto picks a pixel mood from weather and travel. Module art (locations, maps, monsters, NPCs) is always your deliberate choice.</p>
+      </div>
+
+      <div class="field">
+        <label>Ambience — YouTube on the TV (lofi, tavern noise, storm howl…)</label>
+        <div class="supply-row" style={{ gap: '8px' }}>
+          <input
+            class="input"
+            style={{ flex: 1 }}
+            placeholder="Paste a YouTube link or video id"
+            value={yt}
+            onInput={(e) => setYt((e.target as HTMLInputElement).value)}
+          />
+          <button class="btn" disabled={!parseYouTubeId(yt)} onClick={() => {
+            const id = parseYouTubeId(yt);
+            if (id) patch((d) => { d.tv.youtubeId = id; });
+          }}>Play</button>
+          {state.value.tv.youtubeId && (
+            <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; }); }}>Stop</button>
+          )}
+        </div>
+        <p class="stat-fine">
+          {state.value.tv.youtubeId
+            ? `Playing on TV: ${state.value.tv.youtubeId} — it starts muted (browser rule); one click on the TV player unmutes.`
+            : 'The player appears on the TV in exploration mode and starts muted — one click on the TV unmutes it.'}
+        </p>
       </div>
 
       <div class="tv-actions">

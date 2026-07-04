@@ -12,6 +12,38 @@ import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
 import { TvBackdrop } from './vfx';
+import iconsUrl from '../assets/pixel_icons.png';
+import idlePartyUrl from '../assets/party_idle.png';
+
+// pixel icon chip from the shared atlas (5 × 32px cells)
+const ICON_IDX: Record<string, number> = { gold: 0, meat: 1, sun: 2, moon: 3, flake: 4 };
+function PixelIcon({ name }: { name: string }) {
+  return (
+    <span
+      class="tv-px-icon"
+      aria-hidden="true"
+      style={{ backgroundImage: `url(${iconsUrl})`, backgroundPosition: `${-(ICON_IDX[name] ?? 0) * 32}px 0` }}
+    />
+  );
+}
+
+// the little pixel party idling at the foot of the scene — 4 souls, out of sync
+function IdleParty() {
+  return (
+    <div class="tv-idle-party" aria-hidden="true">
+      {[0, 1, 2, 3].map((i) => (
+        <span
+          class="tv-idle-char"
+          style={{
+            backgroundImage: `url(${idlePartyUrl})`,
+            backgroundPositionX: `${-i * 16}px`,
+            animationDelay: `${i * 0.45}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 import { sceneById, SCENES } from './scenes';
 
 const CODE_KEY = 'fmdm_tv_room';
@@ -110,15 +142,7 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
     <div class={`tv-init-row ${c.active ? 'active' : ''} ${flash && c.active ? 'flash' : ''} ${c.hpState === 'down' ? 'down' : ''}`}>
       <span class="tv-init-marker">{c.active ? '▶' : c.next ? '›' : ''}</span>
       <span class="tv-init-num">{c.init ?? '—'}</span>
-      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}
-        {c.deathS !== null && c.deathF !== null && (
-          <span class="tv-deathsaves">
-            {[0, 1, 2].map((i) => <span class={`ds ${i < (c.deathS ?? 0) ? 'ok' : ''}`}>●</span>)}
-            <span class="ds-sep">·</span>
-            {[0, 1, 2].map((i) => <span class={`ds ${i < (c.deathF ?? 0) ? 'bad' : ''}`}>●</span>)}
-          </span>
-        )}
-      </span>
+      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
       <CondChips conds={c.conditions} />
       <span class="tv-init-hp">
         {c.friendly && c.hp !== null && c.maxHp !== null
@@ -131,9 +155,16 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
 
 function AllyRow({ a }: { a: PvAlly }) {
   return (
-    <div class="tv-ally nested">
+    <div class={`tv-ally nested${a.down ? ' down' : ''}`}>
       <span class="tv-ally-tie">└</span>
       <span class="tv-ally-name">{a.emoji} {a.name}</span>
+      {a.down && (
+        <span class="tv-deathsaves">
+          {[0, 1, 2].map((i) => <span class={`ds ${i < a.deathS ? 'ok' : ''}`}>●</span>)}
+          <span class="ds-sep">·</span>
+          {[0, 1, 2].map((i) => <span class={`ds ${i < a.deathF ? 'bad' : ''}`}>●</span>)}
+        </span>
+      )}
       <CondChips conds={a.conditions} />
       <HpPill s={a.hpState} />
     </div>
@@ -180,13 +211,12 @@ export function CombatView({ v, flash = false, roundPulse = false }: {
       </section>
       <section class="tv-party">
         <div class="tv-panel-head"><h2>PARTY</h2></div>
-        {v.party.map((p) => <PartyCard p={p} key={p.id} />)}
-        {v.allies.map((a) => (
-          <div class="tv-ally" key={a.id}>
-            <span>{a.emoji} {a.name}</span>
-            <CondChips conds={a.conditions} />
-            <HpPill s={a.hpState} />
-          </div>
+        {v.party.map((p) => (
+          <PartyCard p={p} key={p.id}
+            allies={v.allies.filter((a) => a.linkedPcId === p.id)} />
+        ))}
+        {v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId)).map((a) => (
+          <AllyRow a={a} key={a.id} />
         ))}
       </section>
     </div>
@@ -225,6 +255,7 @@ export function ExplorationView({ v }: { v: PlayerView }) {
         {/* Where the party is — the DM-chosen scene (pixel mood or module art) */}
         <section class={`tv-scene${scene.cat !== 'pixel' ? ' fit-contain' : ''}`}>
           <img src={scene.url} alt="" class="tv-scene-art" />
+          {scene.cat === 'pixel' && <IdleParty />}
           <div class="tv-scene-caption">
             <span class="tv-scene-loc">{scene.cat === 'pixel' ? v.location : scene.name}</span>
             <span class="tv-scene-wx">{v.weather.icon} {v.weather.name}</span>
@@ -233,9 +264,9 @@ export function ExplorationView({ v }: { v: PlayerView }) {
 
         {/* Party resources — the ledger of survival */}
         <section class="tv-resources">
-          <span class="tv-res"><span class="tv-res-ico">🪙</span>{r.gold}<span class="tv-res-label">GOLD</span></span>
-          <span class={`tv-res${lowFood ? ' low' : ''}`}><span class="tv-res-ico">🍖</span>{r.rations}<span class="tv-res-label">RATIONS</span></span>
-          <span class="tv-res"><span class="tv-res-ico">📅</span>{v.day}<span class="tv-res-label">DAY</span></span>
+          <span class="tv-res"><PixelIcon name="gold" />{r.gold}<span class="tv-res-label">GOLD</span></span>
+          <span class={`tv-res${lowFood ? ' low' : ''}`}><PixelIcon name="meat" />{r.rations}<span class="tv-res-label">RATIONS</span></span>
+          <span class="tv-res"><PixelIcon name="sun" />{v.day}<span class="tv-res-label">DAY</span></span>
           {j && (
             <span class="tv-res journey">
               <span class="tv-journey-route">{j.origin} → {j.dest}</span>
@@ -244,6 +275,18 @@ export function ExplorationView({ v }: { v: PlayerView }) {
             </span>
           )}
         </section>
+
+        {/* Ambience — DM-chosen YouTube; starts muted per browser policy */}
+        {v.youtubeId && (
+          <section class="tv-ambience">
+            <iframe
+              class="tv-ambience-frame"
+              src={`https://www.youtube-nocookie.com/embed/${v.youtubeId}?autoplay=1&mute=1&loop=1&playlist=${v.youtubeId}&rel=0`}
+              allow="autoplay; encrypted-media"
+              title="Ambience"
+            />
+          </section>
+        )}
 
         {/* Objectives */}
         <section class="tv-quests">

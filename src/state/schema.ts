@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -102,6 +102,9 @@ export interface Ally {
   scores: { str: number; dex: number; con: number; int: number; wis: number; cha: number };
   attacks: AllyAttack[];
   conditions: string[];
+  /** Death saves — allies fall like anyone else in the Dale */
+  deathS: number;
+  deathF: number;
   location: string;
   notes: string;
 }
@@ -274,6 +277,8 @@ export interface TvSettings {
   partyLocation: string;
   /** Pixel-art scene shown on the TV. 'auto' derives from weather/journey. */
   sceneId: string;
+  /** YouTube video id for the TV's ambience player ('' = hidden) */
+  youtubeId: string;
 }
 
 export interface AppState {
@@ -328,7 +333,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
-    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto' },
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '' },
     seq: 1,
   };
 }

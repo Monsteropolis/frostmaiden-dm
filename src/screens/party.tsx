@@ -183,6 +183,7 @@ function AllyCard({ ally }: { ally: Ally }) {
   const mod = (n: number) => patch((s) => {
     const a = s.sidekicks.find((x) => x.id === ally.id); if (!a) return;
     a.hp = Math.max(0, Math.min(a.maxHp, a.hp + n));
+    if (a.hp > 0) { a.deathS = 0; a.deathF = 0; }
   });
 
   return (
@@ -210,8 +211,26 @@ function AllyCard({ ally }: { ally: Ally }) {
           <div class="hp-quick">
             <button class="btn" onClick={() => mod(-5)}>−5</button>
             <button class="btn" onClick={() => mod(+5)}>+5</button>
-            <button class="btn" onClick={() => patch((s) => { const a = s.sidekicks.find((x) => x.id === ally.id); if (a) a.hp = a.maxHp; })}>Full</button>
+            <button class="btn" onClick={() => patch((s) => { const a = s.sidekicks.find((x) => x.id === ally.id); if (a) { a.hp = a.maxHp; a.deathS = 0; a.deathF = 0; } })}>Full</button>
           </div>
+
+          {ally.hp <= 0 && (
+            <div class="death-saves">
+              <span class="ds-label">Death saves</span>
+              {(['deathS', 'deathF'] as const).map((k) => (
+                <div class="ds-row">
+                  <span>{k === 'deathS' ? 'Saves' : 'Fails'}</span>
+                  {[1, 2, 3].map((i) => (
+                    <button
+                      class={`ds-pip ${k === 'deathF' ? 'fail' : ''}${(ally[k] ?? 0) >= i ? ' on' : ''}`}
+                      aria-label={`${k === 'deathS' ? 'Success' : 'Failure'} ${i}`}
+                      onClick={() => patch((s) => { const a = s.sidekicks.find((x) => x.id === ally.id); if (a) a[k] = (a[k] ?? 0) >= i ? i - 1 : i; })}
+                    >{k === 'deathS' ? '✦' : '✕'}</button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
 
           {!ally.srcType && (
             <div class="score-row">
@@ -270,7 +289,7 @@ function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: bo
   const blank: Ally = existing ?? {
     id: '', name: '', emoji: '🐺', kind: '', category, level: 1, hp: 11, maxHp: 11, ac: 13, initMod: 2,
     scores: { str: 12, dex: 14, con: 12, int: 3, wis: 12, cha: 6 },
-    attacks: [], conditions: [], location: '', notes: '',
+    attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '',
   };
   const [f, setF] = useState<Ally>(blank);
   const set = (k: keyof Ally, v: unknown) => setF((prev) => ({ ...prev, [k]: v } as Ally));
@@ -359,7 +378,7 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
         id: `sk${d.seq++}`, kind: a.kind ?? '', category: 'ally', level: a.level ?? 0,
         hp: a.maxHp, maxHp: a.maxHp, ac: a.ac, initMod: a.initMod ?? 0,
         scores: a.scores ?? { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
-        attacks: [], conditions: [], location: '', notes: '',
+        attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '',
         name: a.name, emoji: a.emoji, srcType: a.srcType, srcId: a.srcId,
       });
     });

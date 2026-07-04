@@ -63,7 +63,7 @@ function applyHp(id: string, delta: number | 'set' | 'full', setVal = 0) {
     }
     if (c.srcType === 'ally' && c.srcId) {
       const a = s.sidekicks.find((x) => x.id === c.srcId);
-      if (a) a.hp = Math.max(0, Math.min(a.maxHp, c.hp));
+      if (a) { a.hp = Math.max(0, Math.min(a.maxHp, c.hp)); if (a.hp > 0) { a.deathS = 0; a.deathF = 0; } }
     }
   });
 }
@@ -117,27 +117,38 @@ export function MonsterPanel({ srcId, name }: { srcId?: string; name: string }) 
 
 // ---------------------------------------------------------------- tracker row
 
-// Death saves in the tracker — they live on the party record (srcId),
-// so marks made here appear on the Party tab and the TV instantly.
-function DeathPipsInline({ pcId }: { pcId?: string }) {
-  const pc = state.value.party.find((p) => p.id === pcId);
-  if (!pc) return null;
+// Death saves in the tracker — they live on the source record (party PC
+// or sidekick/ally by srcId), so marks made here appear on the Party tab
+// and the TV instantly. Works for PCs AND allies — allies recruited from
+// NPCs go down like anyone else.
+function deathRecord(srcType: string, srcId?: string) {
+  if (srcType === 'pc') return state.value.party.find((p) => p.id === srcId);
+  if (srcType === 'ally') return state.value.sidekicks.find((a) => a.id === srcId);
+  return undefined;
+}
+
+function DeathPipsInline({ srcType, srcId }: { srcType: string; srcId?: string }) {
+  const rec = deathRecord(srcType, srcId);
+  if (!rec) return null;
   return (
     <span class="ds-inline">
       {' · '}
-      {[0, 1, 2].map((i) => <span class={`ds ${i < pc.deathS ? 'ok' : ''}`}>✦</span>)}
+      {[0, 1, 2].map((i) => <span class={`ds ${i < (rec.deathS ?? 0) ? 'ok' : ''}`}>✦</span>)}
       <span class="ds-sep">/</span>
-      {[0, 1, 2].map((i) => <span class={`ds ${i < pc.deathF ? 'bad' : ''}`}>✕</span>)}
+      {[0, 1, 2].map((i) => <span class={`ds ${i < (rec.deathF ?? 0) ? 'bad' : ''}`}>✕</span>)}
     </span>
   );
 }
 
-function DeathSavesEditor({ pcId }: { pcId?: string }) {
-  const pc = state.value.party.find((p) => p.id === pcId);
-  if (!pc) return null;
+function DeathSavesEditor({ srcType, srcId }: { srcType: string; srcId?: string }) {
+  const rec = deathRecord(srcType, srcId);
+  if (!rec) return null;
   const set = (k: 'deathS' | 'deathF', n: number) => patch((s) => {
-    const p = s.party.find((x) => x.id === pcId); if (!p) return;
-    p[k] = p[k] === n ? n - 1 : n; // tap the same pip to untick it
+    const r = srcType === 'pc'
+      ? s.party.find((x) => x.id === srcId)
+      : s.sidekicks.find((x) => x.id === srcId);
+    if (!r) return;
+    r[k] = (r[k] ?? 0) === n ? n - 1 : n; // tap the same pip to untick it
   });
   return (
     <div class="death-saves-row">
@@ -146,7 +157,7 @@ function DeathSavesEditor({ pcId }: { pcId?: string }) {
           <span class="field-label" style={{ margin: 0 }}>{k === 'deathS' ? 'Saves' : 'Fails'}</span>
           {[1, 2, 3].map((n) => (
             <button
-              class={`ds-pip ${k === 'deathF' ? 'fail' : ''} ${pc[k] >= n ? 'on' : ''}`}
+              class={`ds-pip ${k === 'deathF' ? 'fail' : ''} ${(rec[k] ?? 0) >= n ? 'on' : ''}`}
               aria-label={`${k === 'deathS' ? 'Success' : 'Failure'} ${n}`}
               onClick={() => set(k, n)}
             >{k === 'deathS' ? '✦' : '✕'}</button>
@@ -169,7 +180,7 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
           <div class="cr-name">{c.emoji} {c.name}</div>
           <div class="unit-meta">
             AC {c.ac}{c.conditions.length ? ` · ${c.conditions.join(', ')}` : ''}
-            {c.srcType === 'pc' && c.hp <= 0 && <DeathPipsInline pcId={c.srcId} />}
+            {(c.srcType === 'pc' || c.srcType === 'ally') && c.hp <= 0 && <DeathPipsInline srcType={c.srcType} srcId={c.srcId} />}
           </div>
         </div>
         <div class="hp-ctl" onClick={(e) => e.stopPropagation()}>
@@ -187,7 +198,7 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
             <NumInput w="76px" value={c.hp} onInput={(n) => applyHp(c.id, 'set', n)} />
             <button class="btn" onClick={() => applyHp(c.id, 'full')}>Full</button>
           </div>
-          {c.srcType === 'pc' && c.hp <= 0 && <DeathSavesEditor pcId={c.srcId} />}
+          {(c.srcType === 'pc' || c.srcType === 'ally') && c.hp <= 0 && <DeathSavesEditor srcType={c.srcType} srcId={c.srcId} />}
           <CondEditor current={c.conditions} onToggle={(cond) => patch((s) => {
             const x = s.combat.combatants.find((y) => y.id === c.id); if (!x) return;
             x.conditions = x.conditions.includes(cond) ? x.conditions.filter((z) => z !== cond) : [...x.conditions, cond];
