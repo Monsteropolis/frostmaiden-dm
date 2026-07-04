@@ -12,7 +12,7 @@ import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
 import { TvBackdrop } from './vfx';
-import { SCENES } from './scenes';
+import { sceneById, SCENES } from './scenes';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -110,7 +110,15 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
     <div class={`tv-init-row ${c.active ? 'active' : ''} ${flash && c.active ? 'flash' : ''} ${c.hpState === 'down' ? 'down' : ''}`}>
       <span class="tv-init-marker">{c.active ? '▶' : c.next ? '›' : ''}</span>
       <span class="tv-init-num">{c.init ?? '—'}</span>
-      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
+      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}
+        {c.deathS !== null && c.deathF !== null && (
+          <span class="tv-deathsaves">
+            {[0, 1, 2].map((i) => <span class={`ds ${i < (c.deathS ?? 0) ? 'ok' : ''}`}>●</span>)}
+            <span class="ds-sep">·</span>
+            {[0, 1, 2].map((i) => <span class={`ds ${i < (c.deathF ?? 0) ? 'bad' : ''}`}>●</span>)}
+          </span>
+        )}
+      </span>
       <CondChips conds={c.conditions} />
       <span class="tv-init-hp">
         {c.friendly && c.hp !== null && c.maxHp !== null
@@ -189,7 +197,7 @@ export function CombatView({ v, flash = false, roundPulse = false }: {
 
 export function ExplorationView({ v }: { v: PlayerView }) {
   const j = v.travel;
-  const scene = SCENES.find((s) => s.id === v.sceneId) ?? SCENES[0];
+  const scene = sceneById(v.sceneId) ?? SCENES[0];
   const linked = (pcId: string) => v.allies.filter((a) => a.linkedPcId === pcId);
   const orphans = v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId));
   const r = v.resources;
@@ -214,11 +222,11 @@ export function ExplorationView({ v }: { v: PlayerView }) {
       </section>
 
       <div class="tv-main-col">
-        {/* Where the party is — the DM-chosen pixel scene */}
-        <section class="tv-scene">
+        {/* Where the party is — the DM-chosen scene (pixel mood or module art) */}
+        <section class={`tv-scene${scene.cat !== 'pixel' ? ' fit-contain' : ''}`}>
           <img src={scene.url} alt="" class="tv-scene-art" />
           <div class="tv-scene-caption">
-            <span class="tv-scene-loc">{v.location}</span>
+            <span class="tv-scene-loc">{scene.cat === 'pixel' ? v.location : scene.name}</span>
             <span class="tv-scene-wx">{v.weather.icon} {v.weather.name}</span>
           </div>
         </section>
@@ -227,7 +235,6 @@ export function ExplorationView({ v }: { v: PlayerView }) {
         <section class="tv-resources">
           <span class="tv-res"><span class="tv-res-ico">🪙</span>{r.gold}<span class="tv-res-label">GOLD</span></span>
           <span class={`tv-res${lowFood ? ' low' : ''}`}><span class="tv-res-ico">🍖</span>{r.rations}<span class="tv-res-label">RATIONS</span></span>
-          <span class="tv-res"><span class="tv-res-ico">🎒</span>{r.partySize}<span class="tv-res-label">SOULS</span></span>
           <span class="tv-res"><span class="tv-res-ico">📅</span>{v.day}<span class="tv-res-label">DAY</span></span>
           {j && (
             <span class="tv-res journey">

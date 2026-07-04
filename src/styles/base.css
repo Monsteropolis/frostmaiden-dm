@@ -1240,3 +1240,16 @@ details.loc summary::marker { color: var(--frost-deep); }
 
 /* rime tag on master item list rows */
 .cr.frosty-cr { color: var(--frost); border-color: var(--frost-deep); }
+
+/* === DEATH SAVES IN THE TRACKER === */
+.ds-inline { white-space: nowrap; }
+.ds-inline .ds { color: var(--ink-faint); font-size: 11px; }
+.ds-inline .ds.ok { color: var(--ok); }
+.ds-inline .ds.bad { color: var(--thread); }
+.ds-inline .ds-sep { color: var(--ink-faint); margin: 0 2px; }
+.death-saves-row {
+  display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 10px;
+  border: 1px solid var(--thread-deep); border-radius: var(--radius-sm);
+}
+.ds-group { display: flex; align-items: center; gap: 8px; }

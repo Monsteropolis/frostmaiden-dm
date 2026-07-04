@@ -66,6 +66,9 @@ export interface PvCombatant {
   conditions: string[];
   active: boolean;            // it's this combatant's turn
   next: boolean;              // up next
+  /** Death saves for a downed PC (from the party record); null otherwise */
+  deathS: number | null;
+  deathF: number | null;
 }
 
 export interface PvQuest {
@@ -123,9 +126,11 @@ function isFriendly(c: Combatant): boolean {
 
 function projectCombatant(
   c: Combatant, idx: number, turn: number, count: number, hidden: Set<string>,
+  party: AppState['party'],
 ): PvCombatant {
   const friendly = isFriendly(c);
   const masked = !friendly && hidden.has(c.id);
+  const pc = c.srcType === 'pc' && c.hp <= 0 ? party.find((p) => p.id === c.srcId) : undefined;
   return {
     id: c.id,
     name: masked ? '???' : c.name,
@@ -138,6 +143,8 @@ function projectCombatant(
     conditions: c.conditions,
     active: idx === turn,
     next: count > 1 && idx === (turn + 1) % count,
+    deathS: pc ? pc.deathS : null,
+    deathF: pc ? pc.deathF : null,
   };
 }
 
@@ -185,7 +192,7 @@ export function projectPlayerView(s: AppState): PlayerView {
       ? {
           round: s.combat.round,
           combatants: s.combat.combatants.map((c, i) =>
-            projectCombatant(c, i, s.combat.turn, s.combat.combatants.length, hidden)),
+            projectCombatant(c, i, s.combat.turn, s.combat.combatants.length, hidden, s.party)),
         }
       : null,
 

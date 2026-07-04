@@ -10,7 +10,7 @@ import { state, patch } from '../state/store';
 import { Sheet } from './ui';
 import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
-import { SCENES } from '../tv/scenes';
+import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 
 const STATUS_LABEL: Record<string, string> = {
   idle: 'Not connected',
@@ -31,6 +31,7 @@ export function tvPipClass(): string {
 export function TvPanel({ onClose }: { onClose: () => void }) {
   const saved = state.value.tv.lastRoomCode;
   const [code, setCode] = useState(saved);
+  const [catF, setCatF] = useState<SceneCat | 'all'>('all');
   const status = tvStatus.value;
   const live = status === 'open' || status === 'connecting' || status === 'reconnecting';
 
@@ -67,13 +68,19 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div class="field">
-        <label>TV scene — the pixel backdrop the players see</label>
+        <label>TV scene — what the players see</label>
+        <div class="chip-row" style={{ margin: '4px 0 8px' }}>
+          <button class={`cond-chip${catF === 'all' ? ' on' : ''}`} onClick={() => setCatF('all')}>All</button>
+          {SCENE_CATS.map((c) => (
+            <button key={c.id} class={`cond-chip${catF === c.id ? ' on' : ''}`} onClick={() => setCatF(c.id)}>{c.label}</button>
+          ))}
+        </div>
         <div class="scene-grid">
           <button
             class={`scene-pick${state.value.tv.sceneId === 'auto' ? ' on' : ''}`}
             onClick={() => patch((d) => { d.tv.sceneId = 'auto'; })}
           ><span class="scene-auto">✦</span><span class="scene-name">Auto</span></button>
-          {SCENES.map((sc) => (
+          {SCENES.filter((sc) => catF === 'all' || sc.cat === catF).map((sc) => (
             <button
               key={sc.id}
               class={`scene-pick${state.value.tv.sceneId === sc.id ? ' on' : ''}`}
@@ -84,7 +91,7 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             </button>
           ))}
         </div>
-        <p class="stat-fine">Auto picks from weather and travel — blizzards whiteout, journeys show the road.</p>
+        <p class="stat-fine">Auto picks a pixel mood from weather and travel. Module art (locations, maps, monsters, NPCs) is always your deliberate choice.</p>
       </div>
 
       <div class="tv-actions">

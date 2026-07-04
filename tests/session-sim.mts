@@ -639,7 +639,8 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   });
   const pv = projectPlayerView(state.value);
   check('projection carries gold', pv.resources.gold === 137);
-  check('projection carries rations + souls', pv.resources.rations >= 0 && pv.resources.partySize >= 1);
+  check('projection carries rations + party size', pv.resources.rations >= 0 && pv.resources.partySize >= 1);
+  check('souls removed from TV ledger', true); // display-only removal, asserted in scene 24
   check('projection resolves concrete scene', pv.sceneId !== 'auto' && SCENES.some((s) => s.id === pv.sceneId));
   check('ally carries linkedPcId', pv.allies.some((a) => a.id === 'skT' && a.linkedPcId === state.value.party[0]?.id));
 
@@ -677,6 +678,63 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   check('item master list alphabetized', cramp !== -1 && snow !== -1 && cramp < snow, `${cramp} < ${snow}`);
   click(byText('.creature-add', 'Snowshoes'), 'open rime item'); await sleep(20);
   check('rime item sheet opens', bodyHas('deep snow'));
+}
+
+console.log('\n═══ SCENE 24: Polish — death saves everywhere, art library, no souls ═══');
+{
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { SCENES, SCENE_CATS, sceneById } = await import('/home/claude/frostmaiden-dm/src/tv/scenes.ts');
+  const { render: rts } = await import('preact-render-to-string');
+  const { ExplorationView, CombatView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+
+  // -- the art library: categorized, filterable, complete
+  check('all four art categories present', (['location', 'map', 'monster', 'npc'] as const)
+    .every((c) => SCENES.some((s) => s.cat === c)));
+  check('scene cat filter list matches', SCENE_CATS.length === 5);
+  check('36 art pieces + 10 pixel scenes', SCENES.length === 46, `${SCENES.length}`);
+  check('maps include all Ten-Towns art', ['map-bremen', 'map-bryn-shander', 'map-targos', 'map-easthaven'].every((id) => !!sceneById(id)));
+  check('art has real urls', SCENES.every((s) => s.url.length > 0));
+
+  // -- a downed PC carries death saves through combat projection to the TV
+  patch((d) => {
+    const pc = d.party[0];
+    if (pc) { pc.hp = 0; pc.deathS = 2; pc.deathF = 1; }
+    d.combat = {
+      active: true, round: 1, turn: 0,
+      combatants: [
+        { id: 'dsPC', name: pc?.name ?? 'PC', emoji: '🛡️', hp: 0, maxHp: 10, ac: 15, init: 12, initMod: 2, conditions: [], srcType: 'pc', srcId: pc?.id },
+        { id: 'dsMon', name: 'Wolf', emoji: '🐺', hp: 11, maxHp: 11, ac: 13, init: 8, initMod: 1, conditions: [], srcType: 'monster', srcId: 'crag_cat' },
+      ],
+    };
+  });
+  const pvC = projectPlayerView(state.value);
+  const pcRow = pvC.combat!.combatants.find((c) => c.id === 'dsPC')!;
+  const monRow = pvC.combat!.combatants.find((c) => c.id === 'dsMon')!;
+  check('combat projection: downed PC has saves', pcRow.deathS === 2 && pcRow.deathF === 1);
+  check('combat projection: monster has none', monRow.deathS === null && monRow.deathF === null);
+  const combatHtml = rts(h(CombatView, { v: pvC, flash: false, roundPulse: false }));
+  check('TV combat: death pips render', combatHtml.includes('tv-deathsaves'));
+
+  // -- phone tracker shows and edits saves for the downed PC
+  click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);
+  click(byText('.sub-tab', 'Tracker'), 'Tracker sub-tab'); await sleep(20);
+  check('tracker: inline pips on downed PC row', $$('.ds-inline').length >= 1);
+  click($('.combat-row .cr-grid'), 'expand downed PC'); await sleep(20);
+  check('tracker: death saves editor renders', $$('.death-saves-row').length === 1);
+  const failPips = $$('.death-saves-row .ds-pip.fail');
+  click(failPips[1], 'mark second fail'); await sleep(20);
+  check('tracker edit syncs to party record', state.value.party[0]?.deathF === 2, `${state.value.party[0]?.deathF}`);
+
+  // -- exploration ledger: no souls, layout classes that keep it on-screen
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+  const pvE = projectPlayerView(state.value);
+  const exploreHtml = rts(h(ExplorationView, { v: pvE }));
+  check('TV ledger: souls removed', !exploreHtml.includes('SOULS'));
+  check('TV ledger: gold + rations + day remain', ['GOLD', 'RATIONS', 'DAY'].every((t) => exploreHtml.includes(t)));
+  check('TV: art scenes get contain fit', rts(h(ExplorationView, { v: { ...pvE, sceneId: 'mon-yeti' } })).includes('fit-contain'));
+  check('TV: pixel scenes keep cover fit', !rts(h(ExplorationView, { v: { ...pvE, sceneId: 'town' } })).includes('fit-contain'));
+  patch((d) => { const pc = d.party[0]; if (pc) { pc.hp = pc.maxHp; pc.deathS = 0; pc.deathF = 0; } });
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
