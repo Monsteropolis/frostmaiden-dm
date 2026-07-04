@@ -311,7 +311,7 @@ function SpellsPanel() {
 
 // ---------------------------------------------------------------- items
 
-type ItemMode = 'rime' | 'magic' | 'gear';
+type ItemMode = 'all' | 'rime' | 'magic' | 'gear';
 type CatListItem = ApiListItem & { magic?: boolean };
 
 const MAGIC_CATS: [string, string][] = [
@@ -324,8 +324,18 @@ const GEAR_CATS: [string, string][] = [
   ['tools', 'Tools'], ['mounts-and-vehicles', 'Mounts & vehicles'],
 ];
 
+// Rime items keep an emoji next to their name in the master list.
+// Seed data has none (rime-data.js is read-only), so they live here.
+const RIME_ITEM_EMOJI: Record<string, string> = {
+  'snowshoes-rime': '🥾', 'crampons-rime': '🧗', 'cold-weather-clothing': '🧥',
+  'dogsled-rime': '🛷', 'axe-beak-mount': '🦤', 'ice-fishing-tackle': '🎣',
+  'psi-crystal': '🔮', 'professor-orb': '🧿', 'scroll-tarrasque': '📜',
+  'cauldron-of-plenty': '🍲', 'lantern-of-tracking': '🏮', 'scroll-of-comet': '☄️',
+  'ythryn-mythallar': '💠', 'shield-guardian-amulet': '🧿', 'chardalyn-item': '🖤',
+};
+
 function ItemsPanel() {
-  const [mode, setMode] = useState<ItemMode>('rime');
+  const [mode, setMode] = useState<ItemMode>('all');
   const [cat, setCat] = useState<string>('all');
   const [q, setQ] = useState('');
   const [list, setList] = useState<CatListItem[] | null | 'loading'>(null);
@@ -338,6 +348,15 @@ function ItemsPanel() {
     let live = true;
     setList('loading');
     const load = async () => {
+      if (mode === 'all') {
+        // the master shelf: both API lists merged (Rime items join client-side)
+        const [magic, gear] = await Promise.all([getApiList('magic-items'), getApiList('equipment')]);
+        if (!magic && !gear) return null;
+        return [
+          ...(magic ?? []).map((m) => ({ ...m, magic: true })),
+          ...(gear ?? []),
+        ];
+      }
       if (cat === 'all' && mode === 'magic') return getApiList('magic-items');
       if (cat === 'all' && mode === 'gear') return getApiList('equipment');
       const members = await getApiCategory(cat) as CatListItem[] | null;
@@ -359,48 +378,59 @@ function ItemsPanel() {
   const rimeItems = [...(MAGIC_ITEMS as Record<string, unknown>[]), ...(EQUIPMENT as Record<string, unknown>[])];
   const open = rimeItems.find((i) => i.index === openRime);
   const cats = mode === 'magic' ? MAGIC_CATS : GEAR_CATS;
-  const shown = Array.isArray(list)
-    ? list.filter((x) => !q.trim() || x.name.toLowerCase().includes(q.toLowerCase()))
+
+  // One master list: Rime items are rows like everything else, emoji intact,
+  // interleaved alphabetically — not a separate pile floating on top.
+  type Row = { key: string; name: string; emoji?: string; rime?: boolean; magic?: boolean; api?: CatListItem };
+  const rimeRows: Row[] = (mode === 'all' || mode === 'rime')
+    ? rimeItems
+        .filter((i) => !q.trim() || String(i.name).toLowerCase().includes(q.toLowerCase()))
+        .map((i) => ({ key: `rime:${i.index}`, name: String(i.name), emoji: RIME_ITEM_EMOJI[String(i.index)] ?? '✦', rime: true }))
     : [];
+  const apiRows: Row[] = (mode !== 'rime' && Array.isArray(list))
+    ? list
+        .filter((x) => !q.trim() || x.name.toLowerCase().includes(q.toLowerCase()))
+        .map((x) => ({ key: `api:${x.index}`, name: x.name, magic: x.magic, api: x }))
+    : [];
+  const rows = [...rimeRows, ...apiRows].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <>
       <div class="chip-row" style={{ marginBottom: '8px' }}>
+        <button class={`cond-chip${mode === 'all' ? ' on' : ''}`} onClick={() => { setMode('all'); setCat('all'); }}>All items</button>
         <button class={`cond-chip frosty${mode === 'rime' ? ' on' : ''}`} onClick={() => { setMode('rime'); }}>❄ Rime</button>
         <button class={`cond-chip frosty${mode === 'magic' ? ' on' : ''}`} onClick={() => { setMode('magic'); setCat('all'); }}>Magic items</button>
         <button class={`cond-chip frosty${mode === 'gear' ? ' on' : ''}`} onClick={() => { setMode('gear'); setCat('all'); }}>Shop goods</button>
       </div>
 
-      {mode === 'rime' && (
-        <div class="chip-row">
-          {rimeItems.map((i) => (
-            <button class="chip npc-chip" onClick={() => setOpenRime(String(i.index))}>✦ {String(i.name)}</button>
+      {(mode === 'magic' || mode === 'gear') && (
+        <div class="chip-row" style={{ marginBottom: '10px' }}>
+          <button class={`cond-chip${cat === 'all' ? ' on' : ''}`} onClick={() => setCat('all')}>All</button>
+          {cats.map(([idx, label]) => (
+            <button class={`cond-chip${cat === idx ? ' on' : ''}`} onClick={() => setCat(idx)}>{label}</button>
           ))}
         </div>
       )}
 
-      {mode !== 'rime' && (
-        <>
-          <div class="chip-row" style={{ marginBottom: '10px' }}>
-            <button class={`cond-chip${cat === 'all' ? ' on' : ''}`} onClick={() => setCat('all')}>All</button>
-            {cats.map(([idx, label]) => (
-              <button class={`cond-chip${cat === idx ? ' on' : ''}`} onClick={() => setCat(idx)}>{label}</button>
-            ))}
-          </div>
-          <input class="input" placeholder={mode === 'magic' ? 'Search magic items…' : 'Search goods…'} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
-          {list === 'loading' && <p class="stat-fine">Loading…</p>}
-          {list === null && <p class="stat-fine">Needs one online visit to download this shelf.</p>}
-          <div class="ref-list" style={{ marginTop: '10px' }}>
-            {shown.map((x) => (
-              <button class="creature-add" onClick={() => setOpenApi({ kind: x.magic || mode === 'magic' ? 'magic-items' : 'equipment', index: x.index, name: x.name })}>
-                <span>{x.name}</span>
-                {x.magic && mode === 'gear' ? <span class="cr">magic</span> : null}
-              </button>
-            ))}
-            {Array.isArray(list) && shown.length === 0 && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
-          </div>
-        </>
-      )}
+      <input class="input" placeholder="Search items…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+      {mode !== 'rime' && list === 'loading' && <p class="stat-fine">Loading…</p>}
+      {mode !== 'rime' && list === null && <p class="stat-fine">The 5e shelves need one online visit; ❄ Rime items are always here.</p>}
+      <div class="ref-list" style={{ marginTop: '10px' }}>
+        {rows.map((r) => (
+          <button
+            key={r.key}
+            class="creature-add"
+            onClick={() => r.rime
+              ? setOpenRime(r.key.slice(5))
+              : setOpenApi({ kind: r.api!.magic || mode === 'magic' ? 'magic-items' : 'equipment', index: r.api!.index, name: r.name })}
+          >
+            <span>{r.rime ? `${r.emoji} ` : ''}{r.name}</span>
+            {r.rime ? <span class="cr frosty-cr">❄ rime</span>
+              : r.magic && mode !== 'magic' ? <span class="cr">magic</span> : null}
+          </button>
+        ))}
+        {rows.length === 0 && (mode === 'rime' || Array.isArray(list)) && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
+      </div>
 
       {open && (
         <Sheet open title={String(open.name)} onClose={() => setOpenRime(null)}>

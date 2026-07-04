@@ -10,6 +10,7 @@ import { state, patch } from '../state/store';
 import { Sheet } from './ui';
 import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
+import { SCENES } from '../tv/scenes';
 
 const STATUS_LABEL: Record<string, string> = {
   idle: 'Not connected',
@@ -63,6 +64,27 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
         <span class={tvPipClass()} aria-hidden="true" />
         <span>{STATUS_LABEL[status] ?? status}</span>
         {tvStatusDetail.value && <span class="tv-status-detail">{tvStatusDetail.value}</span>}
+      </div>
+
+      <div class="field">
+        <label>TV scene — the pixel backdrop the players see</label>
+        <div class="scene-grid">
+          <button
+            class={`scene-pick${state.value.tv.sceneId === 'auto' ? ' on' : ''}`}
+            onClick={() => patch((d) => { d.tv.sceneId = 'auto'; })}
+          ><span class="scene-auto">✦</span><span class="scene-name">Auto</span></button>
+          {SCENES.map((sc) => (
+            <button
+              key={sc.id}
+              class={`scene-pick${state.value.tv.sceneId === sc.id ? ' on' : ''}`}
+              onClick={() => patch((d) => { d.tv.sceneId = sc.id; })}
+            >
+              <img src={sc.url} alt="" class="scene-thumb" />
+              <span class="scene-name">{sc.name}</span>
+            </button>
+          ))}
+        </div>
+        <p class="stat-fine">Auto picks from weather and travel — blizzards whiteout, journeys show the road.</p>
       </div>
 
       <div class="tv-actions">

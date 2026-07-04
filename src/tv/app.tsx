@@ -8,9 +8,11 @@
 
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { PlayerView, PvCombatant, PvPc, HpState } from './projection';
+import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
+import { TvBackdrop } from './vfx';
+import { SCENES } from './scenes';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -119,7 +121,18 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
   );
 }
 
-function PartyCard({ p }: { p: PvPc }) {
+function AllyRow({ a }: { a: PvAlly }) {
+  return (
+    <div class="tv-ally nested">
+      <span class="tv-ally-tie">└</span>
+      <span class="tv-ally-name">{a.emoji} {a.name}</span>
+      <CondChips conds={a.conditions} />
+      <HpPill s={a.hpState} />
+    </div>
+  );
+}
+
+function PartyCard({ p, allies = [] }: { p: PvPc; allies?: PvAlly[] }) {
   return (
     <div class={`tv-pc ${p.down ? 'down' : ''}`}>
       <div class="tv-pc-head">
@@ -137,6 +150,7 @@ function PartyCard({ p }: { p: PvPc }) {
           </span>
         )}
       </div>
+      {allies.map((a) => <AllyRow a={a} key={a.id} />)}
     </div>
   );
 }
@@ -175,44 +189,68 @@ export function CombatView({ v, flash = false, roundPulse = false }: {
 
 export function ExplorationView({ v }: { v: PlayerView }) {
   const j = v.travel;
+  const scene = SCENES.find((s) => s.id === v.sceneId) ?? SCENES[0];
+  const linked = (pcId: string) => v.allies.filter((a) => a.linkedPcId === pcId);
+  const orphans = v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId));
+  const r = v.resources;
+  const lowFood = r.rations < r.partySize;
+
   return (
     <div class="tv-explore">
-      <section class="tv-party wide">
+      {/* The party, stacked on the left — allies ride under their PC */}
+      <section class="tv-party-col">
         <div class="tv-panel-head"><h2>PARTY</h2></div>
-        <div class="tv-pc-grid">
-          {v.party.map((p) => <PartyCard p={p} key={p.id} />)}
-        </div>
-        {v.allies.length > 0 && (
-          <div class="tv-ally-row">
-            {v.allies.map((a) => (
+        {v.party.map((p) => <PartyCard p={p} allies={linked(p.id)} key={p.id} />)}
+        {orphans.length > 0 && (
+          <div class="tv-orphans">
+            {orphans.map((a) => (
               <div class="tv-ally" key={a.id}>
-                <span>{a.emoji} {a.name}</span>
+                <span class="tv-ally-name">{a.emoji} {a.name}</span>
                 <HpPill s={a.hpState} />
               </div>
             ))}
           </div>
         )}
       </section>
-      <section class="tv-quests">
-        <div class="tv-panel-head"><h2>OBJECTIVES</h2></div>
-        {j && (
-          <div class="tv-journey">
-            <span class="tv-journey-route">{j.origin} → {j.dest}</span>
-            <div class="tv-journey-bar">
-              <div class="tv-journey-fill" style={{ width: `${Math.min(100, (j.day / Math.max(1, j.totalDays)) * 100)}%` }} />
+
+      <div class="tv-main-col">
+        {/* Where the party is — the DM-chosen pixel scene */}
+        <section class="tv-scene">
+          <img src={scene.url} alt="" class="tv-scene-art" />
+          <div class="tv-scene-caption">
+            <span class="tv-scene-loc">{v.location}</span>
+            <span class="tv-scene-wx">{v.weather.icon} {v.weather.name}</span>
+          </div>
+        </section>
+
+        {/* Party resources — the ledger of survival */}
+        <section class="tv-resources">
+          <span class="tv-res"><span class="tv-res-ico">🪙</span>{r.gold}<span class="tv-res-label">GOLD</span></span>
+          <span class={`tv-res${lowFood ? ' low' : ''}`}><span class="tv-res-ico">🍖</span>{r.rations}<span class="tv-res-label">RATIONS</span></span>
+          <span class="tv-res"><span class="tv-res-ico">🎒</span>{r.partySize}<span class="tv-res-label">SOULS</span></span>
+          <span class="tv-res"><span class="tv-res-ico">📅</span>{v.day}<span class="tv-res-label">DAY</span></span>
+          {j && (
+            <span class="tv-res journey">
+              <span class="tv-journey-route">{j.origin} → {j.dest}</span>
+              <span class="tv-journey-bar"><span class="tv-journey-fill" style={{ width: `${Math.min(100, (j.day / Math.max(1, j.totalDays)) * 100)}%` }} /></span>
+              <span class="tv-res-label">DAY {j.day}/{j.totalDays}</span>
+            </span>
+          )}
+        </section>
+
+        {/* Objectives */}
+        <section class="tv-quests">
+          <div class="tv-panel-head"><h2>OBJECTIVES</h2></div>
+          {v.quests.length === 0 && <p class="tv-dim">No active objectives</p>}
+          {v.quests.map((q) => (
+            <div class={`tv-quest ${q.status === 'escalating' ? 'escalating' : ''}`} key={q.id}>
+              <span class="tv-quest-mark">{q.status === 'escalating' ? '⚠' : q.mainHook ? '✦' : '·'}</span>
+              <span class="tv-quest-name">{q.name}</span>
+              {q.town && <span class="tv-quest-town">{q.town}</span>}
             </div>
-            <span class="tv-journey-days">Day {j.day} of {j.totalDays}</span>
-          </div>
-        )}
-        {v.quests.length === 0 && <p class="tv-dim">No active objectives</p>}
-        {v.quests.map((q) => (
-          <div class={`tv-quest ${q.status === 'escalating' ? 'escalating' : ''}`} key={q.id}>
-            <span class="tv-quest-mark">{q.status === 'escalating' ? '⚠' : q.mainHook ? '✦' : '·'}</span>
-            <span class="tv-quest-name">{q.name}</span>
-            {q.town && <span class="tv-quest-town">{q.town}</span>}
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
+      </div>
     </div>
   );
 }
@@ -271,6 +309,7 @@ export function TvApp() {
 
   return (
     <div class="tv-frame">
+      <TvBackdrop weatherId={v?.weather.id ?? 'light_snow'} />
       <div class="tv-safe">
         {v && status.value !== 'error' ? (
           <>

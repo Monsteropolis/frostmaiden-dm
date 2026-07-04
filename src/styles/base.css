@@ -1224,23 +1224,19 @@ details.loc summary::marker { color: var(--frost-deep); }
 /* TV hide/reveal toggle in combat rows */
 .tv-hide-btn.on { color: var(--frost); border-color: var(--frost-deep); }
 
-/* === NPC PORTRAITS (pixel chips for built-in NPCs) === */
-.npc-portrait {
-  width: 28px; height: 56px;
-  flex-shrink: 0;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  align-self: center;
-  /* atlas is 476×56 — natural size, cells addressed by background-position */
+
+/* === TV SCENE PICKER (DM side) === */
+.scene-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+.scene-pick {
+  display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer;
+  min-height: var(--tap);
 }
-.entity-row .npc-portrait { margin: -8px 1px; } /* sprite is tall; don't grow the row */
-.npc-portrait-wrap.lg { display: inline-block; }
-.npc-portrait-wrap.lg .npc-portrait {
-  display: block;
-  width: 28px; height: 56px;
-  transform: scale(1.6);
-  transform-origin: top left;
-  margin: 0 22px 34px 4px; /* reserve space for the 1.6× scale overflow */
-}
-.npc-head-id { display: flex; align-items: flex-start; gap: 10px; }
-.npc-head-id .unit-meta { display: block; margin-top: 6px; }
+.scene-pick.on { border-color: var(--frost); box-shadow: 0 0 8px var(--frost-glow); }
+.scene-thumb { width: 100%; aspect-ratio: 16/9; image-rendering: pixelated; border-radius: 4px; display: block; }
+.scene-auto { font-size: 24px; color: var(--frost); display: grid; place-items: center; aspect-ratio: 16/9; }
+.scene-name { font-size: 11px; color: var(--ink-dim); text-align: center; }
+
+/* rime tag on master item list rows */
+.cr.frosty-cr { color: var(--frost); border-color: var(--frost-deep); }

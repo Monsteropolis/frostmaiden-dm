@@ -215,7 +215,8 @@ export function useBestiary() {
     return () => { live = false; };
   }, []);
   const local = localBestiary();
-  const all = api && api !== 'loading' ? [...local, ...apiBestiary(api)] : local;
+  const all = (api && api !== 'loading' ? [...local, ...apiBestiary(api)] : [...local])
+    .sort((a, b) => a.name.localeCompare(b.name)); // one list, one alphabet — Rime rides inline
   return { all, apiStatus: api, progress };
 }
 

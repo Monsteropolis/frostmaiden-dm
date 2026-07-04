@@ -8,7 +8,6 @@ import { CustomNpc, Standing, AllyAttack } from '../state/schema';
 import { NPCS, SeedNpc } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
-import { NpcFace } from '../lib/portraits';
 
 /** Global NPC popup — call openNpc(id) from any screen. */
 export const npcPopupId = signal<string | null>(null);
@@ -45,7 +44,6 @@ export function npcStanding(id: string): Standing {
   return (state.value.npcOverrides[id]?.standing ?? 'neutral') as Standing;
 }
 
-// (portrait chips for built-in NPCs live in lib/portraits.tsx)
 
 // ---------------------------------------------------------------- quick update
 
@@ -102,13 +100,8 @@ function NpcDetail({ npc, open, onClose, onEdit }: { npc: NpcView; open: boolean
   return (
     <Sheet open={open} title={`${npc.emoji} ${npc.name}`} onClose={onClose}>
       <div class="npc-head">
-        <div class="npc-head-id">
-          <span class="npc-portrait-wrap lg"><NpcFace id={npc.id} emoji={npc.emoji} /></span>
-          <div>
-            <span class={`standing ${npcStanding(npc.id)}`}>{STANDING_LABEL[npcStanding(npc.id)]}</span>
-            <span class="unit-meta">{npc.role} · {npc.town}{s?.location ? ` — ${s.location}` : ''}</span>
-          </div>
-        </div>
+        <span class={`standing ${npcStanding(npc.id)}`}>{STANDING_LABEL[npcStanding(npc.id)]}</span>
+        <span class="unit-meta">{npc.role} · {npc.town}{s?.location ? ` — ${s.location}` : ''}</span>
         {ov.lastSeen && <p class="npc-lastseen">✦ Last seen: {ov.lastSeen}</p>}
       </div>
 
@@ -275,7 +268,7 @@ export function NpcRegistry() {
         const ov = state.value.npcOverrides[n.id];
         return (
           <div class="entity-row npc" onClick={() => openNpc(n.id)}>
-            <NpcFace id={n.id} emoji={n.emoji} />
+            <span class="entity-emoji">{n.emoji}</span>
             <div class="unit-id">
               <div class="entity-name">{n.name}{n.custom && <span class="yours-mark"> ✦</span>}</div>
               <div class="entity-meta">{n.role}{n.town ? <><span class="sep">·</span>{n.town}</> : null}</div>

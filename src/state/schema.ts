@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -272,6 +272,8 @@ export interface TvSettings {
   hiddenCombatantIds: string[];
   /** Manual "party is at…" shown on the TV when no journey is active */
   partyLocation: string;
+  /** Pixel-art scene shown on the TV. 'auto' derives from weather/journey. */
+  sceneId: string;
 }
 
 export interface AppState {
@@ -294,7 +296,7 @@ export interface AppState {
   arcs: Arc[];
   encounterPresets: EncounterPreset[];
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
-  travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number };
+  travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number; gold: number };
   towns: Record<string, TownStatus>;
 
   // NPC system — first-class from the start
@@ -321,12 +323,12 @@ export function defaultState(): AppState {
     arcs: [],
     encounterPresets: [],
     combat: { active: false, round: 0, turn: 0, combatants: [] },
-    travel: { activeJourney: null, log: [], rations: 10, partySize: 4 },
+    travel: { activeJourney: null, log: [], rations: 10, partySize: 4, gold: 0 },
     towns: {},
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
-    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '' },
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto' },
     seq: 1,
   };
 }

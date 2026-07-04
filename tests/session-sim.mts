@@ -376,8 +376,8 @@ check('5e browser offline fallback graceful', bodyHas('online visit') || bodyHas
 click(byText('.sub-tab', 'Spells'), 'Spells'); await sleep(400);
 check('spells tab renders without crash', bodyHas('Spells'));
 click(byText('.sub-tab', 'Items'), 'Items'); await sleep(30);
-check('Rime items chips', bodyHas('Psi Crystal') && bodyHas('Snowshoes'));
-click(byText('.npc-chip', 'Psi Crystal'), 'open rime item'); await sleep(20);
+check('Rime items in master list', bodyHas('Psi Crystal') && bodyHas('Snowshoes'));
+click(byText('.creature-add', 'Psi Crystal'), 'open rime item'); await sleep(20);
 check('item sheet with description', bodyHas('psionic energy'));
 click($('.sheet-close'), 'close item'); await sleep(20);
 
@@ -593,21 +593,90 @@ console.log('\n═══ SCENE 22: Init roll covers all enemy sources + NPC port
   check('PC untouched — players roll their own', get('iP').init === null);
   check('ally untouched — players roll their own', get('iA').init === null);
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+}
 
-  // NPC portraits: built-in NPCs get a pixel chip, custom NPCs keep emoji
-  const { hasPortrait } = await import('/home/claude/frostmaiden-dm/src/lib/portraits.tsx');
-  check('built-in NPC has portrait', hasPortrait('ds') && hasPortrait('au') && hasPortrait('sk2'));
-  check('unknown id falls back', !hasPortrait('npc999'));
+console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV idle view ═══');
+{
+  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { migrate } = await import('/home/claude/frostmaiden-dm/src/state/migrations.ts');
+  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { resolveScene, SCENES } = await import('/home/claude/frostmaiden-dm/src/tv/scenes.ts');
+  const { render: rts } = await import('preact-render-to-string');
+  const { ExplorationView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+
+  // -- migration: a v1 save gains gold + sceneId without losing anything
+  const v1 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
+  v1.version = 1;
+  delete (v1.travel as Record<string, unknown>).gold;
+  delete (v1.tv as Record<string, unknown>).sceneId;
+  const migrated = migrate(v1);
+  check('v1→v2 adds gold', migrated.travel.gold === 0);
+  check('v1→v2 adds sceneId auto', migrated.tv.sceneId === 'auto');
+  check('v1→v2 keeps rations', migrated.travel.rations === state.value.travel.rations);
+
+  // -- DM gold controls exist and write state
+  click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
+  click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
+  check('gold row renders', bodyHas('Gold 🪙'));
+  click(byText('button', '+10'), 'gold +10'); await sleep(20);
+  check('gold incremented', state.value.travel.gold === 10, `${state.value.travel.gold}`);
+
+  // -- scene resolution: auto follows weather/journey, explicit wins
+  check('auto: blizzard whiteout', resolveScene('auto', { journeying: true, weatherId: 'blizzard' }).id === 'blizzard');
+  check('auto: journey shows the road', resolveScene('auto', { journeying: true, weatherId: 'clear' }).id === 'road');
+  check('auto: at rest shows town', resolveScene('auto', { journeying: false, weatherId: 'clear' }).id === 'town');
+  check('explicit scene wins', resolveScene('tavern', { journeying: true, weatherId: 'blizzard' }).id === 'tavern');
+  check('all scenes have art', SCENES.every((s) => typeof s.url === 'string' && s.url.length > 0));
+
+  // -- projection v2 carries resources + scene + ally links; TV nests allies
   patch((d) => {
-    d.customNpcs.push({
-      id: `npc${d.seq++}`, name: 'Test Hermit', emoji: '🧙', role: 'Hermit', town: '',
-      race: '', personality: '', wants: '', fears: '', secrets: '', inventory: '', threads: '',
-    });
+    d.travel.gold = 137;
+    d.sidekicks.push({
+      id: 'skT', name: 'Grit', emoji: '🐺', type: 'Beast', hp: 11, maxHp: 11, ac: 13,
+      level: 1, initMod: 1, conditions: [], linkedPcId: d.party[0]?.id,
+      classTags: [], attacks: [], features: [], notes: '',
+    } as never);
   });
+  const pv = projectPlayerView(state.value);
+  check('projection carries gold', pv.resources.gold === 137);
+  check('projection carries rations + souls', pv.resources.rations >= 0 && pv.resources.partySize >= 1);
+  check('projection resolves concrete scene', pv.sceneId !== 'auto' && SCENES.some((s) => s.id === pv.sceneId));
+  check('ally carries linkedPcId', pv.allies.some((a) => a.id === 'skT' && a.linkedPcId === state.value.party[0]?.id));
+
+  const html = rts(h(ExplorationView, { v: pv }));
+  check('TV: party column present', html.includes('tv-party-col'));
+  check('TV: ally nested under its PC', html.includes('tv-ally nested') && html.includes('Grit'));
+  check('TV: scene art renders', html.includes('tv-scene-art'));
+  check('TV: gold on the ledger', html.includes('137') && html.includes('GOLD'));
+  check('TV: rations on the ledger', html.includes('RATIONS'));
+  check('TV: no secrets — no AC anywhere', !html.includes('AC '));
+  patch((d) => { d.sidekicks = d.sidekicks.filter((s2) => s2.id !== 'skT'); });
+
+  // -- compendium: bestiary is one alphabet, rime inline
+  const { localBestiary } = await import('/home/claude/frostmaiden-dm/src/screens/monsters.tsx');
+  const sortedLocal = [...localBestiary()].sort((a, b) => a.name.localeCompare(b.name));
   click(byText('.nav-btn', 'Lore'), 'Lore tab'); await sleep(20);
-  click(byText('.sub-tab', 'NPCs'), 'NPCs sub-tab'); await sleep(30);
-  check('portrait chips render in NPC list', $$('.npc-portrait').length >= 10, `${$$('.npc-portrait').length} chips`);
-  check('custom NPC keeps emoji fallback', $$('.entity-emoji').length >= 1);
+  click(byText('.sub-tab', 'Bestiary'), 'Bestiary sub-tab'); await sleep(40);
+  const cardNames = $$('.unit .unit-name, .unit .cr-name, .unit strong').map((el) => el.textContent?.trim());
+  check('bestiary renders', $$('.unit').length >= sortedLocal.length - 1, `${$$('.unit').length} cards`);
+  // offline in sim: list = local only, and it must arrive alphabetized
+  const shownOrder = $$('.unit').map((u) => u.textContent ?? '');
+  const abomIdx = shownOrder.findIndex((t) => t.includes('Abominable Yeti'));
+  const yetiIdx = shownOrder.findIndex((t) => t.includes('Yeti') && !t.includes('Abominable'));
+  check('bestiary alphabetized (Abominable before Yeti)', abomIdx !== -1 && yetiIdx !== -1 && abomIdx < yetiIdx, `${abomIdx} < ${yetiIdx}`);
+
+  // -- items: All is default, rime items are normal rows with emoji
+  click(byText('.sub-tab', 'Items'), 'Items sub-tab'); await sleep(30);
+  check('All items chip is default-on', byText('.cond-chip', 'All items')?.className.includes('on') ?? false);
+  check('rime item is a row, not a chip pile', !!byText('.creature-add', 'Snowshoes'));
+  check('rime row keeps its emoji', bodyHas('🥾') && bodyHas('🛷'));
+  check('rime rows tagged', bodyHas('❄ rime'));
+  const itemOrder = $$('.creature-add').map((b) => b.textContent ?? '');
+  const cramp = itemOrder.findIndex((t) => t.includes('Crampons'));
+  const snow = itemOrder.findIndex((t) => t.includes('Snowshoes'));
+  check('item master list alphabetized', cramp !== -1 && snow !== -1 && cramp < snow, `${cramp} < ${snow}`);
+  click(byText('.creature-add', 'Snowshoes'), 'open rime item'); await sleep(20);
+  check('rime item sheet opens', bodyHas('deep snow'));
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

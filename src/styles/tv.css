@@ -274,3 +274,154 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .tv-init-row.flash, .tv-round.pulse, .tv-hp-pill.critical { animation: none; }
 }
+
+/* ============================================================
+   PHASE: TV IDLE REDESIGN — 8-bit RPG skin over the Fate system.
+   Pixel font (Silkscreen) for chrome: headers, labels, numbers.
+   Space Grotesk stays for names/quests — couch legibility rules.
+   Square corners, chunky 2-3px borders, stepped motion only
+   (the drifting snow is the sanctioned exception, as in the app).
+   ============================================================ */
+
+:root { --font-px: 'Silkscreen', monospace; }
+
+/* --- Cosmic backdrop: stars are little fates ---------------------------------- */
+.tvfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.tv-safe { position: relative; z-index: 1; }
+
+.tvfx-star { position: absolute; background: var(--silver); }
+.tvfx-star.tw { animation: tvfxTwinkle 5s steps(3, jump-none) infinite; }
+@keyframes tvfxTwinkle { 0%,100% { opacity: 0.9; } 50% { opacity: 0.2; } }
+
+/* wind-driven snow — continuous fall (the one non-stepped exception),
+   square flakes so it reads pixel */
+.tvfx-flake {
+  position: absolute; top: -8px;
+  background: var(--frost);
+  animation-name: tvfxFall, tvfxSway;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+.tvfx-flake.gust { animation-timing-function: linear, cubic-bezier(0.6, 0, 0.4, 1); }
+@keyframes tvfxFall {
+  from { transform: translate(0, -3vh); }
+  to   { transform: translate(var(--drift, 60px), 103vh); }
+}
+@keyframes tvfxSway { from { margin-left: -4px; } to { margin-left: 4px; } }
+
+/* the aurora breathes — slow stepped shimmer across the top */
+.tvfx-aurora {
+  position: absolute; top: -12%; left: -10%; right: -10%; height: 42%;
+  background:
+    radial-gradient(ellipse 42% 60% at 24% 42%, rgba(127, 200, 169, 0.14), transparent 70%),
+    radial-gradient(ellipse 36% 52% at 56% 30%, rgba(155, 215, 232, 0.12), transparent 70%),
+    radial-gradient(ellipse 40% 56% at 82% 44%, rgba(127, 200, 169, 0.10), transparent 70%);
+  animation: tvfxAurora 14s steps(7, jump-none) infinite alternate;
+}
+@keyframes tvfxAurora { from { opacity: 0.5; transform: translateX(-2%); } to { opacity: 1; transform: translateX(2%); } }
+
+/* winks of magic — a pixel star flares and is gone */
+.tvfx-wink {
+  position: absolute; width: 3px; height: 3px;
+  background: var(--frost);
+  box-shadow: 0 -6px 0 var(--frost), 0 6px 0 var(--frost), -6px 0 0 var(--frost), 6px 0 0 var(--frost);
+  opacity: 0;
+  animation: tvfxWink linear infinite;   /* duration/delay inline per wink */
+}
+.tvfx-wink.silver { background: var(--silver); box-shadow: 0 -6px 0 var(--silver), 0 6px 0 var(--silver), -6px 0 0 var(--silver), 6px 0 0 var(--silver); }
+@keyframes tvfxWink {
+  0%, 92%, 100% { opacity: 0; transform: scale(0.4); }
+  94% { opacity: 1; transform: scale(1); }
+  96% { opacity: 0.7; transform: scale(0.7); }
+  98% { opacity: 1; transform: scale(0.5); }
+}
+
+/* --- 8-bit skin on the chrome --------------------------------------------------- */
+.tv-strip { position: relative; }
+.tv-strip-mode, .tv-panel-head h2, .tv-round, .tv-strip-day,
+.tv-hp-pill, .tv-next-tag, .tv-consave, .tv-init-num, .tv-hpbar-num,
+.tv-res, .tv-res-label, .tv-scene-wx {
+  font-family: var(--font-px);
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+.tv-panel-head h2 { font-size: 22px; letter-spacing: 0.12em; }
+
+/* thread of fate — a garnet shimmer under the strip */
+.tv-strip::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -2px; height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--thread-deep) 18%, var(--thread) 38%,
+    var(--thread-deep) 55%, transparent 78%);
+  background-size: 260% 100%;
+  animation: tvThreadShimmer 9s steps(12, jump-none) infinite;
+}
+@keyframes tvThreadShimmer { from { background-position-x: 0%; } to { background-position-x: -160%; } }
+
+/* square everything, chunky borders, frost top-glint */
+.tv-combat section, .tv-explore section {
+  border-radius: 0;
+  border-width: 2px;
+  border-top: 2px solid var(--frost-edge);
+  background: rgba(23, 24, 51, 0.88);          /* let the stars breathe through */
+}
+.tv-init-row, .tv-hpbar, .tv-hp-pill, .tv-cond, .tv-next-tag, .tv-consave { border-radius: 0; }
+.tv-hpbar { border-width: 2px; height: 32px; }
+/* notched HP fill — the bar itself reads 8-bit */
+.tv-hpbar-fill {
+  background-image: repeating-linear-gradient(90deg, transparent 0 16px, rgba(13, 14, 34, 0.35) 16px 18px);
+}
+
+/* --- Exploration idle layout ------------------------------------------------------ */
+.tv-explore { display: grid; grid-template-columns: minmax(340px, 30%) 1fr; gap: 32px; }
+.tv-party-col { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.tv-main-col { display: flex; flex-direction: column; gap: 24px; min-height: 0; overflow: hidden; }
+
+/* nested allies under their PC */
+.tv-ally.nested { padding: 6px 0 2px 10px; font-size: 22px; gap: 12px; }
+.tv-ally-tie { color: var(--ink-faint); font-family: var(--font-px); }
+.tv-ally-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-orphans { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* the scene — pixel art, upscaled crisp */
+.tv-scene { padding: 0 !important; overflow: hidden; position: relative; flex-shrink: 0; }
+.tv-scene-art {
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+  image-rendering: pixelated;
+}
+.tv-scene-caption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 24px;
+  padding: 10px 18px;
+  background: linear-gradient(transparent, rgba(13, 14, 34, 0.92));
+}
+.tv-scene-loc {
+  font-family: var(--font-read); font-style: italic;
+  font-size: 34px; color: var(--ink);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tv-scene-wx { font-size: 22px; color: var(--frost); flex-shrink: 0; }
+
+/* resources ledger */
+.tv-resources {
+  flex-direction: row !important; align-items: center; gap: 36px;
+  padding: 16px 24px !important; flex-shrink: 0; flex-wrap: wrap;
+}
+.tv-res { display: inline-flex; align-items: baseline; gap: 10px; font-size: 34px; color: var(--ink); }
+.tv-res-ico { font-size: 26px; }
+.tv-res-label { font-size: 16px; color: var(--ink-faint); letter-spacing: 0.12em; }
+.tv-res.low { color: var(--warn); }
+.tv-res.low .tv-res-label { color: var(--warn); }
+.tv-res.journey { gap: 14px; margin-left: auto; }
+.tv-res.journey .tv-journey-route { font-size: 24px; }
+.tv-res.journey .tv-journey-bar { display: inline-block; width: 150px; height: 12px; margin: 0; border-radius: 0; }
+.tv-res.journey .tv-journey-fill { display: block; }
+
+.tv-quests { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tvfx-star.tw, .tvfx-flake, .tvfx-aurora, .tvfx-wink, .tv-strip::after { animation: none; }
+  .tvfx-flake, .tvfx-wink { display: none; }
+}

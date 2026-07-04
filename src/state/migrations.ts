@@ -11,8 +11,15 @@ type Migration = (s: Record<string, unknown>) => Record<string, unknown>;
 
 // index = version being upgraded FROM (migrations[1] takes v1 → v2)
 const migrations: Record<number, Migration> = {
-  // Example for the future:
-  // 1: (s) => ({ ...s, version: 2, newField: [] }),
+  // v1 → v2: party gold on travel, chosen scene on tv (both nested,
+  // so the top-level backfill below can't reach them).
+  1: (s) => {
+    const travel = { ...(s.travel as Record<string, unknown> ?? {}) };
+    if (typeof travel.gold !== 'number') travel.gold = 0;
+    const tv = { ...(s.tv as Record<string, unknown> ?? {}) };
+    if (typeof tv.sceneId !== 'string') tv.sceneId = 'auto';
+    return { ...s, travel, tv, version: 2 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

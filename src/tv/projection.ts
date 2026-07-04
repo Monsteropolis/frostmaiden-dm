@@ -17,8 +17,9 @@
 import {
   AppState, Combatant, WEATHER, WeatherId, QuestStatus,
 } from '../state/schema';
+import { resolveScene } from './scenes';
 
-export const PV_VERSION = 1;
+export const PV_VERSION = 2;
 
 export type HpState = 'healthy' | 'bloodied' | 'critical' | 'down';
 
@@ -48,6 +49,8 @@ export interface PvAlly {
   emoji: string;
   hpState: HpState;
   conditions: string[];
+  /** PC this ally follows — TV nests them under that PC's card */
+  linkedPcId: string | null;
 }
 
 export interface PvCombatant {
@@ -80,6 +83,12 @@ export interface PvTravel {
   totalDays: number;
 }
 
+export interface PvResources {
+  gold: number;
+  rations: number;
+  partySize: number;
+}
+
 export interface PlayerView {
   v: typeof PV_VERSION;
   mode: 'exploration' | 'combat';
@@ -87,6 +96,9 @@ export interface PlayerView {
   weather: PvWeather;
   location: string;
   travel: PvTravel | null;
+  resources: PvResources;
+  /** Concrete scene id — 'auto' is resolved on the phone before sending */
+  sceneId: string;
   party: PvPc[];
   allies: PvAlly[];
   combat: { round: number; combatants: PvCombatant[] } | null;
@@ -150,6 +162,8 @@ export function projectPlayerView(s: AppState): PlayerView {
     weather: { id: wx.id, name: wx.name, icon: wx.icon, conSave: wx.conSave },
     location: deriveLocation(s),
     travel: j ? { origin: j.origin, dest: j.dest, day: j.day, totalDays: j.totalDays } : null,
+    resources: { gold: s.travel.gold ?? 0, rations: s.travel.rations, partySize: s.travel.partySize },
+    sceneId: resolveScene(s.tv?.sceneId ?? 'auto', { journeying: !!j, weatherId: s.weather.current }).id,
 
     party: s.party.map((p) => ({
       id: p.id, name: p.name, cls: p.cls,
@@ -164,6 +178,7 @@ export function projectPlayerView(s: AppState): PlayerView {
       id: a.id, name: a.name, emoji: a.emoji,
       hpState: hpState(a.hp, a.maxHp),
       conditions: a.conditions,
+      linkedPcId: a.linkedPcId ?? null,
     })),
 
     combat: inCombat
