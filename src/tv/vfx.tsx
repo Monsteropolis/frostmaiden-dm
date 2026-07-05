@@ -9,6 +9,22 @@
 // Everything honors prefers-reduced-motion via tv.css.
 // ============================================================
 
+import goblinUrl from '../assets/goblin_snowfight.png';
+
+// The goblin scuffle — two goblins of Karkolohk in stolen furs, trading
+// snowballs at the foot of the screen. One 12-frame diorama strip so the
+// throw, the arc, and the hit stay in sync under a single steps() clock.
+// Pure decoration: pointer-events none, hidden under reduced motion.
+export function GoblinScuffle() {
+  return (
+    <div
+      class="tv-goblins"
+      aria-hidden="true"
+      style={{ backgroundImage: `url(${goblinUrl})` }}
+    />
+  );
+}
+
 function mulberry32(seed: number) {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;

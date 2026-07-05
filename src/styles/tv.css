@@ -551,3 +551,50 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-thread.escalating { color: var(--thread); }
 .tv-thread-mark { color: var(--silver); margin-right: 8px; }
 .tv-thread.escalating .tv-thread-mark { color: var(--thread); }
+
+/* === VISUAL POLISH + THE GOBLIN SCUFFLE === */
+
+/* soft vignette for depth — the cold closes in at the edges */
+.tv-frame::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 42%, transparent 62%, rgba(6, 7, 20, 0.5) 100%);
+  z-index: 2;
+}
+.tv-safe { z-index: 3; }
+.tv-yt { z-index: 40; }
+
+/* frost glint sweeping the scene card's top edge, stepped */
+.tv-scene::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--frost-deep) 30%, var(--frost) 50%, var(--frost-deep) 70%, transparent 100%);
+  background-size: 240% 100%;
+  animation: tvSceneGlint 11s steps(14, jump-none) infinite;
+  z-index: 2;
+}
+@keyframes tvSceneGlint { from { background-position-x: 120%; } to { background-position-x: -120%; } }
+
+/* goblins of Karkolohk, bottom of the display — 12 frames × 96px */
+.tv-goblins {
+  position: absolute;
+  left: 50%; bottom: 4px;
+  width: 96px; height: 36px;
+  margin-left: -144px;             /* center the 3× box */
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(3);
+  transform-origin: bottom center;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.9;
+  animation: tvGoblinFight 4.2s steps(12) infinite;
+}
+@keyframes tvGoblinFight { from { background-position-x: 0; } to { background-position-x: -1152px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-goblins, .tv-scene::before { animation: none; }
+  .tv-goblins { display: none; }
+}

@@ -617,7 +617,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   // -- DM gold controls exist and write state
   click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
   click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
-  check('gold row renders', bodyHas('Gold 🪙'));
+  check('gold row renders', bodyHas('Gold 💰'));
   click(byText('button', '+10'), 'gold +10'); await sleep(20);
   check('gold incremented', state.value.travel.gold === 10, `${state.value.travel.gold}`);
 
@@ -793,12 +793,18 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   const { AmbiencePlayer } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
   const exploreHtml = rts(h(ExplorationView, { v: pv }));
   check('TV explore: downed ally pips under its PC', exploreHtml.includes('tv-roster-ally down'));
-  check('TV explore: emoji ledger inside the party column', exploreHtml.includes('🪙') && exploreHtml.includes('tv-roster-ledger'));
+  check('TV explore: emoji ledger inside the party column', exploreHtml.includes('💰') && exploreHtml.includes('tv-roster-ledger'));
   check('TV explore: threads list replaces objectives', exploreHtml.includes('THREADS') && !exploreHtml.includes('OBJECTIVES'));
   check('TV explore: player NOT inside the view (root-mounted)', !exploreHtml.includes('tv-yt-frame'));
   const playerHtml = rts(h(AmbiencePlayer, { v: pv }));
   check('root player renders iframe once id is set', playerHtml.includes('tv-yt-frame') && playerHtml.includes('jfKfPfyJRdk'));
   check('root player absent when id empty', rts(h(AmbiencePlayer, { v: { ...pv, youtubeId: '' } })) === '');
+
+  // -- goblin scuffle + supported gold emoji
+  const { GoblinScuffle } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
+  const gob = rts(h(GoblinScuffle, {}));
+  check('goblin scuffle renders with its strip', gob.includes('tv-goblins') && gob.includes('goblin_snowfight'));
+  check('ledger uses widely-supported money bag', exploreHtml.includes('💰') && !exploreHtml.includes('🪙'));
 
   // -- phone: tracker pips for the downed ally; party tab editor
   click(byText('.nav-btn', 'Combat'), 'Combat tab'); await sleep(30);

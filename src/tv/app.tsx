@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
-import { TvBackdrop } from './vfx';
+import { TvBackdrop, GoblinScuffle } from './vfx';
 import { sceneById, SCENES } from './scenes';
 
 const CODE_KEY = 'fmdm_tv_room';
@@ -240,7 +240,7 @@ export function ExplorationView({ v }: { v: PlayerView }) {
           {orphans.map((a) => <RosterAlly a={a} key={a.id} />)}
         </div>
         <div class="tv-roster-ledger">
-          <span class="tv-res">🪙 {r.gold}<span class="tv-res-label">GOLD</span></span>
+          <span class="tv-res">💰 {r.gold}<span class="tv-res-label">GOLD</span></span>
           <span class={`tv-res${lowFood ? ' low' : ''}`}>🍖 {r.rations}<span class="tv-res-label">RATIONS</span></span>
           <span class="tv-res">📅 {v.day}<span class="tv-res-label">DAY</span></span>
           {j && (
@@ -383,6 +383,7 @@ export function TvApp() {
           </>
         ) : <PairingScreen />}
       </div>
+      <GoblinScuffle />
       <AmbiencePlayer v={v && status.value !== 'error' ? v : null} />
     </div>
   );

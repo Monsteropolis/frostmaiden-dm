@@ -484,7 +484,7 @@ function TravelPanel() {
             onInput={(n) => patch((d) => { d.travel.partySize = Math.max(1, n); })} />
         </div>
         <div class="supply-row">
-          <span class="field-label" style={{ margin: 0 }}>Gold 🪙</span>
+          <span class="field-label" style={{ margin: 0 }}>Gold 💰</span>
           <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold - 10); })}>−10</button>
           <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold - 1); })}>−</button>
           <NumInput w="76px" value={state.value.travel.gold} min={0}
