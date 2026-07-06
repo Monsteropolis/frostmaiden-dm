@@ -73,6 +73,14 @@ function scheduleSave() {
 }
 
 /** Mutate state through a draft. Triggers re-render + autosave. */
+/** Replace the whole campaign from an imported save file. Runs the same
+ *  migrate → seed → normalize pipeline as a fresh load, then persists. */
+export function replaceState(raw: unknown): void {
+  const migrated = migrate(raw as Record<string, unknown>);
+  state.value = normalize(seedQuests(migrated));
+  saveNow();
+}
+
 export function patch(fn: (draft: AppState) => void) {
   const draft = structuredClone(state.value);
   fn(draft);

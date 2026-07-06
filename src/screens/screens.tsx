@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'preact/hooks';
-import { state, patch } from '../state/store';
+import { useState, useEffect, useRef } from 'preact/hooks';
+import { state, patch, replaceState } from '../state/store';
 import { SessionEntry, SessionStatus, Milestone, QuestStatus } from '../state/schema';
 import { Sheet, ConfirmBtn, Field } from '../components/ui';
 import { EQUIPMENT, MAGIC_ITEMS } from '../data';
@@ -211,6 +211,65 @@ export function SessionScreen() {
       </div>
 
       {sub === 'sessions' ? <SessionsPanel /> : <ProgressPanel />}
+
+      <CampaignSaveCard />
+    </div>
+  );
+}
+
+// The campaign lives only in this browser's localStorage — a save file is
+// the escape hatch: back it up, move devices, or recover from a cleared cache.
+function CampaignSaveCard() {
+  const [pending, setPending] = useState<Record<string, unknown> | null>(null);
+  const [err, setErr] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const exportSave = () => {
+    const blob = new Blob([JSON.stringify(state.value, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `frostmaiden-save-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const pickFile = (e: Event) => {
+    setErr(''); setPending(null);
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    f.text().then((txt) => {
+      try {
+        const raw = JSON.parse(txt) as Record<string, unknown>;
+        if (!Array.isArray(raw.party) || !raw.tv || typeof raw.version !== 'number') {
+          setErr('That file doesn\u2019t look like a Frostmaiden save.'); return;
+        }
+        setPending(raw);
+      } catch { setErr('Couldn\u2019t read that file as JSON.'); }
+    });
+  };
+
+  const pendingSummary = pending
+    ? `v${pending.version} · ${(pending.party as unknown[]).length} PCs · ${(pending.sessions as unknown[] | undefined)?.length ?? 0} sessions · day ${(pending.weather as { day?: number } | undefined)?.day ?? '?'}`
+    : '';
+
+  return (
+    <div class="card" style={{ marginTop: '18px' }}>
+      <h3>Campaign save file</h3>
+      <p class="stat-fine">Everything — party, quests, NPCs, combat, TV settings — as one JSON file. Loading a save replaces the current campaign.</p>
+      <div class="chip-row" style={{ marginTop: '8px', alignItems: 'center' }}>
+        <button class="btn" onClick={exportSave}>⬇ Export save</button>
+        <button class="btn ghost" onClick={() => fileRef.current?.click()}>⬆ Load save…</button>
+        <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={pickFile} />
+      </div>
+      {err && <p class="stat-fine" style={{ color: 'var(--thread)' }}>{err}</p>}
+      {pending && (
+        <div class="chip-row" style={{ marginTop: '10px', alignItems: 'center' }}>
+          <span class="stat-fine" style={{ margin: 0 }}>{pendingSummary}</span>
+          <ConfirmBtn label="Overwrite current campaign" confirmLabel="Really overwrite?" class="danger"
+            onConfirm={() => { replaceState(pending); setPending(null); if (fileRef.current) fileRef.current.value = ''; }} />
+          <button class="btn ghost" onClick={() => { setPending(null); if (fileRef.current) fileRef.current.value = ''; }}>Cancel</button>
+        </div>
+      )}
     </div>
   );
 }

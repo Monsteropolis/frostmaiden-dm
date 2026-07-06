@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
-import { TvBackdrop, GoblinScuffle } from './vfx';
+import { TvBackdrop } from './vfx';
 import { sceneById, SCENES } from './scenes';
 
 const CODE_KEY = 'fmdm_tv_room';
@@ -383,7 +383,6 @@ export function TvApp() {
           </>
         ) : <PairingScreen />}
       </div>
-      <GoblinScuffle />
       <AmbiencePlayer v={v && status.value !== 'error' ? v : null} />
     </div>
   );

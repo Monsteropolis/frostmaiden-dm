@@ -9,22 +9,6 @@
 // Everything honors prefers-reduced-motion via tv.css.
 // ============================================================
 
-import goblinUrl from '../assets/goblin_snowfight.png';
-
-// The goblin scuffle — two goblins of Karkolohk in stolen furs, trading
-// snowballs at the foot of the screen. One 12-frame diorama strip so the
-// throw, the arc, and the hit stay in sync under a single steps() clock.
-// Pure decoration: pointer-events none, hidden under reduced motion.
-export function GoblinScuffle() {
-  return (
-    <div
-      class="tv-goblins"
-      aria-hidden="true"
-      style={{ backgroundImage: `url(${goblinUrl})` }}
-    />
-  );
-}
-
 function mulberry32(seed: number) {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
@@ -59,17 +43,35 @@ const FLAKE_POOL = Array.from({ length: 90 }, (_, i) => ({
 
 // The storm decides everything: how many flakes, how fast they fall,
 // whether clouds crowd the sky, whether Auril's magic rides the wind.
-const WX: Record<string, { flakes: number; speed: number; clouds: number; motes: number }> = {
-  clear:         { flakes: 5,  speed: 1.4, clouds: 0, motes: 0 },  // a few flakes fluttering
-  overcast:      { flakes: 10, speed: 1.2, clouds: 4, motes: 0 },  // cloudy, heavy sky
-  light_snow:    { flakes: 26, speed: 1,   clouds: 1, motes: 0 },
-  heavy_snow:    { flakes: 55, speed: 0.8, clouds: 2, motes: 0 },
-  blizzard:      { flakes: 90, speed: 0.45, clouds: 3, motes: 0 }, // driven hard
-  magical_storm: { flakes: 60, speed: 0.7, clouds: 2, motes: 14 }, // Auril's wrath
+const WX: Record<string, { flakes: number; speed: number; clouds: number; motes: number; streaks: number; sparkles: number }> = {
+  clear:         { flakes: 4,  speed: 1.6,  clouds: 0, motes: 0,  streaks: 0,  sparkles: 0 },  // a few lazy flakes, open sky
+  overcast:      { flakes: 8,  speed: 1.2,  clouds: 6, motes: 0,  streaks: 0,  sparkles: 0 },  // a lid of cloud, aurora smothered
+  light_snow:    { flakes: 26, speed: 1,    clouds: 1, motes: 0,  streaks: 0,  sparkles: 0 },
+  heavy_snow:    { flakes: 60, speed: 0.75, clouds: 3, motes: 0,  streaks: 0,  sparkles: 0 },
+  blizzard:      { flakes: 90, speed: 0.4,  clouds: 4, motes: 0,  streaks: 14, sparkles: 0 },  // driven sideways, wind streaks
+  magical_storm: { flakes: 55, speed: 0.7,  clouds: 2, motes: 14, streaks: 6,  sparkles: 10 }, // Auril's wrath: motes + sparkles
 };
 
+// wind streaks — long diagonal slashes tearing across a blizzard
+const STREAK_POOL = Array.from({ length: 14 }, () => ({
+  top: rand() * 100,
+  duration: 0.9 + rand() * 1.4,
+  delay: rand() * 3,
+  width: 60 + rand() * 90,
+  opacity: 0.14 + rand() * 0.2,
+}));
+
+// Auril's sparkles — four-point pixel stars that pop, spin the light, and die
+const SPARKLE_POOL = Array.from({ length: 10 }, (_, i) => ({
+  left: 3 + rand() * 94,
+  top: 5 + rand() * 82,
+  period: 3.5 + rand() * 4.5,
+  delay: rand() * 8,
+  big: i % 3 === 0,
+}));
+
 // drifting pixel clouds for overcast skies — deterministic like everything else
-const CLOUD_POOL = Array.from({ length: 4 }, (_, i) => ({
+const CLOUD_POOL = Array.from({ length: 6 }, (_, i) => ({
   top: 3 + rand() * 22,
   width: 220 + rand() * 260,
   duration: 90 + rand() * 80,
@@ -101,8 +103,10 @@ export function TvBackdrop({ weatherId }: { weatherId: string }) {
   const flakes = FLAKE_POOL.slice(0, wx.flakes);
   const clouds = CLOUD_POOL.slice(0, wx.clouds);
   const motes = MOTE_POOL.slice(0, wx.motes);
+  const streaks = STREAK_POOL.slice(0, wx.streaks);
+  const sparkles = SPARKLE_POOL.slice(0, wx.sparkles);
   return (
-    <div class="tvfx" aria-hidden="true">
+    <div class={`tvfx wx-${weatherId}`} aria-hidden="true">
       {clouds.map((c) => (
         <span
           class={`tvfx-cloud${c.flip ? ' flip' : ''}`}
@@ -134,6 +138,27 @@ export function TvBackdrop({ weatherId }: { weatherId: string }) {
             animationDuration: `${f.duration * wx.speed}s, ${f.sway * wx.speed}s`,
             animationDelay: `-${f.delay}s, -${f.delay}s`,
             '--drift': `${f.drift * (wx.speed < 0.7 ? 1.8 : 1)}px`,
+          }}
+        />
+      ))}
+      {streaks.map((st) => (
+        <span
+          class="tvfx-streak"
+          style={{
+            top: `${st.top}%`, width: `${st.width}px`,
+            opacity: st.opacity,
+            animationDuration: `${st.duration}s`,
+            animationDelay: `-${st.delay}s`,
+          }}
+        />
+      ))}
+      {sparkles.map((sp) => (
+        <span
+          class={`tvfx-sparkle${sp.big ? ' big' : ''}`}
+          style={{
+            left: `${sp.left}%`, top: `${sp.top}%`,
+            animationDuration: `${sp.period}s`,
+            animationDelay: `${sp.delay}s`,
           }}
         />
       ))}

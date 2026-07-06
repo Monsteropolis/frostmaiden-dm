@@ -456,6 +456,17 @@ export function PartyScreen() {
       <p class="screen-kicker">The Heroes</p>
       <h1 class="screen-title">Party</h1>
 
+      <div class="card party-loc-card">
+        <label class="field-label" style={{ margin: 0 }}>Party is at</label>
+        <input
+          class="input"
+          placeholder="Ten-Towns, Icewind Dale"
+          value={state.value.tv.partyLocation}
+          onInput={(e) => patch((d) => { d.tv.partyLocation = (e.target as HTMLInputElement).value; })}
+        />
+        <p class="stat-fine" style={{ margin: '4px 0 0' }}>Shown top-left on the TV. While set, it overrides the journey route; clear it to let travel take over.</p>
+      </div>
+
       <div class="sub-tabs">
         <button class={`sub-tab${sub === 'pcs' ? ' active' : ''}`} onClick={() => setSub('pcs')}>Characters ({party.length})</button>
         <button class={`sub-tab${sub === 'sidekicks' ? ' active' : ''}`} onClick={() => setSub('sidekicks')}>Sidekicks ({sk.length})</button>

@@ -800,10 +800,6 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   check('root player renders iframe once id is set', playerHtml.includes('tv-yt-frame') && playerHtml.includes('jfKfPfyJRdk'));
   check('root player absent when id empty', rts(h(AmbiencePlayer, { v: { ...pv, youtubeId: '' } })) === '');
 
-  // -- goblin scuffle + supported gold emoji
-  const { GoblinScuffle } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
-  const gob = rts(h(GoblinScuffle, {}));
-  check('goblin scuffle renders with its strip', gob.includes('tv-goblins') && gob.includes('goblin_snowfight'));
   check('ledger uses widely-supported money bag', exploreHtml.includes('💰') && !exploreHtml.includes('🪙'));
 
   // -- phone: tracker pips for the downed ally; party tab editor
@@ -822,9 +818,9 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   const bliz = rts(h(TvBackdrop, { weatherId: 'blizzard' }));
   const wrath = rts(h(TvBackdrop, { weatherId: 'magical_storm' }));
   const count = (html: string, cls: string) => (html.match(new RegExp(`class="${cls}`, 'g')) ?? []).length;
-  check('clear: a few flakes flutter', count(clear, 'tvfx-flake') === 5, `${count(clear, 'tvfx-flake')}`);
+  check('clear: a few flakes flutter', count(clear, 'tvfx-flake') === 4, `${count(clear, 'tvfx-flake')}`);
   check('clear: no clouds', count(clear, 'tvfx-cloud') === 0);
-  check('overcast: cloudy sky', count(over, 'tvfx-cloud') === 4);
+  check('overcast: cloudy sky', count(over, 'tvfx-cloud') === 6);
   check('blizzard: heavy snow', count(bliz, 'tvfx-flake') === 90);
   check("Auril's wrath: magic motes", count(wrath, 'tvfx-mote') === 14);
   check('wrath motes include thread-garnet', wrath.includes('tvfx-mote thread'));
@@ -835,6 +831,66 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
     d.combat = { active: false, round: 0, turn: 0, combatants: [] };
     d.tv.youtubeId = '';
   });
+}
+
+console.log('\n═══ SCENE 26: Save files, party location, distinct weather ═══');
+{
+  const { patch, replaceState } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { render: rts } = await import('preact-render-to-string');
+  const { TvBackdrop } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
+
+  // -- save file round-trip: export shape → replaceState restores it
+  patch((d) => { d.travel.gold = 999; });
+  const exported = JSON.parse(JSON.stringify(state.value));
+  patch((d) => { d.travel.gold = 1; d.tv.partyLocation = 'scratch'; });
+  check('state diverged before import', state.value.travel.gold === 1);
+  replaceState(exported);
+  check('import restores gold', state.value.travel.gold === 999);
+  check('import restores tv settings', state.value.tv.partyLocation !== 'scratch');
+  check('import keeps schema version current', state.value.version === exported.version);
+  // an OLD save (v1) imports through the migration pipeline
+  const oldSave = JSON.parse(JSON.stringify(exported)) as Record<string, unknown>;
+  oldSave.version = 1;
+  delete (oldSave.travel as Record<string, unknown>).gold;
+  delete (oldSave.tv as Record<string, unknown>).sceneId;
+  delete (oldSave.tv as Record<string, unknown>).youtubeId;
+  delete (oldSave.tv as Record<string, unknown>).mediaVisible;
+  replaceState(oldSave);
+  check('old save migrates on import', state.value.version >= 4 && state.value.travel.gold === 0 && state.value.tv.sceneId === 'auto');
+  replaceState(exported);
+
+  // -- save card renders on the Session screen
+  click(byText('.nav-btn', 'Session'), 'Session tab'); await sleep(30);
+  check('campaign save card present', bodyHas('Campaign save file') && !!byText('button', '⬇ Export save'));
+
+  // -- party location: field on Party tab drives the TV strip
+  click(byText('.nav-btn', 'Party'), 'Party tab'); await sleep(30);
+  const locInput = $('.party-loc-card input') as HTMLInputElement | null;
+  check('party location field renders', !!locInput);
+  patch((d) => { d.tv.partyLocation = 'The Black Cabin'; });
+  check('TV strip shows manual location', projectPlayerView(state.value).location === 'The Black Cabin');
+  patch((d) => {
+    d.travel.activeJourney = { origin: 'Targos', dest: 'Bremen', pace: 'normal', day: 1, totalDays: 2, startDay: 1 } as never;
+  });
+  check('manual location outranks journey while set', projectPlayerView(state.value).location === 'The Black Cabin');
+  patch((d) => { d.tv.partyLocation = ''; });
+  check('cleared field falls back to journey route', projectPlayerView(state.value).location === 'Targos → Bremen');
+  patch((d) => { d.travel.activeJourney = null; });
+  check('no journey, no manual → default', projectPlayerView(state.value).location === 'Ten-Towns, Icewind Dale');
+
+  // -- distinct weather
+  const count = (html: string, cls: string) => (html.match(new RegExp(`class="${cls}`, 'g')) ?? []).length;
+  const bliz = rts(h(TvBackdrop, { weatherId: 'blizzard' }));
+  const wrath = rts(h(TvBackdrop, { weatherId: 'magical_storm' }));
+  const over = rts(h(TvBackdrop, { weatherId: 'overcast' }));
+  const clear = rts(h(TvBackdrop, { weatherId: 'clear' }));
+  check('per-weather container class', clear.includes('tvfx wx-clear') && bliz.includes('tvfx wx-blizzard'));
+  check('blizzard gets wind streaks', count(bliz, 'tvfx-streak') === 14);
+  check("Auril's Wrath gets magic sparkles", count(wrath, 'tvfx-sparkle') === 10 && wrath.includes('tvfx-sparkle big'));
+  check('wrath keeps motes too', count(wrath, 'tvfx-mote') === 14);
+  check('overcast is cloud-heavy, streak-free', count(over, 'tvfx-cloud') === 6 && count(over, 'tvfx-streak') === 0);
+  check('clear is nearly still', count(clear, 'tvfx-flake') === 4 && count(clear, 'tvfx-cloud') === 0);
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

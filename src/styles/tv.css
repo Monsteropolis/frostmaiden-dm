@@ -577,24 +577,55 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 }
 @keyframes tvSceneGlint { from { background-position-x: 120%; } to { background-position-x: -120%; } }
 
-/* goblins of Karkolohk, bottom of the display — 12 frames × 96px */
-.tv-goblins {
-  position: absolute;
-  left: 50%; bottom: 4px;
-  width: 96px; height: 36px;
-  margin-left: -144px;             /* center the 3× box */
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  transform: scale(3);
-  transform-origin: bottom center;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0.9;
-  animation: tvGoblinFight 4.2s steps(12) infinite;
+@media (prefers-reduced-motion: reduce) {
+  .tv-scene::before { animation: none; }
 }
-@keyframes tvGoblinFight { from { background-position-x: 0; } to { background-position-x: -1152px; } }
+
+/* === DISTINCT WEATHER MOODS === */
+
+/* clear: open sky — aurora at full breath, stars bright */
+.tvfx.wx-clear .tvfx-aurora { opacity: 1; }
+
+/* overcast: the lid comes down — clouds heavier, aurora smothered, stars dulled */
+.tvfx.wx-overcast .tvfx-aurora { opacity: 0.25; }
+.tvfx.wx-overcast .tvfx-cloud { filter: brightness(0.7); }
+.tvfx.wx-overcast .tvfx-star { opacity: 0.25 !important; }
+
+/* heavy snow: flakes read bigger and softer */
+.tvfx.wx-heavy_snow .tvfx-flake { box-shadow: 0 0 3px rgba(222, 234, 242, 0.5); }
+
+/* blizzard: silver-white fury, aurora lost in the storm, wind streaks */
+.tvfx.wx-blizzard .tvfx-aurora { opacity: 0.15; }
+.tvfx.wx-blizzard .tvfx-flake { background: var(--silver); }
+.tvfx.wx-blizzard .tvfx-star { opacity: 0.15 !important; }
+.tvfx-streak {
+  position: absolute; left: -160px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--silver) 40%, rgba(222,234,242,0.9) 60%, transparent);
+  transform: rotate(7deg);
+  animation: tvfxStreak linear infinite;
+}
+@keyframes tvfxStreak { from { transform: translateX(0) rotate(7deg); } to { transform: translateX(calc(100vw + 320px)) rotate(7deg); } }
+
+/* Auril's Wrath: the aurora burns cold-bright and her magic sparkles */
+.tvfx.wx-magical_storm .tvfx-aurora { opacity: 1; filter: saturate(1.6) brightness(1.25); }
+.tvfx.wx-magical_storm .tvfx-flake { background: var(--frost); }
+.tvfx-sparkle {
+  position: absolute; width: 3px; height: 3px;
+  background: var(--frost);
+  box-shadow: 0 -5px 0 var(--frost), 0 5px 0 var(--frost), -5px 0 0 var(--frost), 5px 0 0 var(--frost), 0 0 8px var(--frost);
+  opacity: 0;
+  animation: tvfxSparklePop steps(4, jump-none) infinite;
+}
+.tvfx-sparkle.big {
+  box-shadow: 0 -8px 0 var(--frost), 0 8px 0 var(--frost), -8px 0 0 var(--frost), 8px 0 0 var(--frost), 0 0 12px var(--frost), 0 0 20px rgba(155, 215, 232, 0.5);
+}
+@keyframes tvfxSparklePop {
+  0%, 70%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  78% { opacity: 1; transform: scale(1) rotate(45deg); }
+  86% { opacity: 0.85; transform: scale(0.75) rotate(90deg); }
+  94% { opacity: 0.4; transform: scale(0.45) rotate(135deg); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .tv-goblins, .tv-scene::before { animation: none; }
-  .tv-goblins { display: none; }
+  .tvfx-streak, .tvfx-sparkle { animation: none; display: none; }
 }

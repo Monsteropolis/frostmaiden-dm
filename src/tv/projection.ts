@@ -159,9 +159,12 @@ function projectCombatant(
 }
 
 function deriveLocation(s: AppState): string {
+  // Manual wins while set — the DM asked for the pen. Journey route
+  // covers travel whenever the field is left blank.
+  if (s.tv?.partyLocation?.trim()) return s.tv.partyLocation.trim();
   const j = s.travel.activeJourney;
   if (j) return `${j.origin} → ${j.dest}`;
-  return s.tv?.partyLocation || 'Ten-Towns, Icewind Dale';
+  return 'Ten-Towns, Icewind Dale';
 }
 
 // --- the projection ----------------------------------------------------------

@@ -1254,3 +1254,6 @@ details.loc summary::marker { color: var(--frost-deep); }
 }
 .ds-group { display: flex; align-items: center; gap: 8px; }
 
+
+/* party location card */
+.party-loc-card { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
