@@ -32,9 +32,9 @@ const bodyHas = (t: string) => (document.body.textContent ?? '').includes(t);
 // Boot the app
 document.body.innerHTML = '<div id="app"></div>';
 const { render, h } = await import('preact');
-await import('/home/claude/frostmaiden-dm/src/styles/tokens.css');
-const { App } = await import('/home/claude/frostmaiden-dm/src/app.tsx');
-const { state } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+await import('../src/styles/tokens.css');
+const { App } = await import('../src/app.tsx');
+const { state } = await import('../src/state/store.ts');
 render(h(App, {}), document.getElementById('app')!);
 await sleep(20);
 
@@ -464,8 +464,8 @@ check('stars still shine', $$('.starfield .star').length >= 50);
 
 console.log('\n═══ SCENE 20: Player TV projection — nothing secret leaves the phone ═══');
 {
-  const { projectPlayerView, hpState } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { projectPlayerView, hpState } = await import('../src/tv/projection.ts');
+  const { patch } = await import('../src/state/store.ts');
 
   // hpState thresholds
   check('hpState healthy', hpState(30, 40) === 'healthy');
@@ -511,10 +511,10 @@ console.log('\n═══ SCENE 20: Player TV projection — nothing secret leave
 
 console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts render ═══');
 {
-  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { patch } = await import('../src/state/store.ts');
   const { render: rts } = await import('preact-render-to-string');
-  const { CombatView, ExplorationView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+  const { CombatView, ExplorationView } = await import('../src/tv/app.tsx');
 
   // Stage a combat and drive the hide toggle through the real DM UI
   patch((d) => {
@@ -563,7 +563,7 @@ console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts rende
 
 console.log('\n═══ SCENE 22: Init roll covers all enemy sources + NPC portraits ═══');
 {
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
+  const { patch } = await import('../src/state/store.ts');
 
   // The bug: 🎲 Init only rolled srcType 'monster'|'custom', silently
   // skipping 'api' and 'custommon'. Stage one combatant of every source.
@@ -597,12 +597,12 @@ console.log('\n═══ SCENE 22: Init roll covers all enemy sources + NPC port
 
 console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV idle view ═══');
 {
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
-  const { migrate } = await import('/home/claude/frostmaiden-dm/src/state/migrations.ts');
-  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
-  const { resolveScene, SCENES } = await import('/home/claude/frostmaiden-dm/src/tv/scenes.ts');
+  const { patch } = await import('../src/state/store.ts');
+  const { migrate } = await import('../src/state/migrations.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { resolveScene, SCENES } = await import('../src/tv/scenes.ts');
   const { render: rts } = await import('preact-render-to-string');
-  const { ExplorationView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+  const { ExplorationView } = await import('../src/tv/app.tsx');
 
   // -- migration: a v1 save gains gold + sceneId without losing anything
   const v1 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
@@ -654,7 +654,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   patch((d) => { d.sidekicks = d.sidekicks.filter((s2) => s2.id !== 'skT'); });
 
   // -- compendium: bestiary is one alphabet, rime inline
-  const { localBestiary } = await import('/home/claude/frostmaiden-dm/src/screens/monsters.tsx');
+  const { localBestiary } = await import('../src/screens/monsters.tsx');
   const sortedLocal = [...localBestiary()].sort((a, b) => a.name.localeCompare(b.name));
   click(byText('.nav-btn', 'Lore'), 'Lore tab'); await sleep(20);
   click(byText('.sub-tab', 'Bestiary'), 'Bestiary sub-tab'); await sleep(40);
@@ -682,11 +682,11 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
 
 console.log('\n═══ SCENE 24: Polish — death saves everywhere, art library, no souls ═══');
 {
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
-  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
-  const { SCENES, SCENE_CATS, sceneById } = await import('/home/claude/frostmaiden-dm/src/tv/scenes.ts');
+  const { patch } = await import('../src/state/store.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { SCENES, SCENE_CATS, sceneById } = await import('../src/tv/scenes.ts');
   const { render: rts } = await import('preact-render-to-string');
-  const { ExplorationView, CombatView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+  const { ExplorationView, CombatView } = await import('../src/tv/app.tsx');
 
   // -- the art library: categorized, filterable, complete
   check('all four art categories present', (['location', 'map', 'monster', 'npc'] as const)
@@ -739,13 +739,13 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
 
 console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moods, idle party ═══');
 {
-  const { patch } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
-  const { migrate } = await import('/home/claude/frostmaiden-dm/src/state/migrations.ts');
-  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
-  const { parseYouTubeId } = await import('/home/claude/frostmaiden-dm/src/components/TvPanel.tsx');
+  const { patch } = await import('../src/state/store.ts');
+  const { migrate } = await import('../src/state/migrations.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { parseYouTubeId } = await import('../src/components/TvPanel.tsx');
   const { render: rts } = await import('preact-render-to-string');
-  const { ExplorationView, CombatView } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
-  const { TvBackdrop } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
+  const { ExplorationView, CombatView } = await import('../src/tv/app.tsx');
+  const { TvBackdrop } = await import('../src/tv/vfx.tsx');
 
   // -- migration v2 → v3
   const v2 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
@@ -790,7 +790,7 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   check('TV combat: downed ally pips live in the init row', combatHtml.includes('tv-deathsaves'));
   check('TV combat: scene card sets the mood', combatHtml.includes('tv-scene-art'));
 
-  const { AmbiencePlayer } = await import('/home/claude/frostmaiden-dm/src/tv/app.tsx');
+  const { AmbiencePlayer } = await import('../src/tv/app.tsx');
   const exploreHtml = rts(h(ExplorationView, { v: pv }));
   check('TV explore: downed ally pips under its PC', exploreHtml.includes('tv-roster-ally down'));
   check('TV explore: emoji ledger inside the party column', exploreHtml.includes('💰') && exploreHtml.includes('tv-roster-ledger'));
@@ -835,10 +835,10 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
 
 console.log('\n═══ SCENE 26: Save files, party location, distinct weather ═══');
 {
-  const { patch, replaceState } = await import('/home/claude/frostmaiden-dm/src/state/store.ts');
-  const { projectPlayerView } = await import('/home/claude/frostmaiden-dm/src/tv/projection.ts');
+  const { patch, replaceState } = await import('../src/state/store.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
   const { render: rts } = await import('preact-render-to-string');
-  const { TvBackdrop } = await import('/home/claude/frostmaiden-dm/src/tv/vfx.tsx');
+  const { TvBackdrop } = await import('../src/tv/vfx.tsx');
 
   // -- save file round-trip: export shape → replaceState restores it
   patch((d) => { d.travel.gold = 999; });
