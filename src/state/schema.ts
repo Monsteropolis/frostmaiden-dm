@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -281,6 +281,12 @@ export interface TvSettings {
   youtubeId: string;
   /** true → the player occupies the scene slot; false → audio-only in the background */
   mediaVisible: boolean;
+  /** what fills the TV's scene slot: art, the idle party diorama, or the video */
+  slotView: 'scene' | 'idle' | 'video';
+  /** idle diorama takes over the whole exploration screen */
+  idleFull: boolean;
+  /** one-shot reaction: bump seq to fire. pcId '' = whole party. */
+  poke: { seq: number; pcId: string; kind: 'wave' | 'cheer' };
 }
 
 export interface AppState {
@@ -335,7 +341,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
-    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false },
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false, slotView: 'scene', idleFull: false, poke: { seq: 0, pcId: '', kind: 'wave' } },
     seq: 1,
   };
 }

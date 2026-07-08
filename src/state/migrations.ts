@@ -35,6 +35,17 @@ const migrations: Record<number, Migration> = {
     if (typeof tv.mediaVisible !== 'boolean') tv.mediaVisible = false;
     return { ...s, tv, version: 4 };
   },
+  // v4 → v5: the scene slot becomes a 3-way (scene/idle/video); idle
+  // fullscreen flag; one-shot poke channel for waves & celebrations.
+  4: (s) => {
+    const tv = { ...(s.tv as Record<string, unknown> ?? {}) };
+    if (typeof tv.slotView !== 'string') tv.slotView = tv.mediaVisible ? 'video' : 'scene';
+    if (typeof tv.idleFull !== 'boolean') tv.idleFull = false;
+    if (!tv.poke || typeof (tv.poke as { seq?: unknown }).seq !== 'number') {
+      tv.poke = { seq: 0, pcId: '', kind: 'wave' };
+    }
+    return { ...s, tv, version: 5 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

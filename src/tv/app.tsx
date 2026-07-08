@@ -25,6 +25,7 @@ import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
 import { TvBackdrop } from './vfx';
 import { sceneById, SCENES } from './scenes';
+import { IdleStage } from './idle';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -162,8 +163,8 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
   );
 }
 
-export function CombatView({ v, flash = false, roundPulse = false }: {
-  v: PlayerView; flash?: boolean; roundPulse?: boolean;
+export function CombatView({ v, flash = false, roundPulse = false, pokeActive = null }: {
+  v: PlayerView; flash?: boolean; roundPulse?: boolean; pokeActive?: { pcId: string; kind: 'wave' | 'cheer' } | null;
 }) {
   const combat = v.combat!;
   // Rotate so the active combatant leads: now, next, then. The order the
@@ -186,7 +187,9 @@ export function CombatView({ v, flash = false, roundPulse = false }: {
           {hidden > 0 && <div class="tv-init-more">+{hidden} MORE</div>}
         </div>
       </section>
-      <SceneCard v={v} />
+      {v.slotView === 'idle'
+        ? <section class="tv-scene idle-slot"><IdleStage v={v} pokeActive={pokeActive} /></section>
+        : <SceneCard v={v} />}
     </div>
   );
 }
@@ -223,7 +226,7 @@ function RosterPc({ p, allies }: { p: PvPc; allies: PvAlly[] }) {
   );
 }
 
-export function ExplorationView({ v }: { v: PlayerView }) {
+export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeActive?: { pcId: string; kind: 'wave' | 'cheer' } | null }) {
   const j = v.travel;
   const linked = (pcId: string) => v.allies.filter((a) => a.linkedPcId === pcId);
   const orphans = v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId));
@@ -266,8 +269,10 @@ export function ExplorationView({ v }: { v: PlayerView }) {
           ))}
         </div>
 
-        {/* The scene is the hero */}
-        <SceneCard v={v} />
+        {/* The scene is the hero — or the party is, in idle mode */}
+        {v.slotView === 'idle'
+          ? <section class="tv-scene idle-slot"><IdleStage v={v} pokeActive={pokeActive} /></section>
+          : <SceneCard v={v} />}
       </div>
     </div>
   );
@@ -359,6 +364,20 @@ export function TvApp() {
     prevActive.current = activeId;
   }, [v]);
 
+  // Poke one-shot: DM bumps tv.poke.seq → play the reaction for 2.6s.
+  const [pokeActive, setPokeActive] = useState<{ pcId: string; kind: 'wave' | 'cheer' } | null>(null);
+  const prevPoke = useRef<number>(-1);
+  useEffect(() => {
+    const seq = v?.poke?.seq ?? 0;
+    if (prevPoke.current >= 0 && seq > prevPoke.current && v?.poke) {
+      setPokeActive({ pcId: v.poke.pcId, kind: v.poke.kind });
+      const t = setTimeout(() => setPokeActive(null), 2600);
+      prevPoke.current = seq;
+      return () => clearTimeout(t);
+    }
+    prevPoke.current = seq;
+  }, [v?.poke?.seq]);
+
   useEffect(() => {
     const r = v?.combat?.round ?? -1;
     if (r > 0 && prevRound.current > 0 && r !== prevRound.current) {
@@ -378,8 +397,10 @@ export function TvApp() {
           <>
             <TopStrip v={v} />
             {v.mode === 'combat' && v.combat
-              ? <CombatView v={v} flash={flash} roundPulse={roundPulse} />
-              : <ExplorationView v={v} />}
+              ? <CombatView v={v} flash={flash} roundPulse={roundPulse} pokeActive={pokeActive} />
+              : v.idleFull
+                ? <section class="tv-scene idle-slot full"><IdleStage v={v} full pokeActive={pokeActive} /></section>
+                : <ExplorationView v={v} pokeActive={pokeActive} />}
           </>
         ) : <PairingScreen />}
       </div>

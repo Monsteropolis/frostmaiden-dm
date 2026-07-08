@@ -816,7 +816,7 @@ console.log('\n═══ SCENE 25: Phase 8 — ally saves, ambience, weather moo
   const clear = rts(h(TvBackdrop, { weatherId: 'clear' }));
   const over = rts(h(TvBackdrop, { weatherId: 'overcast' }));
   const bliz = rts(h(TvBackdrop, { weatherId: 'blizzard' }));
-  const wrath = rts(h(TvBackdrop, { weatherId: 'magical_storm' }));
+  const wrath = rts(h(TvBackdrop, { weatherId: 'aurils_wrath' }));
   const count = (html: string, cls: string) => (html.match(new RegExp(`class="${cls}`, 'g')) ?? []).length;
   check('clear: a few flakes flutter', count(clear, 'tvfx-flake') === 4, `${count(clear, 'tvfx-flake')}`);
   check('clear: no clouds', count(clear, 'tvfx-cloud') === 0);
@@ -882,7 +882,7 @@ console.log('\n═══ SCENE 26: Save files, party location, distinct weather 
   // -- distinct weather
   const count = (html: string, cls: string) => (html.match(new RegExp(`class="${cls}`, 'g')) ?? []).length;
   const bliz = rts(h(TvBackdrop, { weatherId: 'blizzard' }));
-  const wrath = rts(h(TvBackdrop, { weatherId: 'magical_storm' }));
+  const wrath = rts(h(TvBackdrop, { weatherId: 'aurils_wrath' }));
   const over = rts(h(TvBackdrop, { weatherId: 'overcast' }));
   const clear = rts(h(TvBackdrop, { weatherId: 'clear' }));
   check('per-weather container class', clear.includes('tvfx wx-clear') && bliz.includes('tvfx wx-blizzard'));
@@ -891,6 +891,94 @@ console.log('\n═══ SCENE 26: Save files, party location, distinct weather 
   check('wrath keeps motes too', count(wrath, 'tvfx-mote') === 14);
   check('overcast is cloud-heavy, streak-free', count(over, 'tvfx-cloud') === 6 && count(over, 'tvfx-streak') === 0);
   check('clear is nearly still', count(clear, 'tvfx-flake') === 4 && count(clear, 'tvfx-cloud') === 0);
+}
+
+console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ═══');
+{
+  const { patch } = await import('../src/state/store.ts');
+  const { migrate } = await import('../src/state/migrations.ts');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { render: rts } = await import('preact-render-to-string');
+  const { IdleStage, archetypeRow, pickPose } = await import('../src/tv/idle.tsx');
+  const { ExplorationView, CombatView } = await import('../src/tv/app.tsx');
+
+  // -- migration v4 → v5
+  const v4 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
+  v4.version = 4;
+  const tvOld = v4.tv as Record<string, unknown>;
+  delete tvOld.slotView; delete tvOld.idleFull; delete tvOld.poke;
+  tvOld.mediaVisible = true;
+  const m5 = migrate(v4);
+  check('v4→v5 slotView from mediaVisible', m5.tv.slotView === 'video');
+  check('v4→v5 idleFull + poke defaults', m5.tv.idleFull === false && m5.tv.poke.seq === 0);
+
+  // -- archetype mapping
+  check('class → archetype rows', archetypeRow('Fighter') === 0 && archetypeRow('Wizard') === 1
+    && archetypeRow('Rogue') === 2 && archetypeRow('Cleric') === 3 && archetypeRow('Ranger') === 4 && archetypeRow('Barbarian') === 5);
+
+  // -- forced poses are deterministic reads of state
+  const mkPc = (id: string, hp: number) => ({ id, name: id, cls: 'Fighter', hp, maxHp: 10, conditions: [], inspiration: false, deathS: 0, deathF: 0, down: hp <= 0 });
+  check('down PC lies down', pickPose(mkPc('a', 0), 0, 0, { sceneCat: 'pixel', sceneId: 'town', weatherId: 'clear', anyDown: true }) === 'down');
+  check('blizzard forces shivering', pickPose(mkPc('a', 10), 0, 0, { sceneCat: 'pixel', sceneId: 'town', weatherId: 'blizzard', anyDown: false }) === 'shiver');
+  check('camp always has a sleeper', pickPose(mkPc('a', 10), 0, 3, { sceneCat: 'pixel', sceneId: 'camp', weatherId: 'clear', anyDown: false }) === 'sleep');
+  check('clear night has a stargazer', pickPose(mkPc('b', 10), 1, 5, { sceneCat: 'pixel', sceneId: 'town', weatherId: 'clear', anyDown: false }) === 'sit');
+
+  // -- full render: actors, familiars, name tags, mini HP for the hurt
+  patch((d) => {
+    d.party[0].hp = 3;                             // critical → mini HP bar
+    d.tv.slotView = 'idle';
+    d.tv.sceneId = 'tavern';
+    d.sidekicks.push({
+      id: 'skI', name: 'Whiskers', emoji: '🐈', kind: 'Cat', category: 'sidekick',
+      linkedPcId: d.party[0].id, level: 1, hp: 5, maxHp: 5, ac: 12, initMod: 1,
+      scores: { str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7 },
+      attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '',
+    } as never);
+  });
+  const pv = projectPlayerView(state.value);
+  check('projection carries slotView + poke', pv.slotView === 'idle' && typeof pv.poke.seq === 'number');
+  const stage = rts(h(IdleStage, { v: pv }));
+  check('one actor per PC', (stage.match(/tv-idle-actor/g) ?? []).length >= state.value.party.length);
+  check('familiar critter renders', stage.includes('tv-idle-critter'));
+  check('name tags on actors', stage.includes(state.value.party[0].name));
+  check('hurt PC gets mini HP bar', stage.includes('tv-idle-minihp'));
+  check('idle backdrop is pixel art even if module art chosen',
+    rts(h(IdleStage, { v: { ...pv, sceneId: 'mon-yeti' } })).includes('tv-idle-bg'));
+
+  // -- slot switching in the views
+  const ex = rts(h(ExplorationView, { v: pv }));
+  check('exploration slot swaps to idle stage', ex.includes('tv-idle-stage') && !ex.includes('tv-scene-caption'));
+  const exScene = rts(h(ExplorationView, { v: { ...pv, slotView: 'scene' } }));
+  check('scene mode keeps the art card', exScene.includes('tv-scene-caption') && !exScene.includes('tv-idle-stage'));
+  patch((d) => { d.combat = { active: true, round: 1, turn: 0, combatants: [{ id: 'x', name: 'W', emoji: '🐺', hp: 5, maxHp: 5, ac: 10, init: 5, initMod: 0, conditions: [], srcType: 'monster', srcId: 'crag_cat' }] }; });
+  const cb = rts(h(CombatView, { v: projectPlayerView(state.value), flash: false, roundPulse: false }));
+  check('combat slot honors idle too', cb.includes('tv-idle-stage'));
+
+  // -- pokes: wave one PC, cheer everyone
+  const wavePc = state.value.party[1]?.id ?? state.value.party[0].id;
+  const waved = rts(h(IdleStage, { v: pv, pokeActive: { pcId: wavePc, kind: 'wave' } }));
+  check('poke: targeted wave pose', waved.includes('pose-wave'));
+  const cheered = rts(h(IdleStage, { v: pv, pokeActive: { pcId: '', kind: 'cheer' } }));
+  check('poke: party-wide cheer', (cheered.match(/pose-cheer/g) ?? []).length >= 2);
+  check('down PCs sit out the cheer', !cheered.includes('pose-cheer pose-down'));
+
+  // -- DM controls: wave button on the PC card bumps poke
+  click(byText('.nav-btn', 'Party'), 'Party tab'); await sleep(30);
+  const before = state.value.tv.poke.seq;
+  click($('.wave-btn'), 'wave button'); await sleep(20);
+  check('wave button bumps poke seq with pcId', state.value.tv.poke.seq === before + 1 && state.value.tv.poke.kind === 'wave' && !!state.value.tv.poke.pcId);
+
+  // -- fullscreen idle: whole exploration becomes the diorama
+  const full = rts(h('div', {}, h(IdleStage, { v: { ...pv, idleFull: true }, full: true })));
+  check('fullscreen stage renders', full.includes('tv-idle-stage'));
+
+  // cleanup
+  patch((d) => {
+    d.party[0].hp = d.party[0].maxHp;
+    d.sidekicks = d.sidekicks.filter((a) => a.id !== 'skI');
+    d.combat = { active: false, round: 0, turn: 0, combatants: [] };
+    d.tv.slotView = 'scene'; d.tv.sceneId = 'auto';
+  });
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

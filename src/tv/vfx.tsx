@@ -49,7 +49,8 @@ const WX: Record<string, { flakes: number; speed: number; clouds: number; motes:
   light_snow:    { flakes: 26, speed: 1,    clouds: 1, motes: 0,  streaks: 0,  sparkles: 0 },
   heavy_snow:    { flakes: 60, speed: 0.75, clouds: 3, motes: 0,  streaks: 0,  sparkles: 0 },
   blizzard:      { flakes: 90, speed: 0.4,  clouds: 4, motes: 0,  streaks: 14, sparkles: 0 },  // driven sideways, wind streaks
-  magical_storm: { flakes: 55, speed: 0.7,  clouds: 2, motes: 14, streaks: 6,  sparkles: 10 }, // Auril's wrath: motes + sparkles
+  aurils_wrath:  { flakes: 55, speed: 0.7,  clouds: 2, motes: 14, streaks: 6,  sparkles: 10 }, // Auril's wrath: motes + sparkles
+  magical_storm: { flakes: 55, speed: 0.7,  clouds: 2, motes: 14, streaks: 6,  sparkles: 10 }, // legacy alias
 };
 
 // wind streaks — long diagonal slashes tearing across a blizzard

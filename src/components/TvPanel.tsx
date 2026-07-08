@@ -77,7 +77,24 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div class="field">
-        <label>TV scene — what the players see</label>
+        <label>Scene slot — what fills the big space on the TV</label>
+        <div class="chip-row" style={{ margin: '4px 0 10px' }}>
+          {(['scene', 'idle', 'video'] as const).map((sv) => (
+            <button
+              key={sv}
+              class={`cond-chip${state.value.tv.slotView === sv ? ' on' : ''}`}
+              disabled={sv === 'video' && !state.value.tv.youtubeId}
+              onClick={() => patch((d) => { d.tv.slotView = sv; })}
+            >{sv === 'scene' ? '🖼 Scene art' : sv === 'idle' ? '⛺ Idle party' : '📺 Video'}</button>
+          ))}
+          <button
+            class={`cond-chip${state.value.tv.idleFull ? ' on' : ''}`}
+            onClick={() => patch((d) => { d.tv.idleFull = !d.tv.idleFull; })}
+          >⛶ Idle fullscreen</button>
+          <button class="cond-chip" onClick={() => patch((d) => { d.tv.poke = { seq: (d.tv.poke?.seq ?? 0) + 1, pcId: '', kind: 'cheer' }; })}>🎉 Celebrate!</button>
+        </div>
+        <p class="stat-fine">Idle party: your PCs mill about in the pixel scene, reacting to HP, weather, rations, and the place they're in. Fullscreen takes over the whole exploration view. 🎉 makes everyone cheer once.</p>
+        <label style={{ marginTop: '10px' }}>Scene art</label>
         <div class="chip-row" style={{ margin: '4px 0 8px' }}>
           <button class={`cond-chip${catF === 'all' ? ' on' : ''}`} onClick={() => setCatF('all')}>All</button>
           {SCENE_CATS.map((c) => (
@@ -118,17 +135,17 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             if (id) patch((d) => { d.tv.youtubeId = id; });
           }}>Play</button>
           {state.value.tv.youtubeId && (
-            <button class="btn" onClick={() => patch((d) => { d.tv.mediaVisible = !d.tv.mediaVisible; })}>
-              {state.value.tv.mediaVisible ? '🖼 Show scene' : '📺 Show video'}
+            <button class="btn" onClick={() => patch((d) => { d.tv.slotView = d.tv.slotView === 'video' ? 'scene' : 'video'; })}>
+              {state.value.tv.slotView === 'video' ? '🖼 Show scene' : '📺 Show video'}
             </button>
           )}
           {state.value.tv.youtubeId && (
-            <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; d.tv.mediaVisible = false; }); }}>Stop</button>
+            <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; if (d.tv.slotView === 'video') d.tv.slotView = 'scene'; }); }}>Stop</button>
           )}
         </div>
         <p class="stat-fine">
           {state.value.tv.youtubeId
-            ? state.value.tv.mediaVisible
+            ? state.value.tv.slotView === 'video'
               ? `Video is on the TV screen (${state.value.tv.youtubeId}). It starts muted — one click on the TV player unmutes.`
               : `Playing in the background (${state.value.tv.youtubeId}) — the scene stays on screen. Toggle to show the video.`
             : 'The player shares the scene slot on the TV: show it for visuals, hide it to keep music playing under the scene art.'}

@@ -77,6 +77,12 @@ function PcCard({ pc }: { pc: PC }) {
               aria-label={`Inspiration ${pc.inspiration ? 'on' : 'off'}`}
               onClick={(e) => { e.stopPropagation(); patch((s) => { const p = s.party.find((x) => x.id === pc.id); if (p) p.inspiration = !p.inspiration; }); }}
             >✦</button>
+            <button
+              class="inspo wave-btn"
+              aria-label={`Make ${pc.name} wave on the TV`}
+              title="Wave on the TV"
+              onClick={(e) => { e.stopPropagation(); patch((s) => { s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, pcId: pc.id, kind: 'wave' }; }); }}
+            >👋</button>
           </div>
           <div class="unit-meta">{pc.race} {pc.cls} {pc.level} <span class="sep">·</span> AC {pc.ac} <span class="sep">·</span> PP {pc.pp}</div>
           <CondSummary conditions={pc.conditions} />

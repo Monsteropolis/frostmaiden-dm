@@ -607,8 +607,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 @keyframes tvfxStreak { from { transform: translateX(0) rotate(7deg); } to { transform: translateX(calc(100vw + 320px)) rotate(7deg); } }
 
 /* Auril's Wrath: the aurora burns cold-bright and her magic sparkles */
-.tvfx.wx-magical_storm .tvfx-aurora { opacity: 1; filter: saturate(1.6) brightness(1.25); }
-.tvfx.wx-magical_storm .tvfx-flake { background: var(--frost); }
+.tvfx.wx-magical_storm .tvfx-aurora,
+.tvfx.wx-aurils_wrath .tvfx-aurora { opacity: 1; filter: saturate(1.6) brightness(1.25); }
+.tvfx.wx-magical_storm .tvfx-flake,
+.tvfx.wx-aurils_wrath .tvfx-flake { background: var(--frost); }
 .tvfx-sparkle {
   position: absolute; width: 3px; height: 3px;
   background: var(--frost);
@@ -628,4 +630,98 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .tvfx-streak, .tvfx-sparkle { animation: none; display: none; }
+}
+
+/* === IDLE STAGE — the tamagotchi diorama === */
+.tv-scene.idle-slot { padding: 0 !important; position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.tv-scene.idle-slot.full { flex: 1; border-radius: 0; }
+
+.tv-idle-stage { position: absolute; inset: 0; }
+.tv-idle-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; image-rendering: pixelated;
+}
+
+/* actors stand on the scene's snow line (~86% down the 128×72 art) */
+.tv-idle-actor {
+  position: absolute; bottom: 8%;
+  width: 16px; height: 24px;
+  transform: scale(3.2) translateX(-50%);
+  transform-origin: bottom left;
+  transition: left 1.4s steps(10);
+  z-index: 3;
+}
+.tv-scene.idle-slot.full .tv-idle-actor { transform: scale(4.5) translateX(-50%); }
+.tv-idle-sprite {
+  display: block; width: 16px; height: 24px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.tv-idle-actor.hp-critical .tv-idle-sprite { filter: sepia(0.4) hue-rotate(-40deg) saturate(1.6); }
+.tv-idle-actor.pose-down { opacity: 0.9; }
+
+.tv-idle-name {
+  position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%) scale(0.32);
+  transform-origin: top center;
+  font-family: var(--font-px); font-size: 16px;
+  color: var(--ink-dim); white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+}
+.tv-idle-actor.pose-down .tv-idle-name { color: var(--thread); }
+
+/* mini HP bar over hurt heads — the tamagotchi tell */
+.tv-idle-minihp {
+  position: absolute; bottom: 100%; left: 2px; right: 2px; height: 2px;
+  margin-bottom: 2px;
+  background: rgba(13, 14, 34, 0.85);
+}
+.tv-idle-minihp span { display: block; height: 100%; background: var(--ok); }
+.tv-idle-actor.hp-bloodied .tv-idle-minihp span { background: var(--warn); }
+.tv-idle-actor.hp-critical .tv-idle-minihp span { background: var(--thread); }
+
+/* thought bubbles */
+.tv-idle-bubble {
+  position: absolute; bottom: calc(100% + 5px); left: 50%;
+  transform: translateX(-50%) scale(0.4);
+  transform-origin: bottom center;
+  font-size: 22px; line-height: 1;
+  padding: 3px 5px;
+  background: rgba(23, 24, 51, 0.92);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  animation: tvBubblePop 0.4s steps(2, jump-none);
+}
+@keyframes tvBubblePop { from { transform: translateX(-50%) scale(0.2); } to { transform: translateX(-50%) scale(0.4); } }
+
+/* familiars */
+.tv-idle-critter {
+  position: absolute; bottom: 8%;
+  width: 12px; height: 10px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(3) translateX(-50%);
+  transform-origin: bottom left;
+  transition: left 2s steps(8);
+  z-index: 2;
+  opacity: 0.95;
+}
+
+/* passing cameo silhouette, far background */
+.tv-idle-cameo {
+  position: absolute; bottom: 22%;
+  width: 20px; height: 20px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(2.4);
+  transform-origin: bottom left;
+  transition: left 0.7s linear;
+  opacity: 0.45;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-idle-actor, .tv-idle-critter, .tv-idle-cameo { transition: none; }
+  .tv-idle-cameo { display: none; }
+  .tv-idle-bubble { animation: none; }
 }

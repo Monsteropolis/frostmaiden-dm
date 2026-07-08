@@ -109,6 +109,9 @@ export interface PlayerView {
   youtubeId: string;
   /** true → player fills the scene slot; false → audio-only */
   mediaVisible: boolean;
+  slotView: 'scene' | 'idle' | 'video';
+  idleFull: boolean;
+  poke: { seq: number; pcId: string; kind: 'wave' | 'cheer' };
   party: PvPc[];
   allies: PvAlly[];
   combat: { round: number; combatants: PvCombatant[] } | null;
@@ -185,7 +188,10 @@ export function projectPlayerView(s: AppState): PlayerView {
     resources: { gold: s.travel.gold ?? 0, rations: s.travel.rations, partySize: s.travel.partySize },
     sceneId: resolveScene(s.tv?.sceneId ?? 'auto', { journeying: !!j, weatherId: s.weather.current }).id,
     youtubeId: s.tv?.youtubeId ?? '',
-    mediaVisible: s.tv?.mediaVisible ?? false,
+    mediaVisible: (s.tv?.slotView ?? 'scene') === 'video',
+    slotView: s.tv?.slotView ?? 'scene',
+    idleFull: s.tv?.idleFull ?? false,
+    poke: s.tv?.poke ?? { seq: 0, pcId: '', kind: 'wave' },
 
     party: s.party.map((p) => ({
       id: p.id, name: p.name, cls: p.cls,
