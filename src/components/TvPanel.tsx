@@ -11,6 +11,7 @@ import { Sheet } from './ui';
 import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
+import { projectPlayerView } from '../tv/projection';
 
 /** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
 export function parseYouTubeId(input: string): string | null {
@@ -41,6 +42,8 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState(saved);
   const [catF, setCatF] = useState<SceneCat | 'all'>('all');
   const [yt, setYt] = useState(state.value.tv.youtubeId);
+  const [copied, setCopied] = useState<{ kb: string; withheld: number } | null>(null);
+  const [fallback, setFallback] = useState<string | null>(null);
   const status = tvStatus.value;
   const live = status === 'open' || status === 'connecting' || status === 'reconnecting';
 
@@ -49,6 +52,20 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
     if (c.length < 4) return;
     patch((d) => { d.tv.lastRoomCode = c; });
     startBroadcast(c);
+  };
+
+  // Copy the player-safe projection to the clipboard so the DM can paste it over
+  // public/snapshot.json on GitHub. Everything goes through projectPlayerView —
+  // the raw AppState (dormant quests, monster stats, prep) never leaves the phone.
+  const copySnapshot = () => {
+    const view = projectPlayerView(state.value);
+    const json = JSON.stringify(view, null, 2);
+    const withheld = Math.round((1 - JSON.stringify(view).length / JSON.stringify(state.value).length) * 100);
+    const kb = (json.length / 1024).toFixed(1);
+    navigator.clipboard.writeText(json).then(
+      () => { setCopied({ kb, withheld }); setFallback(null); },
+      () => { setCopied({ kb, withheld }); setFallback(json); }, // clipboard blocked — show the JSON to hand-copy
+    );
   };
 
   return (
@@ -150,6 +167,32 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
               : `Playing in the background (${state.value.tv.youtubeId}) — the scene stays on screen. Toggle to show the video.`
             : 'The player shares the scene slot on the TV: show it for visuals, hide it to keep music playing under the scene art.'}
         </p>
+      </div>
+
+      <div class="field">
+        <label>Publish to the Realm — a snapshot players open on their own phones</label>
+        <div class="supply-row" style={{ gap: '8px' }}>
+          <button class="btn" onClick={copySnapshot}>📸 Copy snapshot</button>
+        </div>
+        {copied && (
+          <p class="stat-fine">
+            Copied — <strong>{copied.kb} KB</strong>. <strong style={{ color: 'var(--frost)' }}>{copied.withheld}% of your state withheld</strong> from players.
+            Paste it over <code>public/snapshot.json</code> on GitHub and commit.
+          </p>
+        )}
+        {fallback && (
+          <textarea
+            class="input"
+            readOnly
+            rows={6}
+            style={{ width: '100%', marginTop: '6px', fontFamily: 'ui-monospace, Menlo, Consolas, monospace' }}
+            value={fallback}
+            onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()}
+          />
+        )}
+        {!copied && (
+          <p class="stat-fine">Copies the same player-safe view the TV receives — dormant quests, monster stats and DM prep stay on this phone. Paste it into <code>public/snapshot.json</code> and commit to publish.</p>
+        )}
       </div>
 
       <div class="tv-actions">

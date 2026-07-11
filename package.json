@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "icons": "node scripts/make-icons.mjs",
+    "seed:snapshot": "vite-node scripts/seed-snapshot.mts",
     "test:sim": "vite-node tests/session-sim.mts"
   },
   "dependencies": {

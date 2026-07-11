@@ -1,0 +1,90 @@
+/* ============================================================
+   REALM PAGE — the player-facing snapshot view. Tiny by design.
+   Uses the Fate Direct tokens from tokens.css; invents no palette.
+   The diorama itself is styled by tv.css (.tv-scene.idle-slot).
+   ============================================================ */
+
+.realm-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+/* The stage fills everything above the strip. tv.css handles the
+   diorama's own layout once it has a flex parent with height. */
+.realm-page .tv-scene.idle-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.realm-blank {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  font-size: 14px;
+}
+
+/* --- status strip: a slim bottom bar, calm by default --- */
+.realm-strip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.realm-strip.warn {
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  color: var(--ink);
+}
+
+.realm-strip.bad {
+  background: color-mix(in srgb, var(--thread) 14%, var(--surface));
+  border-top-color: color-mix(in srgb, var(--thread) 45%, var(--border));
+  color: var(--ink);
+}
+
+.realm-dot { color: var(--ok); }
+
+.realm-meta {
+  margin-left: auto;
+  color: var(--ink-faint);
+}
+
+.realm-hint {
+  flex-basis: 100%;
+  color: var(--ink-faint);
+  word-break: break-word;
+}
+
+.realm-strip code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--frost);
+}
+
+.realm-strip button {
+  margin-left: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.realm-strip button:active { background: var(--surface); }

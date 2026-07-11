@@ -1,0 +1,109 @@
+{
+  "v": 2,
+  "mode": "exploration",
+  "day": 5,
+  "weather": {
+    "id": "clear",
+    "name": "Clear skies",
+    "icon": "✦",
+    "conSave": false
+  },
+  "location": "Camp near Bryn Shander",
+  "travel": null,
+  "resources": {
+    "gold": 620,
+    "rations": 8,
+    "partySize": 4
+  },
+  "sceneId": "camp",
+  "youtubeId": "",
+  "mediaVisible": false,
+  "slotView": "scene",
+  "idleFull": false,
+  "poke": {
+    "seq": 0,
+    "pcId": "",
+    "kind": "wave"
+  },
+  "party": [
+    {
+      "id": "pc1",
+      "name": "Brienne",
+      "cls": "Paladin",
+      "hp": 40,
+      "maxHp": 44,
+      "conditions": [],
+      "inspiration": true,
+      "deathS": 0,
+      "deathF": 0,
+      "down": false
+    },
+    {
+      "id": "pc2",
+      "name": "Wick",
+      "cls": "Rogue",
+      "hp": 21,
+      "maxHp": 31,
+      "conditions": [],
+      "inspiration": false,
+      "deathS": 0,
+      "deathF": 0,
+      "down": false
+    },
+    {
+      "id": "pc3",
+      "name": "Zora",
+      "cls": "Druid",
+      "hp": 38,
+      "maxHp": 38,
+      "conditions": [],
+      "inspiration": false,
+      "deathS": 0,
+      "deathF": 0,
+      "down": false
+    },
+    {
+      "id": "pc4",
+      "name": "Doran",
+      "cls": "Fighter",
+      "hp": 33,
+      "maxHp": 46,
+      "conditions": [],
+      "inspiration": false,
+      "deathS": 0,
+      "deathF": 0,
+      "down": false
+    }
+  ],
+  "allies": [
+    {
+      "id": "al1",
+      "name": "Sprig",
+      "emoji": "🦊",
+      "hpState": "healthy",
+      "conditions": [],
+      "linkedPcId": "pc3",
+      "down": false,
+      "deathS": 0,
+      "deathF": 0
+    }
+  ],
+  "combat": null,
+  "quests": [
+    {
+      "id": "sq1",
+      "name": "The Cold-Hearted Killer",
+      "town": "Bryn Shander",
+      "status": "escalating",
+      "mainHook": true
+    },
+    {
+      "id": "sq2",
+      "name": "Foaming Mugs",
+      "town": "Bryn Shander",
+      "status": "active",
+      "mainHook": false
+    }
+  ],
+  "sentAt": 1783771200000
+}

@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         tv: 'tv.html',       // Player TV View — second entry, same deploy
+        realm: 'realm.html', // Player Realm page — snapshot-driven, same deploy
       },
     },
   },
