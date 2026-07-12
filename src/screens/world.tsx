@@ -337,6 +337,13 @@ function QuestCard({ q }: { q: Quest }) {
             <textarea class="input" rows={2} value={q.notes}
               onChange={(e) => patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.notes = (e.target as HTMLTextAreaElement).value; })} />
           </Field>
+          <Field label="Chapter — appears in that chapter's checklist on Progress">
+            <select class="input" value={q.chapter ?? ''}
+              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.chapter = v ? Number(v) : null; }); }}>
+              <option value="">— none —</option>
+              {state.value.chapters.map((c) => <option value={c.id}>Ch{c.id} · {c.label}</option>)}
+            </select>
+          </Field>
           {q.custom && (
             <div class="row-actions">
               <ConfirmBtn label="Delete" confirmLabel="Delete?" class="mini ghost danger"
@@ -353,7 +360,7 @@ function QuestsPanel() {
   const [status, setStatus] = useState<QuestStatus | 'all'>('all');
   const [town, setTown] = useState('all');
   const [creating, setCreating] = useState(false);
-  const [f, setF] = useState({ name: '', town: '' });
+  const [f, setF] = useState<{ name: string; town: string; chapter: number | null }>({ name: '', town: '', chapter: null });
   const quests = state.value.quests;
   const towns = [...new Set(quests.map((q) => q.town).filter(Boolean))].sort();
   const rank: Record<QuestStatus, number> = { escalating: 0, active: 1, dormant: 2, resolved: 3 };
@@ -383,11 +390,18 @@ function QuestsPanel() {
         <div class="card">
           <Field label="Quest name"><input class="input" value={f.name} onInput={(e) => { const v = (e.target as HTMLInputElement).value; setF((p) => ({ ...p, name: v })); }} /></Field>
           <Field label="Town (optional)"><input class="input" value={f.town} onInput={(e) => { const v = (e.target as HTMLInputElement).value; setF((p) => ({ ...p, town: v })); }} /></Field>
+          <Field label="Chapter (optional)">
+            <select class="input" value={f.chapter ?? ''}
+              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; setF((p) => ({ ...p, chapter: v ? Number(v) : null })); }}>
+              <option value="">— none —</option>
+              {state.value.chapters.map((c) => <option value={c.id}>Ch{c.id} · {c.label}</option>)}
+            </select>
+          </Field>
           <div class="row-actions">
             <button class="btn ghost" onClick={() => setCreating(false)}>Cancel</button>
             <button class="btn primary" disabled={!f.name.trim()} onClick={() => {
-              patch((d) => { d.quests.push({ id: `q${d.seq++}`, name: f.name, status: 'active', town: f.town, chapter: null, mainHook: false, trigger: '', development: '', notes: '', custom: true }); });
-              setF({ name: '', town: '' }); setCreating(false);
+              patch((d) => { d.quests.push({ id: `q${d.seq++}`, name: f.name, status: 'active', town: f.town, chapter: f.chapter, mainHook: false, trigger: '', development: '', notes: '', custom: true }); });
+              setF({ name: '', town: '', chapter: null }); setCreating(false);
             }}>Add quest</button>
           </div>
         </div>

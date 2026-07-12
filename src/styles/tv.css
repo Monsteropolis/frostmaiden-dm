@@ -731,23 +731,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   z-index: 1;
 }
 
-/* --- ambience unmute pill: the one tap that gives the TV sound --- */
-.tv-sound-pill {
-  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-  z-index: 50;
-  font-family: var(--font-ui); font-size: 15px; font-weight: 600;
-  color: var(--bg); background: var(--frost);
-  border: none; border-radius: 999px;
-  padding: 10px 20px; cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  animation: tvPillPulse 2s ease-in-out infinite;
-}
-@keyframes tvPillPulse {
-  0%, 100% { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
-  50% { box-shadow: 0 4px 22px var(--frost-glow); }
-}
-@media (prefers-reduced-motion: reduce) { .tv-sound-pill { animation: none; } }
-
 /* --- combat ambience: foe tokens + turn markers + round chip --- */
 .tv-foe-token {
   position: absolute; bottom: 8%;

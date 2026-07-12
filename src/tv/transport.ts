@@ -9,7 +9,8 @@ import { PlayerView } from './projection';
 
 export type TvMessage =
   | { t: 'view'; view: PlayerView }
-  | { t: 'hello'; from: 'dm' | 'tv' };
+  | { t: 'hello'; from: 'dm' | 'tv' }
+  | { t: 'unmute' };   // DM → TV: enable ambience sound (TV is passive, can't be tapped)
 
 export type TransportStatus =
   | 'idle'          // not started

@@ -67,6 +67,29 @@ const migrations: Record<number, Migration> = {
     }));
     return { ...s, tv, party, version: 6 };
   },
+  // v6 → v7: chapters gain a manual `done` flag; Chapter 1's milestones become
+  // quest-linked "beats". Match by label prefix so real progress/notes survive.
+  6: (s) => {
+    const quests = (s.quests as { id: string; name: string }[]) ?? [];
+    const questIdByName = (name: string) => quests.find((q) => q.name === name)?.id ?? null;
+    const chapters = ((s.chapters as Record<string, unknown>[]) ?? []).map((raw) => {
+      const ch = { ...raw };
+      if (typeof ch.done !== 'boolean') ch.done = false;
+      if (ch.id === 1 && Array.isArray(ch.milestones)) {
+        const out: Record<string, unknown>[] = [];
+        for (const m of ch.milestones as Record<string, unknown>[]) {
+          const label = String(m.label ?? '');
+          if (label.startsWith('Three or more town quests')) continue; // replaced by the derived checklist
+          if (label.startsWith('Cold-Hearted Killer')) out.push({ ...m, label: 'Cold-Hearted Killer', questId: questIdByName('Cold-Hearted Killer') });
+          else if (label.startsWith('Nature Spirits')) out.push({ ...m, label: 'Nature Spirits', questId: questIdByName('Nature Spirits') });
+          else out.push(m);
+        }
+        ch.milestones = out;
+      }
+      return ch;
+    });
+    return { ...s, chapters, version: 7 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

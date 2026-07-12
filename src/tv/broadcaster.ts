@@ -43,6 +43,12 @@ export function startBroadcast(roomCode: string) {
   });
 }
 
+/** DM → TV: enable ambience sound. The TV is a passive display and cannot be
+ *  tapped, so the unmute gesture happens here and travels over the wire. */
+export function unmuteTv() {
+  transport?.send({ t: 'unmute' });
+}
+
 export function stopBroadcast() {
   clearTimeout(sendTimer);
   stopWatching?.(); stopWatching = null;

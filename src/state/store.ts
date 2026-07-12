@@ -52,6 +52,14 @@ function normalize(s: AppState): AppState {
   for (const a of s.sidekicks) if (!a.category) a.category = 'sidekick';
   if (typeof s.travel.rations !== 'number') s.travel.rations = 10;
   if (typeof s.travel.partySize !== 'number') s.travel.partySize = 4;
+  // Link Chapter 1's named beats to their quests (their labels are the quest names).
+  const ch1 = s.chapters.find((c) => c.id === 1);
+  if (ch1) for (const m of ch1.milestones) {
+    if (!m.questId && (m.label === 'Cold-Hearted Killer' || m.label === 'Nature Spirits')) {
+      const q = s.quests.find((qq) => qq.name === m.label);
+      if (q) m.questId = q.id;
+    }
+  }
   return s;
 }
 

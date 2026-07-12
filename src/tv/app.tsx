@@ -33,6 +33,8 @@ const roomCode = signal<string>('');
 const status = signal<TransportStatus>('idle');
 const statusDetail = signal<string>('');
 const view = signal<PlayerView | null>(null);
+// Bumped when the DM taps "Enable sound" on their phone — the TV is passive.
+const unmuteSignal = signal<number>(0);
 
 let transport: PeerTransport | null = null;
 
@@ -44,7 +46,10 @@ function boot() {
 
   transport = new PeerTransport();
   transport.onStatus((s, d) => { status.value = s; statusDetail.value = d ?? ''; });
-  transport.onMessage((m) => { if (m.t === 'view') view.value = m.view; });
+  transport.onMessage((m) => {
+    if (m.t === 'view') view.value = m.view;
+    else if (m.t === 'unmute') unmuteSignal.value++;
+  });
   transport.host(code);
 }
 
@@ -288,9 +293,6 @@ function AmbiencePlayer({ v }: { v: PlayerView | null }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const id = v?.youtubeId ?? '';
   const show = !!v?.mediaVisible;
-  // Autoplay is only allowed muted, and YouTube only unmutes on a real gesture
-  // on THIS device. So the TV shows a pill; one tap here does the unmuting.
-  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -314,33 +316,28 @@ function AmbiencePlayer({ v }: { v: PlayerView | null }) {
     return () => { clearInterval(iv); window.removeEventListener('resize', place); };
   }, [show, v?.mode, v?.sceneId, id]);
 
-  useEffect(() => { setUnlocked(false); }, [id]);   // a new track starts muted again
-
-  const unlock = () => {
+  // The DM taps "Enable sound on TV" on their phone; it arrives as a signal
+  // bump here and we unmute the player. (A muted autoplay is already running.)
+  useEffect(() => {
+    if (unmuteSignal.value <= 0) return;
     const win = iframeRef.current?.contentWindow;
     const cmd = (func: string, args: unknown[] = []) =>
       win?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
     cmd('unMute'); cmd('setVolume', [60]); cmd('playVideo');
-    setUnlocked(true);
-  };
+  }, [unmuteSignal.value, id]);
 
   if (!id) return null;
   const origin = typeof location !== 'undefined' ? location.origin : '';
   return (
-    <>
-      <div ref={ref} class="tv-yt" aria-hidden={!show}>
-        <iframe
-          ref={iframeRef}
-          class="tv-yt-frame"
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`}
-          allow="autoplay; encrypted-media"
-          title="Ambience"
-        />
-      </div>
-      {!unlocked && (
-        <button class="tv-sound-pill" onClick={unlock}>🔊 Tap once for sound</button>
-      )}
-    </>
+    <div ref={ref} class="tv-yt" aria-hidden={!show}>
+      <iframe
+        ref={iframeRef}
+        class="tv-yt-frame"
+        src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`}
+        allow="autoplay; encrypted-media"
+        title="Ambience"
+      />
+    </div>
   );
 }
 

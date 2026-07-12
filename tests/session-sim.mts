@@ -289,9 +289,9 @@ check('session NPC chip', !!byText('.session-card .npc-chip', 'Markham'));
 
 click(byText('.sub-tab', 'Progress'), 'Progress'); await sleep(20);
 check('7 chapters render', $$('.card.chapter').length === 7);
-click($('.ms-toggle'), 'toggle first milestone'); await sleep(20);
-check('milestone marked', !!document.querySelector('.milestone.done'));
-check('chapter counter 1/4', bodyHas('1/4 milestones'));
+click($('.ms-toggle'), 'toggle first manual beat'); await sleep(20);
+check('beat marked done', !!document.querySelector('.milestone.done'));
+check('chapter beat counter renders', bodyHas('beats') && bodyHas('/3'));
 
 console.log('\n═══ SCENE 12: Final persistence audit ═══');
 await sleep(600);
@@ -328,20 +328,23 @@ click(byText('.unit-name', 'Bryn Shander'), 'expand town'); await sleep(20);
 check('sidekick chip removed', !bodyHas('Sidekick recruited'));
 click(byText('.unit-name', 'Bryn Shander'), 'collapse town'); await sleep(20);
 
-// (3) Milestone popup with chapter quests
+// (3) Progress rework: chapter-quest checklist on the card + quest-linked beats
 click(byText('.nav-btn', 'Session'), 'Session'); await sleep(20);
 click(byText('.sub-tab', 'Progress'), 'Progress'); await sleep(20);
-click(byText('.milestone', 'Cold-Hearted Killer'), 'open milestone sheet'); await sleep(30);
-check('milestone sheet opens', bodyHas('what this means at your table'));
-check('chapter quests listed inside', bodyHas('Foaming Mugs'));
-const msQuestBadge = document.querySelector('.ms-quest .standing') as HTMLElement;
-const b4 = msQuestBadge?.textContent;
-msQuestBadge?.click(); await sleep(20);
-check('quest advances from milestone sheet', document.querySelector('.ms-quest .standing')?.textContent !== b4);
-click(byText('.sheet button', 'Complete ✦'), 'complete milestone'); await sleep(20);
+check('chapter quest checklist on the card', !!document.querySelector('.chapter-quests') && bodyHas('Foaming Mugs'));
+check('Cold-Hearted Killer is a quest-linked beat', !!byText('.ms-link', 'Cold-Hearted Killer'));
+// resolve the linked quest from the card checklist → its beat auto-completes (derived)
+const chkRow = $$('.chapter-quests .ms-quest').find((r) => (r.textContent ?? '').includes('Cold-Hearted Killer'));
+const chkBadge = chkRow?.querySelector('.standing') as HTMLElement | undefined;
+for (let i = 0; i < 4 && chkBadge && (chkBadge.textContent ?? '').trim() !== 'resolved'; i++) { chkBadge.click(); await sleep(15); }
+const chkAfter = $$('.chapter-quests .ms-quest').find((r) => (r.textContent ?? '').includes('Cold-Hearted Killer'));
+check('quest reaches resolved from the checklist', (chkAfter?.querySelector('.standing')?.textContent ?? '').trim() === 'resolved');
+check('linked beat auto-completes from its quest', !!byText('.milestone.done', 'Cold-Hearted Killer'));
+// the slim milestone sheet: label, notes, link-to-quest picker — no embedded quest list
+click(byText('.milestone', 'Party arrives'), 'open beat sheet'); await sleep(30);
+check('beat sheet slimmed to a link picker', bodyHas('Link to quest') && !bodyHas('tap status to advance'));
 click($('.sheet-close'), 'close sheet'); await sleep(20);
-check('milestone crossed off', $$('.milestone.done').length >= 2);
-check('+ Milestone button exists', !!byText('button', '+ Milestone'));
+check('+ Beat button exists', !!byText('button', '+ Beat'));
 
 // (4) Encounter category filters + copy/edit
 click(byText('.nav-btn', 'Combat'), 'Combat'); await sleep(20);
