@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite-node tests/seam.mts && vite build",
     "preview": "vite preview",
     "icons": "node scripts/make-icons.mjs",
     "seed:snapshot": "vite-node scripts/seed-snapshot.mts",
-    "test:sim": "vite-node tests/session-sim.mts"
+    "test:sim": "vite-node tests/session-sim.mts",
+    "test:seam": "vite-node tests/seam.mts"
   },
   "dependencies": {
     "@fontsource/silkscreen": "^5.2.8",

@@ -4,7 +4,7 @@
 // snapshot the DM published by hand to public/snapshot.json.
 //
 // THE ONE RULE: this file does not reimplement the diorama. It
-// imports IdleStage and hands it a PlayerView. Everything the
+// imports RealmStage and hands it a PlayerView. Everything the
 // stage needs (its own animation clock, sizing via tv.css) lives
 // where it already lives.
 // ============================================================
@@ -17,7 +17,7 @@ import '@fontsource/silkscreen/400.css';
 import '../styles/tokens.css';
 import '../styles/tv.css';
 import '../styles/realm.css';
-import { IdleStage } from '../tv/idle';
+import { RealmStage } from '../tv/realm-stage';
 import type { PlayerView } from '../tv/projection';
 
 const SNAPSHOT_URL = `${import.meta.env.BASE_URL}snapshot.json`;
@@ -74,7 +74,7 @@ function Realm() {
   return (
     <div class="realm-page">
       {v
-        ? <section class="tv-scene idle-slot full"><IdleStage v={v} full /></section>
+        ? <section class="tv-scene idle-slot full"><RealmStage v={v} full /></section>
         : <section class="realm-blank">{status.kind === 'loading' ? 'Loading the realm…' : 'No snapshot to show.'}</section>}
       <RealmStatus status={status} v={v} onRetry={() => setNonce((n) => n + 1)} />
     </div>

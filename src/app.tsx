@@ -9,7 +9,7 @@ import { CombatScreen } from './screens/combat';
 import { RollToast } from './components/ui';
 import { NpcPopup } from './screens/npcs';
 
-const tab = signal<TabId>('world');
+export const tab = signal<TabId>('world');
 
 const SCREENS: Record<TabId, () => preact.JSX.Element> = {
   session: SessionScreen,

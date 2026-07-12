@@ -2,7 +2,8 @@ import { useState } from 'preact/hooks';
 import { state } from '../state/store';
 import { WEATHER } from '../state/schema';
 import { Sheet } from './ui';
-import { WeatherControls } from '../screens/world';
+import { worldSub } from '../screens/world';
+import { tab } from '../app';
 import { TvPanel, tvPipClass } from './TvPanel';
 
 export function Header() {
@@ -39,7 +40,20 @@ export function Header() {
       </div>
       {open && (
         <Sheet open title="The sky over Icewind Dale" onClose={() => setOpen(false)}>
-          <WeatherControls />
+          <div class="wx-readout">
+            <span class="wx-readout-icon" aria-hidden="true">{wx.icon}</span>
+            <div>
+              <div class="wx-readout-name">{wx.name}</div>
+              <div class="wx-readout-day">Day {day} in Icewind Dale</div>
+            </div>
+          </div>
+          {wx.conSave && (
+            <p class="read" style={{ color: 'var(--thread)' }}>{wx.conSaveNote}</p>
+          )}
+          <button
+            class="btn primary wide"
+            onClick={() => { tab.value = 'world'; worldSub.value = 'weather'; setOpen(false); }}
+          >Set on World ▸ Weather</button>
         </Sheet>
       )}
       {tvOpen && <TvPanel onClose={() => setTvOpen(false)} />}

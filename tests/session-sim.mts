@@ -438,13 +438,13 @@ check('NPC ally links to sheet', !!byText('button', 'Open NPC sheet'));
 
 console.log('\n═══ SCENE 18: Weather from the strip + travel rules ═══');
 click($('.weather-strip.tappable'), 'tap weather strip'); await sleep(30);
-check('weather sheet opens from strip', bodyHas('Roll weather') && bodyHas('New day'));
+check('weather sheet is display-only with a World link', bodyHas('Set on World') && !bodyHas('Roll weather'));
 click($('.sheet-close'), 'close'); await sleep(20);
 click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
 click(byText('.sub-tab', 'Travel'), 'Travel'); await sleep(20);
-check('supplies tracker', bodyHas('Rations') && !!document.querySelector('.supply-n'));
+check('supplies tracker', bodyHas('Rations') && !!document.querySelector('.stepper-val'));
 check('travel rules reference', bodyHas('Extreme cold') && bodyHas('Deep snow'));
-const rationsBefore = parseInt(document.querySelector('.supply-n')!.textContent!, 10);
+const rationsBefore = parseInt(document.querySelector('.stepper-val')!.textContent!, 10);
 // take a 1-day trip to consume rations
 {
   const sels = $$('select.input');
@@ -454,7 +454,7 @@ const rationsBefore = parseInt(document.querySelector('.supply-n')!.textContent!
 }
 click(byText('button', 'Set out ✦'), 'set out'); await sleep(20);
 click(byText('button', 'Arrive at Targos'), 'travel+arrive'); await sleep(30);
-const rationsAfter = parseInt(document.querySelector('.supply-n')!.textContent!, 10);
+const rationsAfter = parseInt(document.querySelector('.stepper-val')!.textContent!, 10);
 check('travel day consumed rations', rationsAfter === rationsBefore - 4, `${rationsBefore}→${rationsAfter}`);
 
 console.log('\n═══ SCENE 19: The winds of fate (VFX) ═══');
@@ -899,7 +899,7 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
   const { migrate } = await import('../src/state/migrations.ts');
   const { projectPlayerView } = await import('../src/tv/projection.ts');
   const { render: rts } = await import('preact-render-to-string');
-  const { IdleStage, archetypeRow, pickPose } = await import('../src/tv/idle.tsx');
+  const { RealmStage, archetypeRow, pickPose } = await import('../src/tv/realm-stage.tsx');
   const { ExplorationView, CombatView } = await import('../src/tv/app.tsx');
 
   // -- migration v4 → v5
@@ -926,7 +926,7 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
   // -- full render: actors, familiars, name tags, mini HP for the hurt
   patch((d) => {
     d.party[0].hp = 3;                             // critical → mini HP bar
-    d.tv.slotView = 'idle';
+    d.tv.slotView = 'realm';
     d.tv.sceneId = 'tavern';
     d.sidekicks.push({
       id: 'skI', name: 'Whiskers', emoji: '🐈', kind: 'Cat', category: 'sidekick',
@@ -936,14 +936,14 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
     } as never);
   });
   const pv = projectPlayerView(state.value);
-  check('projection carries slotView + poke', pv.slotView === 'idle' && typeof pv.poke.seq === 'number');
-  const stage = rts(h(IdleStage, { v: pv }));
+  check('projection carries slotView + poke', pv.slotView === 'realm' && typeof pv.poke.seq === 'number');
+  const stage = rts(h(RealmStage, { v: pv }));
   check('one actor per PC', (stage.match(/tv-idle-actor/g) ?? []).length >= state.value.party.length);
   check('familiar critter renders', stage.includes('tv-idle-critter'));
   check('name tags on actors', stage.includes(state.value.party[0].name));
   check('hurt PC gets mini HP bar', stage.includes('tv-idle-minihp'));
   check('idle backdrop is pixel art even if module art chosen',
-    rts(h(IdleStage, { v: { ...pv, sceneId: 'mon-yeti' } })).includes('tv-idle-bg'));
+    rts(h(RealmStage, { v: { ...pv, sceneId: 'mon-yeti' } })).includes('tv-idle-bg'));
 
   // -- slot switching in the views
   const ex = rts(h(ExplorationView, { v: pv }));
@@ -952,13 +952,14 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
   check('scene mode keeps the art card', exScene.includes('tv-scene-caption') && !exScene.includes('tv-idle-stage'));
   patch((d) => { d.combat = { active: true, round: 1, turn: 0, combatants: [{ id: 'x', name: 'W', emoji: '🐺', hp: 5, maxHp: 5, ac: 10, init: 5, initMod: 0, conditions: [], srcType: 'monster', srcId: 'crag_cat' }] }; });
   const cb = rts(h(CombatView, { v: projectPlayerView(state.value), flash: false, roundPulse: false }));
-  check('combat slot honors idle too', cb.includes('tv-idle-stage'));
+  check('combat slot honors the Realm too', cb.includes('tv-idle-stage'));
+  check('combat foes render as emoji tokens with a round chip', cb.includes('tv-foe-token') && cb.includes('Round 1'));
 
   // -- pokes: wave one PC, cheer everyone
   const wavePc = state.value.party[1]?.id ?? state.value.party[0].id;
-  const waved = rts(h(IdleStage, { v: pv, pokeActive: { pcId: wavePc, kind: 'wave' } }));
+  const waved = rts(h(RealmStage, { v: pv, pokeActive: { seq: 1, target: wavePc, kind: 'wave' } }));
   check('poke: targeted wave pose', waved.includes('pose-wave'));
-  const cheered = rts(h(IdleStage, { v: pv, pokeActive: { pcId: '', kind: 'cheer' } }));
+  const cheered = rts(h(RealmStage, { v: pv, pokeActive: { seq: 1, target: 'party', kind: 'cheer' } }));
   check('poke: party-wide cheer', (cheered.match(/pose-cheer/g) ?? []).length >= 2);
   check('down PCs sit out the cheer', !cheered.includes('pose-cheer pose-down'));
 
@@ -966,10 +967,10 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
   click(byText('.nav-btn', 'Party'), 'Party tab'); await sleep(30);
   const before = state.value.tv.poke.seq;
   click($('.wave-btn'), 'wave button'); await sleep(20);
-  check('wave button bumps poke seq with pcId', state.value.tv.poke.seq === before + 1 && state.value.tv.poke.kind === 'wave' && !!state.value.tv.poke.pcId);
+  check('wave button bumps poke seq with target', state.value.tv.poke.seq === before + 1 && state.value.tv.poke.kind === 'wave' && !!state.value.tv.poke.target);
 
   // -- fullscreen idle: whole exploration becomes the diorama
-  const full = rts(h('div', {}, h(IdleStage, { v: { ...pv, idleFull: true }, full: true })));
+  const full = rts(h('div', {}, h(RealmStage, { v: { ...pv, idleFull: true }, full: true })));
   check('fullscreen stage renders', full.includes('tv-idle-stage'));
 
   // cleanup

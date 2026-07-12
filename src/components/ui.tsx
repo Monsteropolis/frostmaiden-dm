@@ -8,12 +8,14 @@ import { lastRoll } from '../lib/dice';
 
 // --- Bottom sheet ---------------------------------------------------------
 
-export function Sheet({ open, title, onClose, children }: {
+export function Sheet({ open, title, onClose, children, center = false }: {
   open: boolean; title: string; onClose: () => void; children: ComponentChildren;
+  /** On tablets/desktop (≥768px) render as a centered modal; still a bottom sheet on phones. */
+  center?: boolean;
 }) {
   if (!open) return null;
   return createPortal(
-    <div class="sheet-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div class={`sheet-scrim${center ? ' center' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="sheet" role="dialog" aria-label={title}>
         <div class="sheet-head">
           <div class="sheet-grip" />
@@ -92,6 +94,28 @@ export function NumInput({ value, onInput, min, max, w }: {
   );
 }
 
+
+// --- Stepper ----------------------------------------------------------------
+// One control paradigm for every counter (rations, party, gold): matched
+// button sizes, tabular-nums value, aligned baselines. `steps` renders a
+// segmented row — [1] → [−1][ value ][+1]; [10,1] → [−10][−1][ value ][+1][+10].
+
+export function Stepper({ label, value, onDelta, low = false, steps = [1] }: {
+  label: string; value: number; onDelta: (delta: number) => void; low?: boolean; steps?: number[];
+}) {
+  const minus = steps;                 // largest-magnitude first on the minus side
+  const plus = [...steps].reverse();   // …and last on the plus side
+  return (
+    <div class="stepper">
+      <span class="stepper-label">{label}</span>
+      <div class="stepper-ctl">
+        {minus.map((s) => <button class="stepper-btn" onClick={() => onDelta(-s)} aria-label={`${label} minus ${s}`}>−{s}</button>)}
+        <span class={`stepper-val${low ? ' low' : ''}`}>{value}</span>
+        {plus.map((s) => <button class="stepper-btn" onClick={() => onDelta(s)} aria-label={`${label} plus ${s}`}>+{s}</button>)}
+      </div>
+    </div>
+  );
+}
 
 // --- Collapsible condition editor -------------------------------------------
 // Active conditions show as removable tags; the full grid stays hidden

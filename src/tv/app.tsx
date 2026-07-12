@@ -20,12 +20,12 @@
 
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { PlayerView, PvCombatant, PvPc, PvAlly, HpState } from './projection';
+import { PlayerView, PvCombatant, PvPc, PvAlly, HpState, PokeActive } from './projection';
 import { TransportStatus, makeRoomCode } from './transport';
 import { PeerTransport } from './peer-transport';
 import { TvBackdrop } from './vfx';
 import { sceneById, SCENES } from './scenes';
-import { IdleStage } from './idle';
+import { RealmStage } from './realm-stage';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -164,7 +164,7 @@ function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
 }
 
 export function CombatView({ v, flash = false, roundPulse = false, pokeActive = null }: {
-  v: PlayerView; flash?: boolean; roundPulse?: boolean; pokeActive?: { pcId: string; kind: 'wave' | 'cheer' } | null;
+  v: PlayerView; flash?: boolean; roundPulse?: boolean; pokeActive?: PokeActive | null;
 }) {
   const combat = v.combat!;
   // Rotate so the active combatant leads: now, next, then. The order the
@@ -187,8 +187,8 @@ export function CombatView({ v, flash = false, roundPulse = false, pokeActive = 
           {hidden > 0 && <div class="tv-init-more">+{hidden} MORE</div>}
         </div>
       </section>
-      {v.slotView === 'idle'
-        ? <section class="tv-scene idle-slot"><IdleStage v={v} pokeActive={pokeActive} /></section>
+      {v.slotView === 'realm'
+        ? <section class="tv-scene idle-slot"><RealmStage v={v} pokeActive={pokeActive} /></section>
         : <SceneCard v={v} />}
     </div>
   );
@@ -226,7 +226,7 @@ function RosterPc({ p, allies }: { p: PvPc; allies: PvAlly[] }) {
   );
 }
 
-export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeActive?: { pcId: string; kind: 'wave' | 'cheer' } | null }) {
+export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeActive?: PokeActive | null }) {
   const j = v.travel;
   const linked = (pcId: string) => v.allies.filter((a) => a.linkedPcId === pcId);
   const orphans = v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId));
@@ -270,8 +270,8 @@ export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeA
         </div>
 
         {/* The scene is the hero — or the party is, in idle mode */}
-        {v.slotView === 'idle'
-          ? <section class="tv-scene idle-slot"><IdleStage v={v} pokeActive={pokeActive} /></section>
+        {v.slotView === 'realm'
+          ? <section class="tv-scene idle-slot"><RealmStage v={v} pokeActive={pokeActive} /></section>
           : <SceneCard v={v} />}
       </div>
     </div>
@@ -285,8 +285,12 @@ export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeA
 // Hidden → collapses to a 2px speck, still playing.
 function AmbiencePlayer({ v }: { v: PlayerView | null }) {
   const ref = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const id = v?.youtubeId ?? '';
   const show = !!v?.mediaVisible;
+  // Autoplay is only allowed muted, and YouTube only unmutes on a real gesture
+  // on THIS device. So the TV shows a pill; one tap here does the unmuting.
+  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -310,16 +314,33 @@ function AmbiencePlayer({ v }: { v: PlayerView | null }) {
     return () => { clearInterval(iv); window.removeEventListener('resize', place); };
   }, [show, v?.mode, v?.sceneId, id]);
 
+  useEffect(() => { setUnlocked(false); }, [id]);   // a new track starts muted again
+
+  const unlock = () => {
+    const win = iframeRef.current?.contentWindow;
+    const cmd = (func: string, args: unknown[] = []) =>
+      win?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+    cmd('unMute'); cmd('setVolume', [60]); cmd('playVideo');
+    setUnlocked(true);
+  };
+
   if (!id) return null;
+  const origin = typeof location !== 'undefined' ? location.origin : '';
   return (
-    <div ref={ref} class="tv-yt" aria-hidden={!show}>
-      <iframe
-        class="tv-yt-frame"
-        src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0`}
-        allow="autoplay; encrypted-media"
-        title="Ambience"
-      />
-    </div>
+    <>
+      <div ref={ref} class="tv-yt" aria-hidden={!show}>
+        <iframe
+          ref={iframeRef}
+          class="tv-yt-frame"
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`}
+          allow="autoplay; encrypted-media"
+          title="Ambience"
+        />
+      </div>
+      {!unlocked && (
+        <button class="tv-sound-pill" onClick={unlock}>🔊 Tap once for sound</button>
+      )}
+    </>
   );
 }
 
@@ -365,12 +386,12 @@ export function TvApp() {
   }, [v]);
 
   // Poke one-shot: DM bumps tv.poke.seq → play the reaction for 2.6s.
-  const [pokeActive, setPokeActive] = useState<{ pcId: string; kind: 'wave' | 'cheer' } | null>(null);
+  const [pokeActive, setPokeActive] = useState<PokeActive | null>(null);
   const prevPoke = useRef<number>(-1);
   useEffect(() => {
     const seq = v?.poke?.seq ?? 0;
     if (prevPoke.current >= 0 && seq > prevPoke.current && v?.poke) {
-      setPokeActive({ pcId: v.poke.pcId, kind: v.poke.kind });
+      setPokeActive({ seq, target: v.poke.target, kind: v.poke.kind });
       const t = setTimeout(() => setPokeActive(null), 2600);
       prevPoke.current = seq;
       return () => clearTimeout(t);
@@ -399,7 +420,7 @@ export function TvApp() {
             {v.mode === 'combat' && v.combat
               ? <CombatView v={v} flash={flash} roundPulse={roundPulse} pokeActive={pokeActive} />
               : v.idleFull
-                ? <section class="tv-scene idle-slot full"><IdleStage v={v} full pokeActive={pokeActive} /></section>
+                ? <section class="tv-scene idle-slot full"><RealmStage v={v} full pokeActive={pokeActive} /></section>
                 : <ExplorationView v={v} pokeActive={pokeActive} />}
           </>
         ) : <PairingScreen />}

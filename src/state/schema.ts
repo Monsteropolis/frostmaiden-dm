@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -77,6 +77,7 @@ export interface PC {
   inspiration: boolean;
   deathS: number;     // death save successes (0–3)
   deathF: number;     // failures (0–3)
+  notes: string;      // DM-only scratch — NEVER projected to players (see seam tests)
 }
 
 export interface AllyAttack { name: string; bonus: number; damage: string; }
@@ -281,13 +282,21 @@ export interface TvSettings {
   youtubeId: string;
   /** true → the player occupies the scene slot; false → audio-only in the background */
   mediaVisible: boolean;
-  /** what fills the TV's scene slot: art, the idle party diorama, or the video */
-  slotView: 'scene' | 'idle' | 'video';
-  /** idle diorama takes over the whole exploration screen */
+  /** what fills the TV's scene slot: art, the Realm diorama, or the video */
+  slotView: 'scene' | 'realm' | 'video';
+  /** Realm diorama takes over the whole exploration screen */
   idleFull: boolean;
-  /** one-shot reaction: bump seq to fire. pcId '' = whole party. */
-  poke: { seq: number; pcId: string; kind: 'wave' | 'cheer' };
+  /** one-shot reaction: bump seq to fire. */
+  poke: Poke;
 }
+
+/** Realm reaction kinds. wave/cheer/taunt map to poses; flinch is CSS-only. */
+export type PokeKind = 'wave' | 'cheer' | 'flinch' | 'taunt';
+
+/** A one-shot "Moment" fired at the Realm. Bump `seq` to trigger.
+ *  `target`: 'party' (all PCs) · 'foes' (non-friendly combatants) ·
+ *  'everyone' · or a single pcId. */
+export interface Poke { seq: number; target: string; kind: PokeKind }
 
 export interface AppState {
   version: number;
@@ -341,7 +350,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
-    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false, slotView: 'scene', idleFull: false, poke: { seq: 0, pcId: '', kind: 'wave' } },
+    tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false, slotView: 'scene', idleFull: false, poke: { seq: 0, target: 'party', kind: 'wave' } },
     seq: 1,
   };
 }

@@ -18,11 +18,11 @@
   "sceneId": "map-dougans-hole",
   "youtubeId": "",
   "mediaVisible": false,
-  "slotView": "idle",
+  "slotView": "realm",
   "idleFull": false,
   "poke": {
     "seq": 9,
-    "pcId": "pc41",
+    "target": "pc41",
     "kind": "wave"
   },
   "party": [

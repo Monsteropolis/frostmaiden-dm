@@ -660,6 +660,17 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-idle-actor.hp-critical .tv-idle-sprite { filter: sepia(0.4) hue-rotate(-40deg) saturate(1.6); }
 .tv-idle-actor.pose-down { opacity: 0.9; }
 
+/* flinch — a struck hero shakes and flashes red for ~500ms. Animated on the
+   sprite so the actor's own scale/position transform is left untouched. */
+.tv-idle-actor.flinch .tv-idle-sprite { animation: tvFlinch 0.5s steps(6, jump-none); }
+@keyframes tvFlinch {
+  0%   { transform: translateX(0);      filter: brightness(1.9) sepia(1) hue-rotate(-50deg) saturate(7); }
+  25%  { transform: translateX(-2.5px); }
+  50%  { transform: translateX(2.5px);  filter: brightness(1.5) sepia(1) hue-rotate(-50deg) saturate(5); }
+  75%  { transform: translateX(-1.5px); }
+  100% { transform: translateX(0);      filter: none; }
+}
+
 .tv-idle-name {
   position: absolute; top: 100%; left: 50%;
   transform: translateX(-50%) scale(0.32);
@@ -720,8 +731,69 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   z-index: 1;
 }
 
+/* --- ambience unmute pill: the one tap that gives the TV sound --- */
+.tv-sound-pill {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  z-index: 50;
+  font-family: var(--font-ui); font-size: 15px; font-weight: 600;
+  color: var(--bg); background: var(--frost);
+  border: none; border-radius: 999px;
+  padding: 10px 20px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  animation: tvPillPulse 2s ease-in-out infinite;
+}
+@keyframes tvPillPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 4px 22px var(--frost-glow); }
+}
+@media (prefers-reduced-motion: reduce) { .tv-sound-pill { animation: none; } }
+
+/* --- combat ambience: foe tokens + turn markers + round chip --- */
+.tv-foe-token {
+  position: absolute; bottom: 8%;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  z-index: 3;
+  display: flex; flex-direction: column; align-items: center;
+  transition: bottom 0.4s var(--ease), left 1.4s steps(10);
+}
+.tv-foe-emoji {
+  font-size: 34px; line-height: 1;                 /* ~2× the familiar's size */
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7));
+}
+.tv-foe-token.hp-bloodied .tv-foe-emoji { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)) sepia(0.5) hue-rotate(-30deg) saturate(1.5); }
+.tv-foe-token.hp-critical .tv-foe-emoji { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)) sepia(0.7) hue-rotate(-45deg) saturate(2); }
+.tv-foe-token.down { opacity: 0.3; }
+.tv-foe-name {
+  font-family: var(--font-px); font-size: 9px;
+  color: var(--ink-dim); white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  margin-top: 2px;
+}
+/* active combatant steps forward (up) with a bobbing ▼; next up gets a faint one */
+.tv-foe-token.active-turn { bottom: 13%; }
+.tv-idle-actor.active-turn { bottom: 12%; }
+.tv-turn-mark {
+  position: absolute; bottom: 100%; left: 50%;
+  transform: translateX(-50%);
+  color: var(--frost); font-size: 10px;
+  animation: tvTurnBob 1s ease-in-out infinite;
+}
+.tv-idle-actor .tv-turn-mark { font-size: 4px; margin-bottom: 1px; } /* actor is scaled 3–4× */
+.next-turn .tv-turn-mark { opacity: 0.4; animation: none; }
+@keyframes tvTurnBob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-2px); } }
+.tv-realm-round {
+  position: absolute; top: 6px; right: 8px; z-index: 5;
+  font-family: var(--font-px); font-size: 10px;
+  color: var(--ink); background: rgba(13, 14, 34, 0.8);
+  border: 1px solid var(--border);
+  padding: 3px 7px; border-radius: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .tv-idle-actor, .tv-idle-critter, .tv-idle-cameo { transition: none; }
+  .tv-idle-actor, .tv-idle-critter, .tv-idle-cameo, .tv-foe-token { transition: none; }
   .tv-idle-cameo { display: none; }
   .tv-idle-bubble { animation: none; }
+  .tv-idle-actor.flinch .tv-idle-sprite { animation: none; }
+  .tv-turn-mark { animation: none; }
 }

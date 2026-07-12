@@ -19,7 +19,7 @@
 // ============================================================
 
 import { useEffect, useState } from 'preact/hooks';
-import { PlayerView, PvPc, PvAlly, HpState } from './projection';
+import { PlayerView, PvPc, PvAlly, PvCombatant, HpState, PokeActive } from './projection';
 import { sceneById, resolveScene, SCENES, TvScene } from './scenes';
 import actorsUrl from '../assets/idle/idle_actors.png';
 import critterUrl from '../assets/idle/idle_critter.png';
@@ -111,16 +111,39 @@ export function pickBubble(
 function homeX(i: number, n: number): number {
   return 12 + (76 / Math.max(1, n - 1 || 1)) * i;            // % across the stage
 }
+// In combat the party gathers in the left half, foes in the right — loose ranks.
+function combatX(i: number, n: number, lo: number, hi: number): number {
+  return lo + ((hi - lo) / Math.max(1, n - 1 || 1)) * i;
+}
+
+// Foe chatter — sparse and deterministic, same seeded feel as party bubbles.
+const FOE_BUBBLES = ['arrrg', 'grr', '!', '⚔️', '😤'];
+function pickFoeBubble(id: string, tick: number): string | null {
+  if ((hashStr(id) + tick) % 14 !== 0) return null;
+  return FOE_BUBBLES[(hashStr(id) + Math.floor(tick / 3)) % FOE_BUBBLES.length];
+}
 
 interface ActorRender {
   key: string; x: number; row: number; pose: Pose; frame: number;
   name: string; hp: number; maxHp: number; hpState: string; bubble: string | null;
+  flinch: boolean; active: boolean; next: boolean;
 }
 
-export function IdleStage({ v, full = false, pokeActive = null }: {
+interface FoeRender {
+  key: string; x: number; emoji: string; name: string; hpState: HpState;
+  down: boolean; active: boolean; next: boolean; bubble: string | null;
+}
+
+/** Does this poke reach the given PC? 'party'/'everyone' hit all PCs; a pcId hits one. */
+function pokeHitsPc(poke: PokeActive | null, pcId: string): boolean {
+  if (!poke) return false;
+  return poke.target === 'party' || poke.target === 'everyone' || poke.target === pcId;
+}
+
+export function RealmStage({ v, full = false, pokeActive = null }: {
   v: PlayerView;
   full?: boolean;
-  pokeActive?: { pcId: string; kind: 'wave' | 'cheer' } | null;
+  pokeActive?: PokeActive | null;
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -143,22 +166,55 @@ export function IdleStage({ v, full = false, pokeActive = null }: {
     wrath: v.weather.id === 'aurils_wrath',
   };
 
+  // Combat turns the diorama into ambience for the fight: party mills in the
+  // left half, foes are emoji tokens on the right. Not a VTT — just mood.
+  const inCombat = v.mode === 'combat' && !!v.combat;
+  const combatants: PvCombatant[] = inCombat ? v.combat!.combatants : [];
+  const foeCombatants = combatants.filter((c) => !c.friendly);
+  const activeCb = combatants.find((c) => c.active) ?? null;
+  const nextCb = combatants.find((c) => c.next) ?? null;
+  const activePcName = activeCb?.friendly ? activeCb.name : null;   // match party actors by name
+  const nextPcName = nextCb?.friendly ? nextCb.name : null;
+
   const behaviorTick = Math.floor(tick / 6);                  // new decisions every ~4s
   const actors: ActorRender[] = v.party.map((p, i) => {
     let pose = pickPose(p, i, behaviorTick, ctx);
-    if (pokeActive && !p.down && (pokeActive.pcId === '' || pokeActive.pcId === p.id)) {
-      pose = pokeActive.kind === 'cheer' ? 'cheer' : 'wave';
+    let flinch = false;
+    if (pokeActive && !p.down && pokeHitsPc(pokeActive, p.id)) {
+      if (pokeActive.kind === 'flinch') flinch = true;        // CSS shake, keeps its pose
+      else pose = pokeActive.kind === 'cheer' || pokeActive.kind === 'taunt' ? 'cheer' : 'wave';
     }
     const frames = POSE_FRAMES[pose];
     const drift = pose === 'walk' ? ((behaviorTick + i) % 2 ? 7 : -7) : 0;
+    const mingle = inCombat ? (i % 2 ? 3 : -3) : 0;           // mild ragged rank
     return {
       key: p.id,
-      x: homeX(i, v.party.length) + drift,
+      x: (inCombat ? combatX(i, v.party.length, 8, 42) + mingle : homeX(i, v.party.length)) + drift,
       row: archetypeRow(p.cls),
       pose,
       frame: frames[tick % frames.length],
       name: p.name, hp: p.hp, maxHp: p.maxHp, hpState: pcHpState(p),
       bubble: pickBubble(p, i, tick, ctx, pose),
+      flinch,
+      active: inCombat && !!activePcName && p.name === activePcName,
+      next: inCombat && !!nextPcName && p.name === nextPcName,
+    };
+  });
+
+  // Foes: emoji tokens, tinted by health, chattering now and then.
+  const foes: FoeRender[] = foeCombatants.map((c, i) => {
+    const down = c.hpState === 'down';
+    let bubble = down ? null : pickFoeBubble(c.id, tick);
+    if (!down && pokeActive && (pokeActive.target === 'foes' || pokeActive.target === 'everyone')
+      && (pokeActive.kind === 'taunt' || pokeActive.kind === 'cheer')) {
+      bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
+    }
+    const mingle = i % 2 ? -3 : 3;
+    return {
+      key: c.id,
+      x: combatX(i, foeCombatants.length, 58, 92) + mingle,
+      emoji: c.emoji, name: c.name, hpState: c.hpState, down,
+      active: c.active, next: c.next, bubble,
     };
   });
 
@@ -203,7 +259,12 @@ export function IdleStage({ v, full = false, pokeActive = null }: {
         />
       ))}
       {actors.map((a) => (
-        <div key={a.key} class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}`} style={{ left: `${a.x}%` }}>
+        <div
+          key={a.flinch ? `${a.key}-flinch-${pokeActive?.seq ?? 0}` : a.key}
+          class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
+          style={{ left: `${a.x}%` }}
+        >
+          {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
           {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
           {a.hpState !== 'healthy' && a.pose !== 'down' && (
             <span class="tv-idle-minihp"><span style={{ width: `${Math.max(4, (a.hp / Math.max(1, a.maxHp)) * 100)}%` }} /></span>
@@ -218,6 +279,20 @@ export function IdleStage({ v, full = false, pokeActive = null }: {
           <span class="tv-idle-name">{a.name}</span>
         </div>
       ))}
+      {foes.map((f) => (
+        <div
+          key={f.key}
+          class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
+          style={{ left: `${f.x}%` }}
+          title={f.name}
+        >
+          {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}
+          {f.bubble && <span class="tv-idle-bubble">{f.bubble}</span>}
+          <span class="tv-foe-emoji">{f.down ? '💀' : f.emoji}</span>
+          <span class="tv-foe-name">{f.name}</span>
+        </div>
+      ))}
+      {inCombat && <span class="tv-realm-round">Round {v.combat!.round}</span>}
     </div>
   );
 }

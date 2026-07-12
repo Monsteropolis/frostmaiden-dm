@@ -1,14 +1,26 @@
 import { useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { state, patch } from '../state/store';
 import {
   WEATHER, WEATHER_POOL, WeatherId, Arc, ArcStatus, TownStanding, defaultTownStatus,
   Quest, QuestStatus, Pace, Journey,
 } from '../state/schema';
 import { TOWNS, TOWN_DISTANCES } from '../data';
-import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
+import { Sheet, ConfirmBtn, Field, NumInput, Stepper } from '../components/ui';
 import { allNpcs, openNpc } from './npcs';
 
+// Which World sub-tab is showing — a signal so other screens (the header
+// weather sheet) can deep-link straight to Weather.
+export type WorldSub = 'towns' | 'quests' | 'arcs' | 'travel' | 'weather';
+export const worldSub = signal<WorldSub>('towns');
+
 // ---------------------------------------------------------------- weather
+
+// Short labels keep all six conditions on one row (Auril's Wrath truncates).
+const WX_SHORT: Record<WeatherId, string> = {
+  clear: 'Clear', overcast: 'Overcast', light_snow: 'Light snow',
+  heavy_snow: 'Heavy snow', blizzard: 'Blizzard', aurils_wrath: "Auril's",
+};
 
 export function WeatherControls() {
   const wx = state.value.weather;
@@ -21,13 +33,12 @@ export function WeatherControls() {
 
   return (
     <>
-        <div class="chip-row">
+        <div class="chip-row weather-chips">
           {order.map((id) => (
             <button
-              class="btn"
-              style={wx.current === id ? { borderColor: 'var(--frost)', color: 'var(--frost)' } : {}}
+              class={`cond-chip${wx.current === id ? ' on' : ''}`}
               onClick={() => setWeather(id)}
-            >{WEATHER[id].icon} {WEATHER[id].name}</button>
+            >{WEATHER[id].icon} {WX_SHORT[id]}</button>
           ))}
         </div>
         {WEATHER[wx.current].conSaveNote && (
@@ -61,12 +72,21 @@ function WeatherPanel() {
 
       <div class="card">
         <h3>Weather log</h3>
-        {[...state.value.weather.log].reverse().slice(0, 14).map((e) => (
-          <div class="seed-line">
-            <span class="n" style={{ fontSize: '14px' }}>D{e.day}</span>
-            <span class="lbl">{WEATHER[e.weather].icon} {WEATHER[e.weather].name}</span>
-          </div>
-        ))}
+        {state.value.weather.log
+          .map((e, i) => ({ e, i }))
+          .sort((a, b) => b.e.day - a.e.day)   // newest day first, consistently
+          .slice(0, 14)
+          .map(({ e, i }) => (
+            <div class="seed-line">
+              <span class="n" style={{ fontSize: '14px' }}>D{e.day}</span>
+              <span class="lbl">{WEATHER[e.weather].icon} {WEATHER[e.weather].name}</span>
+              <button
+                class="wx-log-del"
+                aria-label={`Delete day ${e.day} weather entry`}
+                onClick={() => patch((d) => { d.weather.log.splice(i, 1); })}
+              >✕</button>
+            </div>
+          ))}
       </div>
     </>
   );
@@ -474,24 +494,23 @@ function TravelPanel() {
 
       <div class="card">
         <h3>Supplies</h3>
-        <div class="supply-row">
-          <span class="field-label" style={{ margin: 0 }}>Rations</span>
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.rations = Math.max(0, d.travel.rations - 1); })}>−</button>
-          <span class={`supply-n${state.value.travel.rations < state.value.travel.partySize ? ' low' : ''}`}>{state.value.travel.rations}</span>
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.rations++; })}>+</button>
-          <span class="field-label" style={{ margin: '0 0 0 12px' }}>Party</span>
-          <NumInput w="60px" value={state.value.travel.partySize} min={1}
-            onInput={(n) => patch((d) => { d.travel.partySize = Math.max(1, n); })} />
-        </div>
-        <div class="supply-row">
-          <span class="field-label" style={{ margin: 0 }}>Gold 💰</span>
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold - 10); })}>−10</button>
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold - 1); })}>−</button>
-          <NumInput w="76px" value={state.value.travel.gold} min={0}
-            onInput={(n) => patch((d) => { d.travel.gold = Math.max(0, n); })} />
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold++; })}>+</button>
-          <button class="hp-btn" onClick={() => patch((d) => { d.travel.gold += 10; })}>+10</button>
-        </div>
+        <Stepper
+          label="Rations"
+          value={state.value.travel.rations}
+          low={state.value.travel.rations < state.value.travel.partySize}
+          onDelta={(dl) => patch((d) => { d.travel.rations = Math.max(0, d.travel.rations + dl); })}
+        />
+        <Stepper
+          label="Party"
+          value={state.value.travel.partySize}
+          onDelta={(dl) => patch((d) => { d.travel.partySize = Math.max(1, d.travel.partySize + dl); })}
+        />
+        <Stepper
+          label="Gold 💰"
+          value={state.value.travel.gold}
+          steps={[10, 1]}
+          onDelta={(dl) => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold + dl); })}
+        />
         <p class="stat-fine">Each travel day consumes one ration per party member automatically.
           {state.value.travel.rations < state.value.travel.partySize && ' ⚠ Not enough for another day — foraging (WIS/Survival) or going hungry (exhaustion) awaits.'}</p>
       </div>
@@ -533,7 +552,8 @@ function TravelPanel() {
 // ---------------------------------------------------------------- screen
 
 export function WorldScreen() {
-  const [sub, setSub] = useState<'towns' | 'quests' | 'arcs' | 'travel' | 'weather'>('towns');
+  const sub = worldSub.value;
+  const setSub = (v: WorldSub) => { worldSub.value = v; };
   const visited = Object.values(state.value.towns).filter((t) => t.visited).length;
   const activeQuests = state.value.quests.filter((q) => q.status === 'active' || q.status === 'escalating').length;
 

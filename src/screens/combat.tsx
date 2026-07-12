@@ -54,6 +54,7 @@ function sortCombatants(list: Combatant[]): Combatant[] {
 function applyHp(id: string, delta: number | 'set' | 'full', setVal = 0) {
   patch((s) => {
     const c = s.combat.combatants.find((x) => x.id === id); if (!c) return;
+    const before = c.hp;
     c.hp = delta === 'full' ? c.maxHp
       : delta === 'set' ? Math.max(0, Math.min(c.maxHp, setVal))
       : Math.max(0, Math.min(c.maxHp, c.hp + delta));
@@ -64,6 +65,10 @@ function applyHp(id: string, delta: number | 'set' | 'full', setVal = 0) {
     if (c.srcType === 'ally' && c.srcId) {
       const a = s.sidekicks.find((x) => x.id === c.srcId);
       if (a) { a.hp = Math.max(0, Math.min(a.maxHp, c.hp)); if (a.hp > 0) { a.deathS = 0; a.deathF = 0; } }
+    }
+    // A struck hero flinches on the Realm — the damage tap is the trigger.
+    if (c.hp < before && c.srcType === 'pc' && c.srcId) {
+      s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, target: c.srcId, kind: 'flinch' };
     }
   });
 }

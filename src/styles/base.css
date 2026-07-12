@@ -654,6 +654,20 @@ body { min-height: 100dvh; }
 }
 @keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+
+/* Centered-modal variant — tablets/desktop (≥768px) only; phones keep the sheet */
+@media (min-width: 768px) {
+  .sheet-scrim.center { align-items: center; }
+  .sheet-scrim.center .sheet {
+    max-width: 560px; max-height: 85vh;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 0 var(--frost-edge), 0 20px 60px rgba(0, 0, 0, 0.55);
+    animation: sheet-pop 0.24s var(--ease);
+  }
+  .sheet-scrim.center .sheet-grip { display: none; }
+}
+@keyframes sheet-pop { from { transform: scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
 .sheet-head { position: relative; padding: 18px 16px 10px; }
 .sheet-grip {
   position: absolute; top: 7px; left: 50%;
@@ -1127,6 +1141,23 @@ details.loc summary::marker { color: var(--frost-deep); }
 }
 
 /* Tappable weather strip */
+/* header weather sheet — display-only readout */
+.wx-readout { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.wx-readout-icon { font-size: 40px; color: var(--frost); line-height: 1; }
+.wx-readout-name { font-size: 20px; font-weight: 600; color: var(--ink); }
+.wx-readout-day { font-size: 13px; color: var(--ink-faint); }
+
+/* World ▸ Weather — condition chips compact enough for one row */
+.chip-row.weather-chips { flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+.chip-row.weather-chips .cond-chip { white-space: nowrap; flex: 0 0 auto; }
+
+/* weather log rows: deletable */
+.seed-line .wx-log-del {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--ink-faint); font-size: 14px; padding: 2px 6px; line-height: 1;
+}
+.seed-line .wx-log-del:active { color: var(--thread); }
+
 .weather-strip.tappable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .weather-strip.tappable:active { background: color-mix(in srgb, var(--surface) 80%, transparent); }
 
@@ -1193,6 +1224,24 @@ details.loc summary::marker { color: var(--frost-deep); }
 .supply-n { font-size: 22px; font-weight: 700; color: var(--silver); min-width: 44px; text-align: center; }
 .supply-n.low { color: var(--thread); }
 
+/* Stepper — one shared counter control (rations · party · gold) */
+.stepper { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.stepper-label { color: var(--ink-dim); font-size: 13.5px; min-width: 72px; }
+.stepper-ctl { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.stepper-btn {
+  min-width: 40px; height: 36px; padding: 0 8px;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font: inherit; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.stepper-btn:active { background: var(--surface); }
+.stepper-val {
+  min-width: 48px; text-align: center; padding: 0 4px;
+  font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.stepper-val.low { color: var(--thread); }
+
 /* === PHASE 7: PLAYER TV VIEW (DM-side pairing UI) === */
 .tv-btn {
   display: flex; align-items: center; gap: 6px;
@@ -1237,6 +1286,25 @@ details.loc summary::marker { color: var(--frost-deep); }
 .scene-thumb { width: 100%; aspect-ratio: 16/9; image-rendering: pixelated; border-radius: 4px; display: block; }
 .scene-auto { font-size: 24px; color: var(--frost); display: grid; place-items: center; aspect-ratio: 16/9; }
 .scene-name { font-size: 11px; color: var(--ink-dim); text-align: center; }
+
+/* === TV PANEL (restructured: header · display · layout · moments · scene) === */
+.tv-panel-header { margin-bottom: 12px; }
+.tv-header-row { display: flex; gap: 8px; align-items: stretch; }
+.tv-header-row .tv-code-input { flex: 1; min-width: 0; }
+.tv-header-row .btn { white-space: nowrap; align-self: stretch; }
+.tv-panel-header .tv-status-row { margin: 8px 0 4px; }   /* tighter than default */
+.chip-row.tight { gap: 6px; }
+/* Moments fire (one-shot), they don't select — set them apart from the radios. */
+.btn.moment { border-style: dashed; border-color: var(--border-strong); }
+.btn.moment:not(:disabled):active { background: var(--thread-deep); border-style: solid; }
+/* Auto is always visible; the category grid stays collapsed until tapped. */
+.scene-auto-tile {
+  display: block; width: 100%; text-align: left; font: inherit;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--ink-dim); cursor: pointer;
+}
+.scene-auto-tile.on { border-color: var(--frost); color: var(--ink); box-shadow: 0 0 8px var(--frost-glow); }
 
 /* rime tag on master item list rows */
 .cr.frosty-cr { color: var(--frost); border-color: var(--frost-deep); }
