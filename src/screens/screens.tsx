@@ -24,7 +24,7 @@ function SessionForm({ open, onClose, existing }: { open: boolean; onClose: () =
   };
 
   return (
-    <Sheet open={open} title={existing ? 'Edit session' : 'New session'} onClose={onClose}>
+    <Sheet open={open} center title={existing ? 'Edit session' : 'New session'} onClose={onClose}>
       <Field label="Title"><input class="input" placeholder="S4 — The road to Easthaven" value={f.title} onInput={txt('title')} /></Field>
       <div class="field-row">
         <Field label="Date (optional)"><input class="input" placeholder="Jul 9" value={f.date} onInput={txt('date')} /></Field>

@@ -34,7 +34,7 @@ patch((d) => {
   ];
   d.weather = { current: 'clear', day: 5, log: [{ day: 5, weather: 'clear' }] };
   d.travel = { activeJourney: null, log: [], rations: 8, partySize: 4, gold: 620 };
-  d.tv = { ...d.tv, sceneId: 'camp', partyLocation: 'Camp near Bryn Shander' };
+  d.tv = { ...d.tv, sceneId: 'camp', partyLocation: 'Camp near Bryn Shander', slotView: 'realm' };
   d.quests = [
     { id: 'sq1', name: 'The Cold-Hearted Killer', status: 'escalating', town: 'Bryn Shander', chapter: 1, mainHook: true, trigger: '', development: '', notes: '', custom: false },
     { id: 'sq2', name: 'Foaming Mugs', status: 'active', town: 'Bryn Shander', chapter: 1, mainHook: false, trigger: '', development: '', notes: '', custom: false },

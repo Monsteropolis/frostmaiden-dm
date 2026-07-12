@@ -46,6 +46,27 @@ const migrations: Record<number, Migration> = {
     }
     return { ...s, tv, version: 5 };
   },
+  // v5 → v6: "Idle" becomes "the Realm". slotView 'idle' → 'realm'; the poke
+  // gains a general `target` (old pcId '' meant the party); PCs gain DM notes.
+  5: (s) => {
+    const tv = { ...(s.tv as Record<string, unknown> ?? {}) };
+    if (tv.slotView === 'idle') tv.slotView = 'realm';
+    const poke = { ...(tv.poke as Record<string, unknown> ?? {}) };
+    if (!('target' in poke)) {
+      const pcId = typeof poke.pcId === 'string' ? poke.pcId : '';
+      poke.target = pcId === '' ? 'party' : pcId;
+    }
+    delete poke.pcId;
+    if (poke.kind !== 'wave' && poke.kind !== 'cheer' && poke.kind !== 'flinch' && poke.kind !== 'taunt') {
+      poke.kind = 'wave';
+    }
+    if (typeof poke.seq !== 'number') poke.seq = 0;
+    tv.poke = poke;
+    const party = ((s.party as Record<string, unknown>[]) ?? []).map((p) => ({
+      notes: '', ...p,
+    }));
+    return { ...s, tv, party, version: 6 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

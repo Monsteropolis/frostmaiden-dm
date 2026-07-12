@@ -11,7 +11,7 @@ import { Sheet } from './ui';
 import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
-import { projectPlayerView } from '../tv/projection';
+import { projectPlayerView, type PokeKind } from '../tv/projection';
 
 /** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
 export function parseYouTubeId(input: string): string | null {
@@ -40,7 +40,7 @@ export function tvPipClass(): string {
 export function TvPanel({ onClose }: { onClose: () => void }) {
   const saved = state.value.tv.lastRoomCode;
   const [code, setCode] = useState(saved);
-  const [catF, setCatF] = useState<SceneCat | 'all'>('all');
+  const [openCat, setOpenCat] = useState<SceneCat | null>(null);
   const [yt, setYt] = useState(state.value.tv.youtubeId);
   const [copied, setCopied] = useState<{ kb: string; withheld: number } | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
@@ -53,6 +53,10 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
     patch((d) => { d.tv.lastRoomCode = c; });
     startBroadcast(c);
   };
+
+  // Moments fire once — bump the poke seq and the TV plays the reaction.
+  const fireMoment = (target: string, kind: PokeKind) =>
+    patch((d) => { d.tv.poke = { seq: (d.tv.poke?.seq ?? 0) + 1, target, kind }; });
 
   // Copy the player-safe projection to the clipboard so the DM can paste it over
   // public/snapshot.json on GitHub. Everything goes through projectPlayerView —
@@ -70,73 +74,102 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet open title="Player TV View" onClose={onClose}>
-      <p class="tv-help">
-        Open <strong>tv.html</strong> on the TV browser — it shows a room code.
-        Enter it here and everything player-safe mirrors live: party HP,
-        initiative, weather, active quests. Secrets stay on this phone.
-      </p>
-
-      <div class="field">
-        <label>Room code (shown on the TV)</label>
-        <input
-          class="input tv-code-input"
-          value={code}
-          placeholder="e.g. FRK4Q7"
-          maxLength={8}
-          onInput={(e) => setCode(normalizeRoomCode((e.target as HTMLInputElement).value))}
-        />
+      {/* 1 — header: code + status + connect, pinned at the top */}
+      <div class="tv-panel-header">
+        <div class="tv-header-row">
+          <input
+            class="input tv-code-input"
+            value={code}
+            placeholder="Room code"
+            maxLength={8}
+            onInput={(e) => setCode(normalizeRoomCode((e.target as HTMLInputElement).value))}
+          />
+          {!live
+            ? <button class="btn primary" disabled={normalizeRoomCode(code).length < 4} onClick={connect}>Connect to TV</button>
+            : <button class="btn" onClick={stopBroadcast}>Disconnect</button>}
+        </div>
+        <div class="tv-status-row">
+          <span class={tvPipClass()} aria-hidden="true" />
+          <span>{STATUS_LABEL[status] ?? status}</span>
+          {tvStatusDetail.value && <span class="tv-status-detail">{tvStatusDetail.value}</span>}
+        </div>
+        <p class="tv-help">Open <strong>tv.html</strong> on the TV — it shows the code. Everything player-safe mirrors live; secrets stay on this phone.</p>
       </div>
 
-      <div class="tv-status-row">
-        <span class={tvPipClass()} aria-hidden="true" />
-        <span>{STATUS_LABEL[status] ?? status}</span>
-        {tvStatusDetail.value && <span class="tv-status-detail">{tvStatusDetail.value}</span>}
-      </div>
-
+      {/* 2 — display */}
       <div class="field">
-        <label>Scene slot — what fills the big space on the TV</label>
-        <div class="chip-row" style={{ margin: '4px 0 10px' }}>
-          {(['scene', 'idle', 'video'] as const).map((sv) => (
+        <label>Display — what fills the big space on the TV</label>
+        <div class="chip-row tight">
+          {(['scene', 'realm', 'video'] as const).map((sv) => (
             <button
               key={sv}
               class={`cond-chip${state.value.tv.slotView === sv ? ' on' : ''}`}
               disabled={sv === 'video' && !state.value.tv.youtubeId}
               onClick={() => patch((d) => { d.tv.slotView = sv; })}
-            >{sv === 'scene' ? '🖼 Scene art' : sv === 'idle' ? '⛺ Idle party' : '📺 Video'}</button>
-          ))}
-          <button
-            class={`cond-chip${state.value.tv.idleFull ? ' on' : ''}`}
-            onClick={() => patch((d) => { d.tv.idleFull = !d.tv.idleFull; })}
-          >⛶ Idle fullscreen</button>
-          <button class="cond-chip" onClick={() => patch((d) => { d.tv.poke = { seq: (d.tv.poke?.seq ?? 0) + 1, pcId: '', kind: 'cheer' }; })}>🎉 Celebrate!</button>
-        </div>
-        <p class="stat-fine">Idle party: your PCs mill about in the pixel scene, reacting to HP, weather, rations, and the place they're in. Fullscreen takes over the whole exploration view. 🎉 makes everyone cheer once.</p>
-        <label style={{ marginTop: '10px' }}>Scene art</label>
-        <div class="chip-row" style={{ margin: '4px 0 8px' }}>
-          <button class={`cond-chip${catF === 'all' ? ' on' : ''}`} onClick={() => setCatF('all')}>All</button>
-          {SCENE_CATS.map((c) => (
-            <button key={c.id} class={`cond-chip${catF === c.id ? ' on' : ''}`} onClick={() => setCatF(c.id)}>{c.label}</button>
+            >{sv === 'scene' ? '🖼 Scene art' : sv === 'realm' ? '⛺ The Realm' : '📺 Video'}</button>
           ))}
         </div>
-        <div class="scene-grid">
-          <button
-            class={`scene-pick${state.value.tv.sceneId === 'auto' ? ' on' : ''}`}
-            onClick={() => patch((d) => { d.tv.sceneId = 'auto'; })}
-          ><span class="scene-auto">✦</span><span class="scene-name">Auto</span></button>
-          {SCENES.filter((sc) => catF === 'all' || sc.cat === catF).map((sc) => (
-            <button
-              key={sc.id}
-              class={`scene-pick${state.value.tv.sceneId === sc.id ? ' on' : ''}`}
-              onClick={() => patch((d) => { d.tv.sceneId = sc.id; })}
-            >
-              <img src={sc.url} alt="" class="scene-thumb" />
-              <span class="scene-name">{sc.name}</span>
-            </button>
-          ))}
-        </div>
-        <p class="stat-fine">Auto picks a pixel mood from weather and travel. Module art (locations, maps, monsters, NPCs) is always your deliberate choice.</p>
       </div>
 
+      {/* 3 — layout (only meaningful for the Realm) */}
+      <div class="field">
+        <label>Layout</label>
+        <div class="chip-row tight">
+          {([['▭ Inset', false], ['⛶ Fullscreen', true]] as const).map(([lbl, full]) => (
+            <button
+              key={lbl}
+              class={`cond-chip${state.value.tv.idleFull === full ? ' on' : ''}`}
+              disabled={state.value.tv.slotView !== 'realm'}
+              onClick={() => patch((d) => { d.tv.idleFull = full; })}
+            >{lbl}</button>
+          ))}
+        </div>
+        <p class="stat-fine">The Realm: your party mills about the scene, reacting to HP, weather, and the fight. Fullscreen takes over the whole exploration view.</p>
+      </div>
+
+      {/* 4 — moments: one-shots that fire, distinct from the radios above */}
+      <div class="field">
+        <label>Moments — fire a one-shot reaction on the Realm</label>
+        <div class="chip-row tight">
+          <button class="btn moment" onClick={() => fireMoment('party', 'cheer')}>🎉 Party cheer</button>
+          <button class="btn moment" onClick={() => fireMoment('party', 'wave')}>👋 Wave</button>
+          <button class="btn moment" disabled={!state.value.combat.active} onClick={() => fireMoment('foes', 'taunt')}>😈 Foes taunt</button>
+        </div>
+      </div>
+
+      {/* 5 — scene art: collapsed. Auto is pinned; a category opens its grid. */}
+      <div class="field">
+        <label>Scene art</label>
+        <button
+          class={`scene-auto-tile${state.value.tv.sceneId === 'auto' ? ' on' : ''}`}
+          onClick={() => patch((d) => { d.tv.sceneId = 'auto'; })}
+        >✨ Auto — follows the weather and your journey</button>
+        <div class="chip-row tight" style={{ marginTop: '8px' }}>
+          {SCENE_CATS.map((c) => (
+            <button
+              key={c.id}
+              class={`cond-chip${openCat === c.id ? ' on' : ''}`}
+              onClick={() => setOpenCat(openCat === c.id ? null : c.id)}
+            >{c.label}</button>
+          ))}
+        </div>
+        {openCat && (
+          <div class="scene-grid">
+            {SCENES.filter((sc) => sc.cat === openCat).map((sc) => (
+              <button
+                key={sc.id}
+                class={`scene-pick${state.value.tv.sceneId === sc.id ? ' on' : ''}`}
+                onClick={() => patch((d) => { d.tv.sceneId = sc.id; })}
+              >
+                <img src={sc.url} alt="" class="scene-thumb" />
+                <span class="scene-name">{sc.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 6 — ambience */}
       <div class="field">
         <label>Ambience — YouTube on the TV (lofi, tavern noise, storm howl…)</label>
         <div class="supply-row" style={{ gap: '8px' }}>
@@ -152,23 +185,17 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             if (id) patch((d) => { d.tv.youtubeId = id; });
           }}>Play</button>
           {state.value.tv.youtubeId && (
-            <button class="btn" onClick={() => patch((d) => { d.tv.slotView = d.tv.slotView === 'video' ? 'scene' : 'video'; })}>
-              {state.value.tv.slotView === 'video' ? '🖼 Show scene' : '📺 Show video'}
-            </button>
-          )}
-          {state.value.tv.youtubeId && (
             <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; if (d.tv.slotView === 'video') d.tv.slotView = 'scene'; }); }}>Stop</button>
           )}
         </div>
         <p class="stat-fine">
           {state.value.tv.youtubeId
-            ? state.value.tv.slotView === 'video'
-              ? `Video is on the TV screen (${state.value.tv.youtubeId}). It starts muted — one click on the TV player unmutes.`
-              : `Playing in the background (${state.value.tv.youtubeId}) — the scene stays on screen. Toggle to show the video.`
-            : 'The player shares the scene slot on the TV: show it for visuals, hide it to keep music playing under the scene art.'}
+            ? `Loaded (${state.value.tv.youtubeId}). Choose 📺 Video above to show it, or leave it under the scene as audio. Starts muted — tap the 🔊 pill on the TV once to enable sound.`
+            : 'Paste a link, then choose 📺 Video to show it — or keep it playing as audio under the scene art.'}
         </p>
       </div>
 
+      {/* 7 — publish (unchanged) */}
       <div class="field">
         <label>Publish to the Realm — a snapshot players open on their own phones</label>
         <div class="supply-row" style={{ gap: '8px' }}>
@@ -192,17 +219,6 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
         )}
         {!copied && (
           <p class="stat-fine">Copies the same player-safe view the TV receives — dormant quests, monster stats and DM prep stay on this phone. Paste it into <code>public/snapshot.json</code> and commit to publish.</p>
-        )}
-      </div>
-
-      <div class="tv-actions">
-        {!live && (
-          <button class="btn primary" disabled={normalizeRoomCode(code).length < 4} onClick={connect}>
-            Connect to TV
-          </button>
-        )}
-        {live && (
-          <button class="btn" onClick={stopBroadcast}>Disconnect</button>
         )}
       </div>
     </Sheet>

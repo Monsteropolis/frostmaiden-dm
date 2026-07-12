@@ -61,8 +61,11 @@ function PcCard({ pc }: { pc: PC }) {
   const [editing, setEditing] = useState(false);
   const mod = (n: number, d: PC) => patch((s) => {
     const p = s.party.find((x) => x.id === d.id); if (!p) return;
+    const before = p.hp;
     p.hp = Math.max(0, Math.min(p.maxHp, p.hp + n));
     if (p.hp > 0) { p.deathS = 0; p.deathF = 0; }
+    // A hit is its own trigger — the Realm flinches the struck hero, no button.
+    if (p.hp < before) s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, target: p.id, kind: 'flinch' };
   });
 
   return (
@@ -81,7 +84,7 @@ function PcCard({ pc }: { pc: PC }) {
               class="inspo wave-btn"
               aria-label={`Make ${pc.name} wave on the TV`}
               title="Wave on the TV"
-              onClick={(e) => { e.stopPropagation(); patch((s) => { s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, pcId: pc.id, kind: 'wave' }; }); }}
+              onClick={(e) => { e.stopPropagation(); patch((s) => { s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, target: pc.id, kind: 'wave' }; }); }}
             >👋</button>
           </div>
           <div class="unit-meta">{pc.race} {pc.cls} {pc.level} <span class="sep">·</span> AC {pc.ac} <span class="sep">·</span> PP {pc.pp}</div>
@@ -99,7 +102,6 @@ function PcCard({ pc }: { pc: PC }) {
           <div class="hp-quick">
             <button class="btn" onClick={() => mod(-5, pc)}>−5</button>
             <button class="btn" onClick={() => mod(+5, pc)}>+5</button>
-            <NumInput w="76px" value={pc.hp} onInput={(n) => patch((s) => { const p = s.party.find((x) => x.id === pc.id); if (p) p.hp = Math.max(0, Math.min(p.maxHp, n)); })} />
             <button class="btn" onClick={() => patch((s) => { const p = s.party.find((x) => x.id === pc.id); if (p) { p.hp = p.maxHp; p.deathS = 0; p.deathF = 0; } })}>Full</button>
           </div>
 
@@ -129,6 +131,17 @@ function PcCard({ pc }: { pc: PC }) {
             })}
           />
 
+          <label class="field" style={{ marginTop: '10px' }}>
+            <span class="field-label">Notes (DM only)</span>
+            <textarea
+              class="input"
+              rows={2}
+              placeholder="Private — stays on your phone, never sent to players."
+              value={pc.notes}
+              onInput={(e) => patch((s) => { const p = s.party.find((x) => x.id === pc.id); if (p) p.notes = (e.target as HTMLTextAreaElement).value; })}
+            />
+          </label>
+
           <div class="row-actions">
             <button class="btn ghost" onClick={() => setEditing(true)}>Edit</button>
             <ConfirmBtn label="Remove" confirmLabel="Remove?" class="ghost danger"
@@ -147,7 +160,7 @@ function PcCard({ pc }: { pc: PC }) {
 function PcForm({ open, onClose, existing }: { open: boolean; onClose: () => void; existing?: PC }) {
   const blank: PC = existing ?? {
     id: '', name: '', cls: '', level: 1, race: '', hp: 10, maxHp: 10,
-    ac: 12, pp: 10, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0,
+    ac: 12, pp: 10, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0, notes: '',
   };
   const [f, setF] = useState<PC>(blank);
   const set = (k: keyof PC, v: unknown) => setF((prev) => ({ ...prev, [k]: v } as PC));

@@ -15,11 +15,17 @@
 // ============================================================
 
 import {
-  AppState, Combatant, WEATHER, WeatherId, QuestStatus,
+  AppState, Combatant, WEATHER, WeatherId, QuestStatus, Poke, PokeKind,
 } from '../state/schema';
 import { resolveScene } from './scenes';
 
 export const PV_VERSION = 2;
+
+export type { Poke, PokeKind } from '../state/schema';
+
+/** The transient reaction the TV plays for ~2.6s when a poke fires. `seq`
+ *  lets the stage re-key an actor so a repeated reaction replays. */
+export type PokeActive = { seq: number; target: string; kind: PokeKind };
 
 export type HpState = 'healthy' | 'bloodied' | 'critical' | 'down';
 
@@ -109,9 +115,9 @@ export interface PlayerView {
   youtubeId: string;
   /** true → player fills the scene slot; false → audio-only */
   mediaVisible: boolean;
-  slotView: 'scene' | 'idle' | 'video';
+  slotView: 'scene' | 'realm' | 'video';
   idleFull: boolean;
-  poke: { seq: number; pcId: string; kind: 'wave' | 'cheer' };
+  poke: Poke;
   party: PvPc[];
   allies: PvAlly[];
   combat: { round: number; combatants: PvCombatant[] } | null;
@@ -191,7 +197,7 @@ export function projectPlayerView(s: AppState): PlayerView {
     mediaVisible: (s.tv?.slotView ?? 'scene') === 'video',
     slotView: s.tv?.slotView ?? 'scene',
     idleFull: s.tv?.idleFull ?? false,
-    poke: s.tv?.poke ?? { seq: 0, pcId: '', kind: 'wave' },
+    poke: s.tv?.poke ?? { seq: 0, target: 'party', kind: 'wave' },
 
     party: s.party.map((p) => ({
       id: p.id, name: p.name, cls: p.cls,
