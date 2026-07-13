@@ -605,6 +605,37 @@ body { min-height: 100dvh; }
 .diff-tag.easy, .diff-tag.trivial { color: var(--frost); border-color: var(--frost-deep); }
 .diff-tag.medium { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .diff-tag.hard, .diff-tag.deadly { color: var(--thread); border-color: var(--thread-deep); }
+
+/* === WORLD ▸ ENCOUNTERS === */
+.enc-confirm {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; margin-bottom: 10px;
+  background: color-mix(in srgb, var(--ok) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--border));
+  border-radius: var(--radius-sm);
+  font-size: 13.5px; color: var(--ink);
+}
+.enc-cat { font-family: var(--font-ui); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin: 12px 0 6px; }
+.enc-table-head { display: flex; align-items: center; }
+.enc-table-head h3 { margin: 0; }
+.enc-rows { display: flex; flex-direction: column; margin-top: 6px; }
+.enc-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 4px; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.enc-row:last-child { border-bottom: 0; }
+.enc-row-icon { flex: 0 0 16px; text-align: center; color: var(--ink-dim); }
+.enc-row-range { flex: 0 0 36px; color: var(--ink-faint); font-variant-numeric: tabular-nums; font-size: 12px; }
+.enc-row-text { flex: 1; color: var(--ink-dim); line-height: 1.35; }
+.enc-row-btn { flex: 0 0 auto; }
+.enc-row.rolled { background: var(--frost-glow); border-radius: 6px; animation: encRolled 1.2s var(--ease); }
+@keyframes encRolled { 0% { background: var(--frost); } 100% { background: var(--frost-glow); } }
+.enc-preset-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.enc-preset-name { font-weight: 600; color: var(--ink); }
+.enc-preset .btn.mini { margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .enc-row.rolled { animation: none; } }
 .mini-chip { font-size: 11px; padding: 3px 9px; min-height: 0; }
 
 /* Creature picker */

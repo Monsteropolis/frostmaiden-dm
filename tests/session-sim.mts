@@ -985,5 +985,29 @@ console.log('\n═══ SCENE 27: The idle diorama — tamagotchi party ══�
   });
 }
 
+console.log('\n═══ SCENE 27: World ▸ Encounters — tables & prebuilt → initiative ═══');
+{
+  const { patch } = await import('../src/state/store.ts');
+  click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
+  click(byText('.sub-tab', 'Encounters'), 'Encounters sub-tab'); await sleep(30);
+  check('rollable tables render', bodyHas('Wilderness Travel') && bodyHas('Rollable tables'));
+  check('combat rows carry a Send button', $$('.enc-row .btn.primary').length > 0);
+  check('prebuilt encounters present', bodyHas('Prebuilt encounters') && bodyHas('Bandit Ambush'));
+
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+  await sleep(10);
+  const before = state.value.combat.combatants.length;
+  click($('.enc-row .btn.primary'), 'send a table combat row'); await sleep(20);
+  check('send-to-initiative pushes combatants', state.value.combat.combatants.length > before);
+  check('confirmation offers Open Combat jump', bodyHas('to initiative') && !!byText('.enc-confirm .btn', 'Open Combat ▸'));
+
+  const cntBefore = state.value.combat.combatants.length;
+  const banditSend = $$('.enc-preset').find((c) => (c.textContent ?? '').includes('Bandit Ambush'))?.querySelector('.btn.primary') as HTMLElement | undefined;
+  if (banditSend) { banditSend.click(); await sleep(20); } else check('Bandit Ambush send button', false, 'not found');
+  check('prebuilt resolves multiple combatants', state.value.combat.combatants.length - cntBefore >= 5);
+  check('multi-count names are auto-numbered', state.value.combat.combatants.some((c) => /Bandit 2/.test(c.name)));
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+}
+
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

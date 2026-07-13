@@ -8,10 +8,11 @@ import {
 import { TOWNS, TOWN_DISTANCES } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput, Stepper } from '../components/ui';
 import { allNpcs, openNpc } from './npcs';
+import { EncountersPanel } from './encounters';
 
 // Which World sub-tab is showing — a signal so other screens (the header
 // weather sheet) can deep-link straight to Weather.
-export type WorldSub = 'towns' | 'quests' | 'arcs' | 'travel' | 'weather';
+export type WorldSub = 'towns' | 'quests' | 'arcs' | 'travel' | 'weather' | 'encounters';
 export const worldSub = signal<WorldSub>('towns');
 
 // ---------------------------------------------------------------- weather
@@ -582,6 +583,7 @@ export function WorldScreen() {
         <button class={`sub-tab${sub === 'arcs' ? ' active' : ''}`} onClick={() => setSub('arcs')}>Arcs ({state.value.arcs.length})</button>
         <button class={`sub-tab${sub === 'travel' ? ' active' : ''}`} onClick={() => setSub('travel')}>Travel</button>
         <button class={`sub-tab${sub === 'weather' ? ' active' : ''}`} onClick={() => setSub('weather')}>Weather</button>
+        <button class={`sub-tab${sub === 'encounters' ? ' active' : ''}`} onClick={() => setSub('encounters')}>Encounters</button>
       </div>
 
       {sub === 'weather' && <WeatherPanel />}
@@ -589,6 +591,7 @@ export function WorldScreen() {
       {sub === 'quests' && <QuestsPanel />}
       {sub === 'arcs' && <ArcsPanel />}
       {sub === 'travel' && <TravelPanel />}
+      {sub === 'encounters' && <EncountersPanel />}
     </div>
   );
 }
