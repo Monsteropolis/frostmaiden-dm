@@ -695,7 +695,7 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
   check('all four art categories present', (['location', 'map', 'monster', 'npc'] as const)
     .every((c) => SCENES.some((s) => s.cat === c)));
   check('scene cat filter list matches', SCENE_CATS.length === 5);
-  check('36 art pieces + 10 pixel scenes', SCENES.length === 46, `${SCENES.length}`);
+  check('36 art pieces + 12 pixel scenes (incl. 2 glacial 384×216)', SCENES.length === 48, `${SCENES.length}`);
   check('maps include all Ten-Towns art', ['map-bremen', 'map-bryn-shander', 'map-targos', 'map-easthaven'].every((id) => !!sceneById(id)));
   check('art has real urls', SCENES.every((s) => s.url.length > 0));
 
@@ -1007,6 +1007,41 @@ console.log('\n═══ SCENE 27: World ▸ Encounters — tables & prebuilt �
   check('prebuilt resolves multiple combatants', state.value.combat.combatants.length - cntBefore >= 5);
   check('multi-count names are auto-numbered', state.value.combat.combatants.some((c) => /Bandit 2/.test(c.name)));
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
+}
+
+console.log('\n═══ SCENE 28: Wave 3 — the 384×216 stage, sprite actors, matched foes ═══');
+{
+  const { render: rts } = await import('preact-render-to-string');
+  const { RealmStage } = await import('../src/tv/realm-stage.tsx');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { patch } = await import('../src/state/store.ts');
+
+  // fixture: one descriptor PC, one atlas PC, one matched foe, one emoji foe
+  patch((d) => {
+    d.party = [
+      { id: 'wpc1', name: 'Sprity', cls: 'Fighter', level: 3, race: 'Human', hp: 20, maxHp: 20, ac: 15, pp: 12, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0, notes: '', sprite: 'soldier' },
+      { id: 'wpc2', name: 'Atlas', cls: 'Wizard', level: 3, race: 'Elf', hp: 18, maxHp: 18, ac: 12, pp: 12, initMod: 1, conditions: [], inspiration: false, deathS: 0, deathF: 0, notes: '' },
+    ];
+    d.sidekicks = [];
+    d.combat = {
+      active: true, round: 2, turn: 0,
+      combatants: [
+        { id: 'wf1', name: 'Winter Wolf', emoji: '🐺', hp: 40, maxHp: 40, ac: 13, init: 12, initMod: 1, conditions: [], srcType: 'monster', srcId: 'winter_wolf' },
+        { id: 'wf2', name: 'Frost Druid', emoji: '🌲', hp: 30, maxHp: 30, ac: 11, init: 8, initMod: 0, conditions: [], srcType: 'monster', srcId: 'frost_druid' },
+      ],
+    };
+    d.tv.slotView = 'realm';
+  });
+  const pv = projectPlayerView(state.value);
+  check('projection carries PC sprite id', pv.party[0].sprite === 'soldier' && pv.party[1].sprite === undefined);
+  const html = rts(h(RealmStage, { v: pv }));
+  check('stage canvas present (384×216)', html.includes('tv-realm-canvas') && /width:\s*384px/.test(html) && /height:\s*216px/.test(html));
+  check('descriptor PC renders as sprite actor', html.includes('realm-sprite-actor') && html.includes('Sprity'));
+  check('atlas PC still renders the classic way', html.includes('tv-idle-actor') && html.includes('Atlas'));
+  check('matched foe renders as sprite (wolf)', (html.match(/realm-sprite-actor/g) ?? []).length >= 2 && html.includes('Winter Wolf'));
+  check('unmatched foe stays an emoji token', html.includes('tv-foe-token') && html.includes('Frost Druid'));
+  check('CSS steps animation attached', html.includes('realmSpriteRun') && html.includes('steps('));
+  patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; d.tv.slotView = 'scene'; });
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

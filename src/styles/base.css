@@ -606,6 +606,23 @@ body { min-height: 100dvh; }
 .diff-tag.medium { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .diff-tag.hard, .diff-tag.deadly { color: var(--thread); border-color: var(--thread-deep); }
 
+/* === REALM SPRITE PICKER (character/ally editors) === */
+.sprite-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
+.sprite-pick {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 8px; min-width: 60px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+.sprite-pick.on { border-color: var(--frost); box-shadow: 0 0 8px var(--frost-glow); }
+.sprite-pick-thumb { display: block; background-color: var(--panel); border-radius: 4px; }
+.sprite-pick-default {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  font-size: 20px; color: var(--frost);
+  background: var(--panel); border-radius: 4px;
+}
+.sprite-pick-name { font-size: 11px; color: var(--ink-dim); }
+
 /* === MAP PICKER (World ▸ Travel) === */
 .mp-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .mp-scroll { overflow: auto; max-height: 46vh; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }

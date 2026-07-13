@@ -7,6 +7,48 @@ import { CREATURES } from '../data';
 import { allNpcs, openNpc } from './npcs';
 import { Sheet, ConfirmBtn, Field, NumInput, CondEditor } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
+import { ACTOR_SPRITES, ActorSprite } from '../data/actor-sprites';
+
+// ---------------------------------------------------------------- sprite picker
+
+/** Idle frame 0, zoomed so the (measured) character fills the thumb box. */
+function spriteThumbStyle(a: ActorSprite, size = 44): Record<string, string> {
+  const idle = a.anims.idle;
+  if (!idle) return {};
+  const z = (0.72 * size) / a.contentH;
+  return {
+    width: `${size}px`, height: `${size}px`,
+    backgroundImage: `url(${idle.file})`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: `${idle.frames * a.frameW * z}px auto`,
+    backgroundPosition: `${size / 2 - (a.frameW * z) / 2}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
+    imageRendering: 'pixelated',
+  };
+}
+
+/** "Who wears which sprite" — descriptor thumbnails + Default (classic look). */
+export function SpritePicker({ value, onPick }: { value?: string; onPick: (id?: string) => void }) {
+  return (
+    <div class="sprite-picker">
+      <button
+        class={`sprite-pick${!value ? ' on' : ''}`}
+        onClick={() => onPick(undefined)}
+        title="Classic atlas / emoji look"
+      ><span class="sprite-pick-default">✦</span><span class="sprite-pick-name">Default</span></button>
+      {ACTOR_SPRITES.map((a) => (
+        <button
+          key={a.id}
+          class={`sprite-pick${value === a.id ? ' on' : ''}`}
+          onClick={() => onPick(a.id)}
+          title={a.label}
+        >
+          <span class="sprite-pick-thumb" style={spriteThumbStyle(a)} />
+          <span class="sprite-pick-name">{a.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- helpers
 
@@ -173,6 +215,8 @@ function PcForm({ open, onClose, existing }: { open: boolean; onClose: () => voi
         <Field label="Level"><NumInput value={f.level} min={1} max={20} onInput={(n) => set('level', n)} /></Field>
       </div>
       <Field label="Race / lineage"><input class="input" value={f.race} onInput={(e) => set('race', (e.target as HTMLInputElement).value)} /></Field>
+      <div class="field-label">Realm sprite — how they appear on the TV &amp; Realm</div>
+      <SpritePicker value={f.sprite} onPick={(id) => set('sprite', id)} />
       <div class="field-row">
         <Field label="Max HP"><NumInput value={f.maxHp} min={1} onInput={(n) => set('maxHp', n)} /></Field>
         <Field label="AC"><NumInput value={f.ac} onInput={(n) => set('ac', n)} /></Field>
@@ -325,6 +369,8 @@ function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: bo
         <Field label="Kind (e.g. Wolf, Goliath scout)"><input class="input" value={f.kind} onInput={(e) => set('kind', (e.target as HTMLInputElement).value)} /></Field>
         <Field label="Level"><NumInput value={f.level} min={0} onInput={(n) => set('level', n)} /></Field>
       </div>
+      <div class="field-label">Realm sprite — how they appear on the TV &amp; Realm</div>
+      <SpritePicker value={f.sprite} onPick={(id) => set('sprite', id)} />
       {(f.category ?? 'sidekick') === 'sidekick' && (
         <>
           <div class="field-label">Sidekick class (Tasha's)</div>

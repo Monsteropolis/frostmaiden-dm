@@ -67,8 +67,10 @@ const ALLOW = new Set<string>([
   'poke.seq', 'poke.target', 'poke.kind',
   'party[].id', 'party[].name', 'party[].cls', 'party[].hp', 'party[].maxHp',
   'party[].conditions[]', 'party[].inspiration', 'party[].deathS', 'party[].deathF', 'party[].down',
+  'party[].sprite',   // Wave 3 — cosmetic actor-sprite id, deliberately allowed
   'allies[].id', 'allies[].name', 'allies[].emoji', 'allies[].hpState',
   'allies[].conditions[]', 'allies[].linkedPcId', 'allies[].down', 'allies[].deathS', 'allies[].deathF',
+  'allies[].sprite',  // Wave 3 — cosmetic actor-sprite id, deliberately allowed
   'combat', // null out of combat
   'combat.round',
   'combat.combatants[].id', 'combat.combatants[].name', 'combat.combatants[].emoji',
