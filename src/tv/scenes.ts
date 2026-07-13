@@ -18,6 +18,9 @@ import cave from '../assets/scenes/cave.png';
 import forge from '../assets/scenes/forge.png';
 import aurora from '../assets/scenes/aurora.png';
 import blizzard from '../assets/scenes/blizzard.png';
+// native 384×216 stage scenes (Wave 3 intake) — render 1:1 on the Realm canvas
+import glacial from '../assets/scenes-realm/glacial_mountains.png';
+import glacialLight from '../assets/scenes-realm/glacial_mountains_light.png';
 import camp from '../assets/scenes/camp.png';
 import peak from '../assets/scenes/peak.png';
 
@@ -89,6 +92,8 @@ export const SCENES: TvScene[] = [
   { id: 'forge', name: 'The forge', url: forge, cat: 'pixel' },
   { id: 'aurora', name: 'Aurora', url: aurora, cat: 'pixel' },
   { id: 'blizzard', name: 'Blizzard', url: blizzard, cat: 'pixel' },
+  { id: 'glacial', name: 'Glacial peaks', url: glacial, cat: 'pixel' },
+  { id: 'glacial-light', name: 'Glacial dawn', url: glacialLight, cat: 'pixel' },
 
   // locations — mood-setting module art
   { id: 'loc-the-caer', name: 'The Caer', url: locTheCaer, cat: 'location' },

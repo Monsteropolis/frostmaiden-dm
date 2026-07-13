@@ -47,6 +47,8 @@ export interface PvPc {
   deathS: number;
   deathF: number;
   down: boolean;
+  /** actor sprite descriptor id — cosmetic passthrough (deliberate seam addition, Wave 3) */
+  sprite?: string;
 }
 
 export interface PvAlly {
@@ -60,6 +62,8 @@ export interface PvAlly {
   down: boolean;
   deathS: number;
   deathF: number;
+  /** actor sprite descriptor id — cosmetic passthrough (deliberate seam addition, Wave 3) */
+  sprite?: string;
 }
 
 export interface PvCombatant {
@@ -206,6 +210,7 @@ export function projectPlayerView(s: AppState): PlayerView {
       inspiration: p.inspiration,
       deathS: p.deathS, deathF: p.deathF,
       down: p.hp <= 0,
+      sprite: p.sprite,
     })),
 
     allies: s.sidekicks.map((a) => ({
@@ -216,6 +221,7 @@ export function projectPlayerView(s: AppState): PlayerView {
       down: a.hp <= 0,
       deathS: a.deathS ?? 0,
       deathF: a.deathF ?? 0,
+      sprite: a.sprite,
     })),
 
     combat: inCombat

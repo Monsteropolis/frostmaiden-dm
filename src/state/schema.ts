@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -78,6 +78,8 @@ export interface PC {
   deathS: number;     // death save successes (0–3)
   deathF: number;     // failures (0–3)
   notes: string;      // DM-only scratch — NEVER projected to players (see seam tests)
+  /** Actor sprite descriptor id (data/actor-sprites.ts); undefined = classic atlas. */
+  sprite?: string;
 }
 
 export interface AllyAttack { name: string; bonus: number; damage: string; }
@@ -108,6 +110,8 @@ export interface Ally {
   deathF: number;
   location: string;
   notes: string;
+  /** Actor sprite descriptor id (data/actor-sprites.ts); undefined = critter/emoji. */
+  sprite?: string;
 }
 
 export type CombatantSrc = 'pc' | 'ally' | 'monster' | 'custom' | 'api' | 'custommon';
@@ -261,6 +265,9 @@ export interface Chapter {
   done: boolean;              // manual "Complete chapter" flag
 }
 
+/** A DM-dropped pin on the region map (native 1353×954 px coords). */
+export interface MapPin { id: string; name: string; x: number; y: number; kind: 'custom' }
+
 export type Pace = 'cautious' | 'normal' | 'dogsled';
 
 export interface Journey {
@@ -328,6 +335,9 @@ export interface AppState {
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
   travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number; gold: number };
   towns: Record<string, TownStatus>;
+  /** The DM's own map pins (kind 'custom'). Seeded places live in data/map.ts.
+   *  DM-only — never projected. */
+  mapPins: MapPin[];
 
   // NPC system — first-class from the start
   npcOverrides: Record<string, NpcOverride>;
@@ -355,6 +365,7 @@ export function defaultState(): AppState {
     combat: { active: false, round: 0, turn: 0, combatants: [] },
     travel: { activeJourney: null, log: [], rations: 10, partySize: 4, gold: 0 },
     towns: {},
+    mapPins: [],
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],

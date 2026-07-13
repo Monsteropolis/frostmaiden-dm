@@ -18,9 +18,10 @@
 // (which is also what makes it testable).
 // ============================================================
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { PlayerView, PvPc, PvAlly, PvCombatant, HpState, PokeActive } from './projection';
 import { sceneById, resolveScene, SCENES, TvScene } from './scenes';
+import { ActorSprite, ActorAnim, actorSpriteById, actorSpriteForFoe, animForPose } from '../data/actor-sprites';
 import actorsUrl from '../assets/idle/idle_actors.png';
 import critterUrl from '../assets/idle/idle_critter.png';
 import cameosUrl from '../assets/idle/idle_cameos.png';
@@ -127,11 +128,90 @@ interface ActorRender {
   key: string; x: number; row: number; pose: Pose; frame: number;
   name: string; hp: number; maxHp: number; hpState: string; bubble: string | null;
   flinch: boolean; active: boolean; next: boolean;
+  sprite?: ActorSprite;      // descriptor-backed actor; undefined = classic atlas
 }
 
 interface FoeRender {
   key: string; x: number; emoji: string; name: string; hpState: HpState;
   down: boolean; active: boolean; next: boolean; bubble: string | null;
+  sprite?: ActorSprite;      // matched descriptor; undefined = emoji token
+}
+
+// --- the stage canvas: fixed 384×216 logical px, integer-scaled to fit -----------
+
+export const STAGE_W = 384;
+export const STAGE_H = 216;
+
+function useStageScale() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [k, setK] = useState(1);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      setK(Math.max(1, Math.floor(Math.min(r.width / STAGE_W, r.height / STAGE_H))));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, k };
+}
+
+// --- descriptor-backed actor: CSS steps() runs the frames, not JS -----------------
+
+function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
+  const s = a.scale;
+  const loopFrames = anim.once ? Math.max(1, anim.frames - 1) : anim.frames;
+  const dur = loopFrames / anim.fps;
+  // sheet is drawn pre-scaled via background-size, so positions are scaled px too
+  const sheetLen = anim.frames * (anim.layout === 'h' ? a.frameW : a.frameH) * s;
+  return {
+    width: `${a.frameW * s}px`,
+    height: `${a.frameH * s}px`,
+    backgroundImage: `url(${anim.file})`,
+    backgroundSize: anim.layout === 'h' ? `${sheetLen}px auto` : `auto ${sheetLen}px`,
+    backgroundPositionY: anim.layout === 'h' ? `${-(anim.row ?? 0) * a.frameH * s}px` : '0px',
+    '--realm-to': `${-loopFrames * a.frameW * s}px`,
+    animation: anim.frames > 1
+      ? `realmSpriteRun ${dur}s steps(${loopFrames}) ${anim.once ? '1 forwards' : 'infinite'}`
+      : 'none',
+  } as Record<string, string>;
+}
+
+function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, pokeSeq }: {
+  sprite: ActorSprite; pose: string; name: string;
+  hp?: number; maxHp?: number; hpState: string;
+  bubble: string | null; flinch: boolean; active: boolean; next: boolean;
+  x: number; pokeSeq: number;
+}) {
+  const picked = animForPose(sprite, pose);
+  if (!picked) return null;
+  const s = sprite.scale;
+  const emote = pose === 'cheer' ? ' emote-cheer' : pose === 'wave' ? ' emote-wave' : '';
+  return (
+    <div
+      key={flinch ? `flinch-${pokeSeq}` : undefined}
+      class={`realm-sprite-actor hp-${hpState}${flinch ? ' flinch' : ''}${active ? ' active-turn' : ''}${next ? ' next-turn' : ''}${pose === 'down' ? ' pose-down' : ''}${emote}`}
+      style={{
+        left: `${x}%`,
+        width: `${sprite.frameW * s}px`,
+        bottom: `calc(8% - ${sprite.footPad * s}px)`,
+      }}
+    >
+      {(active || next) && <span class="tv-turn-mark" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 4}px` }}>▼</span>}
+      {bubble && <span class="tv-idle-bubble realm-bubble" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 2}px` }}>{bubble}</span>}
+      {hpState !== 'healthy' && pose !== 'down' && typeof hp === 'number' && typeof maxHp === 'number' && (
+        <span class="tv-idle-minihp realm-minihp" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 2}px` }}>
+          <span style={{ width: `${Math.max(4, (hp / Math.max(1, maxHp)) * 100)}%` }} />
+        </span>
+      )}
+      <span class="realm-sprite" style={spriteAnimStyle(sprite, picked.anim)} />
+      <span class="realm-sprite-name" style={{ bottom: `${Math.max(0, sprite.footPad * s - 12)}px` }}>{name}</span>
+    </div>
+  );
 }
 
 /** Does this poke reach the given PC? 'party'/'everyone' hit all PCs; a pcId hits one. */
@@ -198,6 +278,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       flinch,
       active: inCombat && !!activePcName && p.name === activePcName,
       next: inCombat && !!nextPcName && p.name === nextPcName,
+      sprite: actorSpriteById(p.sprite),
     };
   });
 
@@ -215,6 +296,9 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       x: combatX(i, foeCombatants.length, 58, 92) + mingle,
       emoji: c.emoji, name: c.name, hpState: c.hpState, down,
       active: c.active, next: c.next, bubble,
+      // Matching runs on the projected name only (PvCombatant carries no srcId),
+      // so a DM-masked "???" foe can never match — the mask holds.
+      sprite: actorSpriteForFoe(undefined, c.name),
     };
   });
 
@@ -233,66 +317,87 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     : CAMEO_BY_CAT[scene.cat] ?? 0;
   const cameoOn = tick % 90 >= 20 && tick % 90 < 50;          // ~20s pass every ~63s
 
+  const { ref: vpRef, k } = useStageScale();
+  const pokeSeq = pokeActive?.seq ?? 0;
+
   return (
-    <div class={`tv-idle-stage${full ? ' full' : ''}`}>
-      <img src={scene.url} alt="" class="tv-idle-bg" />
-      {cameoOn && (
-        <span
-          class="tv-idle-cameo"
-          style={{
-            backgroundImage: `url(${cameosUrl})`,
-            backgroundPosition: `${-cameoIdx * 20}px 0`,
-            left: `${((tick % 90) - 20) * (100 / 30)}%`,
-          }}
-        />
-      )}
-      {critters.map((c) => !c.down && (
-        <span
-          key={c.key}
-          class="tv-idle-critter"
-          title={c.name}
-          style={{
-            backgroundImage: `url(${critterUrl})`,
-            backgroundPosition: `${-((c.frame + 2) % 4) * 12}px 0`,
-            left: `${c.x}%`,
-          }}
-        />
-      ))}
-      {actors.map((a) => (
-        <div
-          key={a.flinch ? `${a.key}-flinch-${pokeActive?.seq ?? 0}` : a.key}
-          class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
-          style={{ left: `${a.x}%` }}
-        >
-          {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
-          {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
-          {a.hpState !== 'healthy' && a.pose !== 'down' && (
-            <span class="tv-idle-minihp"><span style={{ width: `${Math.max(4, (a.hp / Math.max(1, a.maxHp)) * 100)}%` }} /></span>
-          )}
+    <div class={`tv-idle-stage tv-realm-viewport${full ? ' full' : ''}`} ref={vpRef}>
+      <div class="tv-realm-canvas" style={{ width: `${STAGE_W}px`, height: `${STAGE_H}px`, transform: `scale(${k})` }}>
+        <img src={scene.url} alt="" class="tv-idle-bg" />
+        {cameoOn && (
           <span
-            class="tv-idle-sprite"
+            class="tv-idle-cameo"
             style={{
-              backgroundImage: `url(${actorsUrl})`,
-              backgroundPosition: `${-a.frame * 16}px ${-a.row * 24}px`,
+              backgroundImage: `url(${cameosUrl})`,
+              backgroundPosition: `${-cameoIdx * 20}px 0`,
+              left: `${((tick % 90) - 20) * (100 / 30)}%`,
             }}
           />
-          <span class="tv-idle-name">{a.name}</span>
-        </div>
-      ))}
-      {foes.map((f) => (
-        <div
-          key={f.key}
-          class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
-          style={{ left: `${f.x}%` }}
-          title={f.name}
-        >
-          {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}
-          {f.bubble && <span class="tv-idle-bubble">{f.bubble}</span>}
-          <span class="tv-foe-emoji">{f.down ? '💀' : f.emoji}</span>
-          <span class="tv-foe-name">{f.name}</span>
-        </div>
-      ))}
-      {inCombat && <span class="tv-realm-round">Round {v.combat!.round}</span>}
+        )}
+        {critters.map((c) => !c.down && (
+          <span
+            key={c.key}
+            class="tv-idle-critter"
+            title={c.name}
+            style={{
+              backgroundImage: `url(${critterUrl})`,
+              backgroundPosition: `${-((c.frame + 2) % 4) * 12}px 0`,
+              left: `${c.x}%`,
+            }}
+          />
+        ))}
+        {actors.map((a) => a.sprite ? (
+          <SpriteActor
+            key={a.key}
+            sprite={a.sprite} pose={a.pose} name={a.name}
+            hp={a.hp} maxHp={a.maxHp} hpState={a.hpState}
+            bubble={a.bubble} flinch={a.flinch} active={a.active} next={a.next}
+            x={a.x} pokeSeq={pokeSeq}
+          />
+        ) : (
+          <div
+            key={a.flinch ? `${a.key}-flinch-${pokeSeq}` : a.key}
+            class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
+            style={{ left: `${a.x}%` }}
+          >
+            {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
+            {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
+            {a.hpState !== 'healthy' && a.pose !== 'down' && (
+              <span class="tv-idle-minihp"><span style={{ width: `${Math.max(4, (a.hp / Math.max(1, a.maxHp)) * 100)}%` }} /></span>
+            )}
+            <span
+              class="tv-idle-sprite"
+              style={{
+                backgroundImage: `url(${actorsUrl})`,
+                backgroundPosition: `${-a.frame * 16}px ${-a.row * 24}px`,
+              }}
+            />
+            <span class="tv-idle-name">{a.name}</span>
+          </div>
+        ))}
+        {foes.map((f) => f.sprite ? (
+          <SpriteActor
+            key={f.key}
+            sprite={f.sprite} pose={f.down ? 'down' : 'idle'} name={f.name}
+            hpState={f.hpState}
+            bubble={f.bubble} flinch={false} active={f.active} next={f.next}
+            x={f.x} pokeSeq={pokeSeq}
+          />
+        ) : (
+          <div
+            key={f.key}
+            class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
+            style={{ left: `${f.x}%` }}
+            title={f.name}
+          >
+            {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}
+            {f.bubble && <span class="tv-idle-bubble">{f.bubble}</span>}
+            <span class="tv-foe-emoji">{f.down ? '💀' : f.emoji}</span>
+            <span class="tv-foe-name">{f.name}</span>
+          </div>
+        ))}
+        {inCombat && <span class="tv-realm-round">Round {v.combat!.round}</span>}
+      </div>
     </div>
   );
 }

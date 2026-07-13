@@ -5,10 +5,12 @@ import {
   WEATHER, WEATHER_POOL, WeatherId, Arc, ArcStatus, TownStanding, defaultTownStatus,
   Quest, QuestStatus, Pace, Journey,
 } from '../state/schema';
-import { TOWNS, TOWN_DISTANCES } from '../data';
+import { TOWNS } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput, Stepper } from '../components/ui';
 import { allNpcs, openNpc } from './npcs';
 import { EncountersPanel } from './encounters';
+import { MapPicker, PickedPlace, placeByName, estimateLeg } from '../components/MapPicker';
+import { MAP_PLACES, Terrain, TERRAIN_LABEL } from '../data/map';
 
 // Which World sub-tab is showing — a signal so other screens (the header
 // weather sheet) can deep-link straight to Weather.
@@ -419,22 +421,25 @@ const PACES: { id: Pace; label: string; mult: number; note: string }[] = [
   { id: 'dogsled', label: 'Dogsled', mult: 0.5, note: 'fast, needs dogs & open snow' },
 ];
 
-function journeyDays(origin: string, dest: string, pace: Pace): number | null {
-  const d = (TOWN_DISTANCES as { from: string; to: string; days: number }[])
-    .find((x) => (x.from === origin && x.to === dest) || (x.from === dest && x.to === origin));
-  if (!d) return null;
-  const mult = PACES.find((p) => p.id === pace)!.mult;
-  return Math.max(1, Math.ceil(d.days * mult));
-}
-
 function TravelPanel() {
   const townNames = TOWNS.map((t) => t.name);
   const [origin, setOrigin] = useState(townNames[0]);
   const [dest, setDest] = useState(townNames[1]);
   const [pace, setPace] = useState<Pace>('normal');
+  const [terrain, setTerrain] = useState<Terrain>('tundra');
+  const [picking, setPicking] = useState(false);
+  // Crosshair points picked on the map — named but not saved as pins.
+  const [adhoc, setAdhoc] = useState<Record<string, PickedPlace>>({});
   const j = state.value.travel.activeJourney;
   const wx = state.value.weather;
-  const est = journeyDays(origin, dest, pace);
+
+  const landmarkNames = MAP_PLACES.filter((p) => p.kind === 'landmark').map((p) => p.name);
+  const pinNames = state.value.mapPins.map((p) => p.name);
+  const adhocNames = Object.keys(adhoc);
+  const resolve = (name: string): PickedPlace | undefined => placeByName(name) ?? adhoc[name];
+
+  const paceMult = PACES.find((p) => p.id === pace)!.mult;
+  const est = estimateLeg(resolve(origin), resolve(dest), origin, dest, terrain, paceMult);
 
   const advance = () => patch((d) => {
     const jj = d.travel.activeJourney; if (!jj) return;
@@ -444,13 +449,37 @@ function TravelPanel() {
     d.travel.log.push({ day: d.weather.day, text: `${jj.origin} → ${jj.dest}: day ${jj.day} of ${jj.totalDays} — ${WEATHER[d.weather.current].name}` });
     if (jj.day >= jj.totalDays) {
       d.travel.log.push({ day: d.weather.day, text: `Arrived at ${jj.dest}` });
-      if (!d.towns[jj.dest]) d.towns[jj.dest] = defaultTownStatus();
-      d.towns[jj.dest].visited = true;
+      // Only real towns join the towns record — landmark/pin arrivals just log.
+      if (TOWNS.some((t) => t.name === jj.dest)) {
+        if (!d.towns[jj.dest]) d.towns[jj.dest] = defaultTownStatus();
+        d.towns[jj.dest].visited = true;
+      }
       d.travel.activeJourney = null;
     } else {
       jj.day++;
     }
   });
+
+  const PlaceOptions = ({ exclude }: { exclude?: string }) => (
+    <>
+      <optgroup label="Towns">
+        {townNames.filter((t) => t !== exclude).map((t) => <option value={t}>{t}</option>)}
+      </optgroup>
+      <optgroup label="Landmarks">
+        {landmarkNames.filter((t) => t !== exclude).map((t) => <option value={t}>{t}</option>)}
+      </optgroup>
+      {pinNames.length > 0 && (
+        <optgroup label="Your pins">
+          {pinNames.filter((t) => t !== exclude).map((t) => <option value={t}>{t}</option>)}
+        </optgroup>
+      )}
+      {adhocNames.length > 0 && (
+        <optgroup label="Picked on map">
+          {adhocNames.filter((t) => t !== exclude).map((t) => <option value={t}>{t}</option>)}
+        </optgroup>
+      )}
+    </>
+  );
 
   return (
     <>
@@ -477,34 +506,63 @@ function TravelPanel() {
           <div class="field-row" style={{ marginTop: '10px' }}>
             <Field label="From">
               <select class="input" value={origin} onChange={(e) => setOrigin((e.target as HTMLSelectElement).value)}>
-                {townNames.map((t) => <option value={t}>{t}</option>)}
+                <PlaceOptions />
               </select>
             </Field>
             <Field label="To">
               <select class="input" value={dest} onChange={(e) => setDest((e.target as HTMLSelectElement).value)}>
-                {townNames.filter((t) => t !== origin).map((t) => <option value={t}>{t}</option>)}
+                <PlaceOptions exclude={origin} />
               </select>
             </Field>
           </div>
+          <button class="btn" style={{ marginBottom: '10px' }} onClick={() => setPicking(true)}>🗺 Pick on map</button>
           <div class="field-label">Pace</div>
-          <div class="chip-row" style={{ marginBottom: '12px' }}>
+          <div class="chip-row" style={{ marginBottom: '10px' }}>
             {PACES.map((p) => (
               <button class={`cond-chip${pace === p.id ? ' on' : ''}`} onClick={() => setPace(p.id)} title={p.note}>{p.label}</button>
             ))}
           </div>
+          {est?.source === 'overland' && (
+            <>
+              <div class="field-label">Terrain — your judgment of the route</div>
+              <div class="chip-row tight" style={{ marginBottom: '10px' }}>
+                {(Object.keys(TERRAIN_LABEL) as Terrain[]).map((t) => (
+                  <button class={`cond-chip${terrain === t ? ' on' : ''}`} onClick={() => setTerrain(t)}>{TERRAIN_LABEL[t]}</button>
+                ))}
+              </div>
+            </>
+          )}
           <p class="read" style={{ marginBottom: '10px' }}>
-            {est !== null
-              ? `Estimated ${est} day${est > 1 ? 's' : ''} on the trail.`
-              : 'No mapped route — travel via a connected town, or log it manually.'}
+            {est
+              ? <>Estimated <strong>{est.days} day{est.days > 1 ? 's' : ''}</strong>
+                  {est.miles !== null ? ` (${est.miles} mi straight-line)` : ''} —{' '}
+                  <span class={`mp-est-src ${est.source}`}>{est.source === 'table' ? 'module road time' : 'overland estimate'}</span>.</>
+              : 'No coordinates for one of these places — pick it on the map.'}
           </p>
-          <button class="btn primary wide" disabled={est === null} onClick={() => {
-            const total = est!;
+          <button class="btn primary wide" disabled={!est} onClick={() => {
+            const total = est!.days;
             patch((d) => {
               d.travel.activeJourney = { origin, dest, pace, day: 1, totalDays: total } as Journey;
               d.travel.log.push({ day: d.weather.day, text: `Departed ${origin} for ${dest} (${total} day${total > 1 ? 's' : ''})` });
             });
           }}>Set out ✦</button>
         </div>
+      )}
+
+      {picking && (
+        <MapPicker
+          initialA={resolve(origin)} initialB={resolve(dest)}
+          terrain={terrain} paceMult={paceMult}
+          onUse={(a, b, t) => {
+            setTerrain(t);
+            setOrigin(a.name); setDest(b.name);
+            const extra: Record<string, PickedPlace> = {};
+            if (a.kind === 'point') extra[a.name] = a;
+            if (b.kind === 'point') extra[b.name] = b;
+            if (Object.keys(extra).length) setAdhoc((prev) => ({ ...prev, ...extra }));
+          }}
+          onClose={() => setPicking(false)}
+        />
       )}
 
       <div class="card">

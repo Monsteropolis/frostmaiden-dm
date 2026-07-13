@@ -637,21 +637,78 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-scene.idle-slot.full { flex: 1; border-radius: 0; }
 
 .tv-idle-stage { position: absolute; inset: 0; }
+
+/* --- the stage canvas: 384×216 logical px, integer-scaled to its container.
+       Legacy 128×72 scenes fill it at exactly 3×; native 384×216 scenes at 1×.
+       Everything inside positions in canvas pixels. --- */
+.tv-realm-viewport { display: grid; place-items: center; overflow: hidden; background: var(--bg); }
+.tv-realm-canvas {
+  position: relative; flex: none;
+  transform-origin: center center;
+  image-rendering: pixelated;
+  overflow: hidden;
+}
+
 .tv-idle-bg {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; image-rendering: pixelated;
 }
 
-/* actors stand on the scene's snow line (~86% down the 128×72 art) */
+/* actors stand on the scene's snow line (~86% down the art).
+   Transition rule: legacy atlas actors draw at 2× (16×24 → 32×48 box) so mixed
+   parties read as one sprite generation on the 384×216 canvas. */
 .tv-idle-actor {
   position: absolute; bottom: 8%;
   width: 16px; height: 24px;
-  transform: scale(3.2) translateX(-50%);
+  transform: scale(2) translateX(-50%);
   transform-origin: bottom left;
   transition: left 1.4s steps(10);
   z-index: 3;
 }
-.tv-scene.idle-slot.full .tv-idle-actor { transform: scale(4.5) translateX(-50%); }
+
+/* --- descriptor-backed actors: the sheet runs on CSS steps() --- */
+.realm-sprite-actor {
+  position: absolute;
+  transform: translateX(-50%);
+  transition: left 1.4s steps(10), bottom 0.4s var(--ease);
+  z-index: 3;
+  display: flex; flex-direction: column; align-items: center;
+}
+.realm-sprite {
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+@keyframes realmSpriteRun { from { background-position-x: 0; } to { background-position-x: var(--realm-to); } }
+.realm-sprite-name {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-px); font-size: 8px;
+  color: var(--ink-dim); white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+.realm-sprite-actor .tv-turn-mark { bottom: auto; }
+.realm-sprite-actor .tv-idle-bubble.realm-bubble { transform: translateX(-50%) scale(0.8); bottom: auto; }
+.realm-sprite-actor .tv-idle-minihp.realm-minihp { bottom: auto; left: 50%; width: 26px; margin-left: -13px; }
+/* health tint + down fade mirror the atlas/token behaviors */
+.realm-sprite-actor.hp-critical .realm-sprite { filter: sepia(0.4) hue-rotate(-40deg) saturate(1.6); }
+.realm-sprite-actor.hp-bloodied .realm-sprite { filter: sepia(0.25) hue-rotate(-25deg) saturate(1.3); }
+.realm-sprite-actor.pose-down { opacity: 0.75; }
+/* flinch rides on the wrapper (margin + filter) so it never fights the
+   background-position animation running on .realm-sprite */
+.realm-sprite-actor.flinch { animation: realmFlinch 0.5s steps(6, jump-none); }
+@keyframes realmFlinch {
+  0%   { margin-left: 0;     filter: brightness(1.9) sepia(1) hue-rotate(-50deg) saturate(7); }
+  25%  { margin-left: -4px; }
+  50%  { margin-left: 4px;   filter: brightness(1.5) sepia(1) hue-rotate(-50deg) saturate(5); }
+  75%  { margin-left: -2px; }
+  100% { margin-left: 0;     filter: none; }
+}
+/* universal CSS emotes — work on any sprite, no art needed */
+.realm-sprite-actor.emote-cheer { animation: realmCheer 0.6s steps(4, jump-none) infinite; }
+.realm-sprite-actor.emote-wave { animation: realmWave 0.7s steps(4, jump-none) infinite; }
+@keyframes realmCheer { 0%,100% { margin-bottom: 0; } 50% { margin-bottom: 6px; } }
+@keyframes realmWave { 0%,100% { transform: translateX(-50%) rotate(0deg); } 50% { transform: translateX(-50%) rotate(-6deg); } }
 .tv-idle-sprite {
   display: block; width: 16px; height: 24px;
   background-repeat: no-repeat;
@@ -711,7 +768,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   width: 12px; height: 10px;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  transform: scale(3) translateX(-50%);
+  transform: scale(2) translateX(-50%);   /* transition rule: critters 2× */
   transform-origin: bottom left;
   transition: left 2s steps(8);
   z-index: 2;
@@ -724,7 +781,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   width: 20px; height: 20px;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  transform: scale(2.4);
+  transform: scale(2);   /* transition rule: cameos 2× */
   transform-origin: bottom left;
   transition: left 0.7s linear;
   opacity: 0.45;
