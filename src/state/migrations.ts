@@ -90,6 +90,9 @@ const migrations: Record<number, Migration> = {
     });
     return { ...s, chapters, version: 7 };
   },
+  // v7 → v8: the region map lands. Custom pins live in state (seeded places
+  // are code). PC/Ally `sprite` is optional-undefined — no backfill needed.
+  7: (s) => ({ ...s, mapPins: Array.isArray(s.mapPins) ? s.mapPins : [], version: 8 }),
 };
 
 export function migrate(raw: unknown): AppState {

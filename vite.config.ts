@@ -33,7 +33,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         runtimeCaching: [
           {
             // D&D 5e API — cache-first so the compendium works offline after first load
