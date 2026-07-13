@@ -93,6 +93,16 @@ const migrations: Record<number, Migration> = {
   // v7 → v8: the region map lands. Custom pins live in state (seeded places
   // are code). PC/Ally `sprite` is optional-undefined — no backfill needed.
   7: (s) => ({ ...s, mapPins: Array.isArray(s.mapPins) ? s.mapPins : [], version: 8 }),
+  // v8 → v9: the items domain (inventory) and ally roaming. Existing allies
+  // with a linked PC keep hugging them; the rest wander with the party.
+  // CustomNpc.sprite / NpcOverride.sprite are optional-undefined — no backfill.
+  8: (s) => {
+    const sidekicks = ((s.sidekicks as Record<string, unknown>[]) ?? []).map((a) => ({
+      ...a,
+      follow: a.follow ?? (a.linkedPcId ? 'pc' : 'party'),
+    }));
+    return { ...s, sidekicks, inventory: Array.isArray(s.inventory) ? s.inventory : [], version: 9 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

@@ -477,6 +477,32 @@ function ItemsPanel() {
   const open = rimeItems.find((i) => i.index === openRime);
   const cats = mode === 'magic' ? MAGIC_CATS : GEAR_CATS;
 
+  // Give ▸ — granting copies into the party inventory; the catalog is a menu,
+  // nothing decrements. Emoji by category (best-effort for API rows), editable after.
+  const [giveFor, setGiveFor] = useState<string | null>(null);
+  const itemEmojiFor = (name: string, category?: string, magic?: boolean): string => {
+    const c = (category ?? '').toLowerCase(), n = name.toLowerCase();
+    if (c.includes('potion') || /potion|elixir|philter/.test(n)) return '🧪';
+    if (c.includes('scroll') || /scroll/.test(n)) return '📜';
+    if (c.includes('ring') || c.includes('wondrous') || /ring of/.test(n)) return '💍';
+    if (c.includes('weapon') || /sword|axe|bow|dagger|mace|spear|hammer|blade/.test(n)) return '⚔️';
+    if (c.includes('armor') || c.includes('shield') || /armor|shield|mail|plate/.test(n)) return '🛡️';
+    if (magic) return '💍';
+    return '🎒';
+  };
+  const grant = (row: Row, ownerId: string | null) => {
+    const rime = row.rime ? rimeItems.find((i) => `rime:${i.index}` === row.key) : undefined;
+    const category = rime ? (rime.equipment_category as { name?: string } | undefined)?.name : undefined;
+    const emoji = row.rime ? (row.emoji ?? '✦') : itemEmojiFor(row.name, category, row.magic);
+    patch((d) => {
+      d.inventory.push({
+        id: `it${d.seq++}`, name: row.name, emoji, qty: 1, ownerId,
+        srcIndex: row.key.replace(/^(rime|api):/, ''),
+      });
+    });
+    setGiveFor(null);
+  };
+
   // One master list: Rime items are rows like everything else, emoji intact,
   // interleaved alphabetically — not a separate pile floating on top.
   type Row = { key: string; name: string; emoji?: string; rime?: boolean; magic?: boolean; api?: CatListItem };
@@ -515,17 +541,28 @@ function ItemsPanel() {
       {mode !== 'rime' && list === null && <p class="stat-fine">The 5e shelves need one online visit; ❄ Rime items are always here.</p>}
       <div class="ref-list" style={{ marginTop: '10px' }}>
         {rows.map((r) => (
-          <button
-            key={r.key}
-            class="creature-add"
-            onClick={() => r.rime
-              ? setOpenRime(r.key.slice(5))
-              : setOpenApi({ kind: r.api!.magic || mode === 'magic' ? 'magic-items' : 'equipment', index: r.api!.index, name: r.name })}
-          >
-            <span>{r.rime ? `${r.emoji} ` : ''}{r.name}</span>
-            {r.rime ? <span class="cr frosty-cr">❄ rime</span>
-              : r.magic && mode !== 'magic' ? <span class="cr">magic</span> : null}
-          </button>
+          <div class="item-shelf-row" key={r.key}>
+            <button
+              class="creature-add"
+              style={{ flex: 1 }}
+              onClick={() => r.rime
+                ? setOpenRime(r.key.slice(5))
+                : setOpenApi({ kind: r.api!.magic || mode === 'magic' ? 'magic-items' : 'equipment', index: r.api!.index, name: r.name })}
+            >
+              <span>{r.rime ? `${r.emoji} ` : ''}{r.name}</span>
+              {r.rime ? <span class="cr frosty-cr">❄ rime</span>
+                : r.magic && mode !== 'magic' ? <span class="cr">magic</span> : null}
+            </button>
+            <button class="btn mini" onClick={() => setGiveFor(giveFor === r.key ? null : r.key)}>Give ▸</button>
+            {giveFor === r.key && (
+              <div class="item-give-targets">
+                <button class="cond-chip" onClick={() => grant(r, null)}>🎒 Party stash</button>
+                {state.value.party.map((p) => (
+                  <button class="cond-chip" key={p.id} onClick={() => grant(r, p.id)}>{p.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
         {rows.length === 0 && (mode === 'rime' || Array.isArray(list)) && <p class="stat-fine" style={{ padding: '12px' }}>Nothing matches.</p>}
       </div>

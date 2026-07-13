@@ -44,6 +44,8 @@ type Popup = { title: string; body: string; note?: string };
 export function EncountersPanel() {
   const [sent, setSent] = useState<number | null>(null);
   const [popup, setPopup] = useState<Popup | null>(null);
+  // Component-state only, per the brief — the tab opens as a scannable index.
+  const [prebuiltOpen, setPrebuiltOpen] = useState(false);
 
   // Resolve counts + reuse the tracker's resolver, then push into initiative.
   const send = (specs: PresetCombatant[]) => {
@@ -68,8 +70,11 @@ export function EncountersPanel() {
           onOpenRow={(r) => setPopup({ title: `${t.name} · ${r.range}`, body: r.text, note: r.note })} />
       ))}
 
-      <div class="field-label" style={{ marginTop: '18px' }}>Prebuilt encounters</div>
-      {CATS.map((cat) => {
+      <button class="enc-section-head" style={{ marginTop: '18px' }} onClick={() => setPrebuiltOpen(!prebuiltOpen)}>
+        <span class="field-label" style={{ margin: 0 }}>Prebuilt encounters</span>
+        <span class="enc-caret">{prebuiltOpen ? '▾' : '▸'}</span>
+      </button>
+      {prebuiltOpen && CATS.map((cat) => {
         const group = PREBUILT.filter((e) => e.category === cat.id);
         if (!group.length) return null;
         return (
@@ -108,15 +113,18 @@ export function EncountersPanel() {
 function EncTableCard({ t, onSend, onOpenRow }: {
   t: EncTable; onSend: (s: PresetCombatant[]) => void; onOpenRow: (r: EncRow) => void;
 }) {
+  const [open, setOpen] = useState(false);   // collapsed by default — a scannable index
   const [rolled, setRolled] = useState<number | null>(null);
   const [nonce, setNonce] = useState(0);   // re-key the highlight so a re-roll re-animates
 
   return (
     <div class="card">
-      <div class="enc-table-head">
+      <button class="enc-table-head enc-toggle" onClick={() => setOpen(!open)}>
         <h3>{t.name}</h3>
         <span class="die-tag">{t.die}</span>
-      </div>
+        <span class="enc-caret">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <>
       <p class="read" style={{ fontSize: '13px' }}>{t.trigger}</p>
       <button class="btn" style={{ margin: '8px 0' }}
         onClick={() => { setRolled(d(dieSides(t.die))); setNonce((n) => n + 1); }}>🎲 Roll {t.die}</button>
@@ -136,6 +144,7 @@ function EncTableCard({ t, onSend, onOpenRow }: {
           );
         })}
       </div>
+      </>}
     </div>
   );
 }

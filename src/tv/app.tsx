@@ -26,6 +26,8 @@ import { PeerTransport } from './peer-transport';
 import { TvBackdrop } from './vfx';
 import { sceneById, SCENES } from './scenes';
 import { RealmStage } from './realm-stage';
+import { ActorSprite, actorSpriteById, actorSpriteForFoe } from '../data/actor-sprites';
+import { spriteThumbStyle } from '../components/SpritePicker';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -151,12 +153,28 @@ function SceneCard({ v }: { v: PlayerView }) {
 
 const MAX_INIT_ROWS = 9;
 
-function InitRow({ c, flash }: { c: PvCombatant; flash: boolean }) {
+/** The sprite in the row thumbnail, resolved from already-projected fields:
+ *  friendlies match their party/ally record by name; foes match descriptors
+ *  by name (so a masked "???" stays an emoji — the mask holds here too). */
+function combatantSprite(c: PvCombatant, v: PlayerView): ActorSprite | undefined {
+  if (c.friendly) {
+    const rec = v.party.find((p) => p.name === c.name) ?? v.allies.find((a) => a.name === c.name);
+    return actorSpriteById(rec?.sprite);
+  }
+  return actorSpriteForFoe(undefined, c.name);
+}
+
+function InitRow({ c, v, flash }: { c: PvCombatant; v: PlayerView; flash: boolean }) {
+  const sprite = combatantSprite(c, v);
   return (
     <div class={`tv-init-row ${c.active ? 'active' : ''} ${flash && c.active ? 'flash' : ''} ${c.hpState === 'down' ? 'down' : ''}`}>
       <span class="tv-init-marker">{c.active ? '▶' : c.next ? '›' : ''}</span>
-      <span class="tv-init-num">{c.init ?? '—'}</span>
-      <span class="tv-init-name">{c.emoji} {c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
+      <span class="tv-init-thumb">
+        {sprite
+          ? <span class="tv-init-thumb-sprite" style={spriteThumbStyle(sprite, 40)} />
+          : <span class="tv-init-thumb-emoji">{c.emoji}</span>}
+      </span>
+      <span class="tv-init-name">{c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
       <CondChips conds={c.conditions} />
       {c.deathS !== null && c.deathF !== null && <DeathPips s={c.deathS} f={c.deathF} />}
       <span class="tv-init-hp">
@@ -188,7 +206,7 @@ export function CombatView({ v, flash = false, roundPulse = false, pokeActive = 
           <span class={`tv-round ${roundPulse ? 'pulse' : ''}`}>ROUND {combat.round}</span>
         </div>
         <div class="tv-init-list">
-          {shown.map((c) => <InitRow c={c} flash={flash} key={c.id} />)}
+          {shown.map((c) => <InitRow c={c} v={v} flash={flash} key={c.id} />)}
           {hidden > 0 && <div class="tv-init-more">+{hidden} MORE</div>}
         </div>
       </section>

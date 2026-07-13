@@ -111,5 +111,28 @@
       "mainHook": false
     }
   ],
-  "sentAt": 1783870327563
+  "sentAt": 1783870327563,
+  "inventory": [
+    {
+      "id": "demo-it1",
+      "name": "Rope (50 ft)",
+      "emoji": "🎒",
+      "qty": 1,
+      "ownerId": null
+    },
+    {
+      "id": "demo-it2",
+      "name": "Potion of Healing",
+      "emoji": "🧪",
+      "qty": 2,
+      "ownerId": "pc40"
+    },
+    {
+      "id": "demo-it3",
+      "name": "Frozen Locket",
+      "emoji": "🧿",
+      "qty": 1,
+      "ownerId": "pc41"
+    }
+  ]
 }

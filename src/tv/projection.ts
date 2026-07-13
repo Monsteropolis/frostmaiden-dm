@@ -57,7 +57,10 @@ export interface PvAlly {
   emoji: string;
   hpState: HpState;
   conditions: string[];
-  /** PC this ally follows — TV nests them under that PC's card */
+  /** PC this ally follows — TV nests them under that PC's card.
+   *  Roaming rides this existing path (no new seam surface): a PC id = hug
+   *  that PC · null = wander with the party · 'free' = roam the whole stage.
+   *  Non-id values match no PC, so the TV roster treats them like null. */
   linkedPcId: string | null;
   down: boolean;
   deathS: number;
@@ -90,6 +93,16 @@ export interface PvQuest {
   town: string;
   status: QuestStatus;        // only 'active' | 'escalating' ever appear
   mainHook: boolean;
+}
+
+/** A carried item on the player side. Granting = revealing: everything the
+ *  party holds is visible — except OwnedItem.notes, which never leaves the phone. */
+export interface PvItem {
+  id: string;
+  name: string;
+  emoji: string;
+  qty: number;
+  ownerId: string | null;   // null = party stash
 }
 
 export interface PvTravel {
@@ -126,6 +139,7 @@ export interface PlayerView {
   allies: PvAlly[];
   combat: { round: number; combatants: PvCombatant[] } | null;
   quests: PvQuest[];
+  inventory: PvItem[];
   sentAt: number;             // epoch ms — lets the TV show staleness
 }
 
@@ -217,7 +231,9 @@ export function projectPlayerView(s: AppState): PlayerView {
       id: a.id, name: a.name, emoji: a.emoji,
       hpState: hpState(a.hp, a.maxHp),
       conditions: a.conditions,
-      linkedPcId: a.linkedPcId ?? null,
+      linkedPcId: a.follow === 'free' ? 'free'
+        : a.follow === 'party' ? null
+        : a.linkedPcId ?? null,
       down: a.hp <= 0,
       deathS: a.deathS ?? 0,
       deathF: a.deathF ?? 0,
@@ -235,6 +251,11 @@ export function projectPlayerView(s: AppState): PlayerView {
     quests: s.quests
       .filter((q) => q.status === 'active' || q.status === 'escalating')
       .map((q) => ({ id: q.id, name: q.name, town: q.town, status: q.status, mainHook: q.mainHook })),
+
+    // Explicit field list — OwnedItem.notes (DM-only) must never ride along.
+    inventory: (s.inventory ?? []).map((it) => ({
+      id: it.id, name: it.name, emoji: it.emoji, qty: it.qty, ownerId: it.ownerId,
+    })),
 
     sentAt: Date.now(),
   };

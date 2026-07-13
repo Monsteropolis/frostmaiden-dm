@@ -76,7 +76,55 @@ function Realm() {
       {v
         ? <section class="tv-scene idle-slot full"><RealmStage v={v} full /></section>
         : <section class="realm-blank">{status.kind === 'loading' ? 'Loading the realm…' : 'No snapshot to show.'}</section>}
+      {v && <Pack v={v} />}
       <RealmStatus status={status} v={v} onRetry={() => setNonce((n) => n + 1)} />
+    </div>
+  );
+}
+
+/** The Pack — what the party carries, stash first, then a group per PC who
+ *  holds anything. Hidden entirely when nothing is carried. */
+function Pack({ v }: { v: PlayerView }) {
+  const [openItem, setOpenItem] = useState<string | null>(null);
+  const inv = v.inventory ?? [];   // older published snapshots predate the field
+  if (!inv.length) return null;
+  const groups: { key: string; label: string; items: typeof inv }[] = [];
+  const stash = inv.filter((i) => i.ownerId === null);
+  if (stash.length) groups.push({ key: 'stash', label: '🎒 Party stash', items: stash });
+  for (const p of v.party) {
+    const mine = inv.filter((i) => i.ownerId === p.id);
+    if (mine.length) groups.push({ key: p.id, label: p.name, items: mine });
+  }
+  return (
+    <div class="realm-pack">
+      <div class="realm-pack-head">The Pack</div>
+      {groups.map((g) => (
+        <div class="realm-pack-group" key={g.key}>
+          <span class="realm-pack-owner">{g.label}</span>
+          <div class="realm-pack-items">
+            {g.items.map((it) => (
+              <button class="realm-pack-item" key={it.id}
+                onClick={() => setOpenItem(openItem === it.id ? null : it.id)}>
+                {it.emoji} {it.name}{it.qty > 1 ? ` ×${it.qty}` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {openItem && (() => {
+        const it = inv.find((x) => x.id === openItem);
+        return it ? (
+          <div class="realm-pack-pop" onClick={() => setOpenItem(null)}>
+            <span class="realm-pack-pop-emoji">{it.emoji}</span>
+            <div>
+              <div class="realm-pack-pop-name">{it.name}{it.qty > 1 ? ` ×${it.qty}` : ''}</div>
+              <div class="realm-pack-pop-owner">
+                {it.ownerId === null ? 'In the party stash' : `Carried by ${v.party.find((p) => p.id === it.ownerId)?.name ?? 'someone'}`}
+              </div>
+            </div>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }
