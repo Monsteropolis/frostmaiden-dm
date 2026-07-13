@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -244,13 +244,21 @@ export interface SessionEntry {
   debrief: string;
 }
 
-export interface Milestone { label: string; done: boolean; notes?: string; }
+export interface Milestone {
+  label: string;
+  done: boolean;              // manual beats only; linked beats derive done from the quest
+  notes?: string;
+  /** When set, this beat's done state is derived from quest.status === 'resolved'
+   *  (never stored, so it can't drift) and the manual toggle is disabled. */
+  questId?: string | null;
+}
 
 export interface Chapter {
   id: number;
   label: string;
   levels: string;
   milestones: Milestone[];
+  done: boolean;              // manual "Complete chapter" flag
 }
 
 export type Pace = 'cautious' | 'normal' | 'dogsled';
@@ -359,13 +367,14 @@ export function defaultState(): AppState {
 // Module chapters with DM-facing milestones (editable checkmarks).
 export function defaultChapters(): Chapter[] {
   const c = (id: number, label: string, levels: string, ms: string[]): Chapter =>
-    ({ id, label, levels, milestones: ms.map((label) => ({ label, done: false })) });
+    ({ id, label, levels, done: false, milestones: ms.map((label) => ({ label, done: false })) });
   return [
+    // Ch1's two named beats (Cold-Hearted Killer, Nature Spirits) are linked to
+    // their quests by name in normalize() — their labels equal the quest names.
     c(1, 'Ten-Towns', '1–4', [
       'Party arrives in Icewind Dale',
-      'Cold-Hearted Killer: Sephek confronted',
-      'Nature Spirits: the awakened beast dealt with',
-      'Three or more town quests resolved',
+      'Cold-Hearted Killer',
+      'Nature Spirits',
     ]),
     c(2, 'Icewind Dale', '4–6', [
       'A Ten-Towns crisis draws the party into the wilds',

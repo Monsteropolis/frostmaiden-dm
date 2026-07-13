@@ -21,8 +21,9 @@ function abilityMod(score: unknown): number {
   return typeof score === 'number' ? Math.floor((score - 10) / 2) : 0;
 }
 
-/** Resolve preset combatant refs (with dice counts) into tracker combatants. */
-function resolvePreset(list: PresetCombatant[]): Combatant[] {
+/** Resolve preset combatant refs (with dice counts) into tracker combatants.
+ *  Reused by the World ▸ Encounters tab — do not duplicate this. */
+export function resolvePreset(list: PresetCombatant[]): Combatant[] {
   const out: Combatant[] = [];
   for (const ref of list) {
     const creature = ref.srcType === 'monster' ? creatureById(ref.srcId) : undefined;

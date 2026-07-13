@@ -101,20 +101,30 @@ function SessionsPanel() {
 
 // ---------------------------------------------------------------- progress
 
+const NEXT_QUEST_STATUS: Record<QuestStatus, QuestStatus> = {
+  dormant: 'active', active: 'escalating', escalating: 'resolved', resolved: 'dormant',
+};
+
+/** The quest a beat is linked to (if any). */
+function beatQuest(m: Milestone) {
+  return m.questId ? state.value.quests.find((x) => x.id === m.questId) : undefined;
+}
+/** Derived for linked beats (quest resolved), manual otherwise — never stored. */
+function beatDone(m: Milestone): boolean {
+  return m.questId ? beatQuest(m)?.status === 'resolved' : m.done;
+}
+
 function MilestoneSheet({ ci, mi, onClose }: { ci: number; mi: number; onClose: () => void }) {
   const ch = state.value.chapters[ci];
   const m: Milestone | undefined = ch?.milestones[mi];
   if (!m) return null;
-  const relatedQuests = state.value.quests.filter((q) => q.chapter === ch.id);
-  const nextStatus: Record<QuestStatus, QuestStatus> = {
-    dormant: 'active', active: 'escalating', escalating: 'resolved', resolved: 'dormant',
-  };
+  const chapterQuests = state.value.quests.filter((q) => q.chapter === ch.id);
   const upd = (fn: (mm: Milestone) => void) =>
     patch((d) => { const x = d.chapters[ci]?.milestones[mi]; if (x) fn(x); });
 
   return (
-    <Sheet open title={`Ch${ch.id} · Milestone`} onClose={onClose}>
-      <Field label="Milestone">
+    <Sheet open title={`Ch${ch.id} · Beat`} onClose={onClose}>
+      <Field label="Beat">
         <input class="input" value={m.label}
           onChange={(e) => upd((x) => { x.label = (e.target as HTMLInputElement).value; })} />
       </Field>
@@ -123,29 +133,23 @@ function MilestoneSheet({ ci, mi, onClose }: { ci: number; mi: number; onClose: 
           value={m.notes ?? ''}
           onChange={(e) => upd((x) => { x.notes = (e.target as HTMLTextAreaElement).value; })} />
       </Field>
-
-      {relatedQuests.length > 0 && (
-        <div class="npc-block">
-          <div class="field-label">Chapter {ch.id} quests — tap status to advance</div>
-          {relatedQuests.map((q) => (
-            <div class="ms-quest">
-              <span class={`ms-quest-name${q.status === 'resolved' ? ' resolved' : ''}`}>{q.name}</span>
-              <button class={`standing q-${q.status}`}
-                style={{ background: 'none', cursor: 'pointer', minHeight: '34px', flexShrink: 0 }}
-                onClick={() => patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.status = nextStatus[x.status]; })}
-              >{q.status}</button>
-            </div>
-          ))}
-        </div>
-      )}
+      <Field label="Link to quest — auto-completes this beat when the quest resolves">
+        <select class="input" value={m.questId ?? ''}
+          onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd((x) => { x.questId = v || null; }); }}>
+          <option value="">— not linked (manual toggle) —</option>
+          {chapterQuests.map((q) => <option value={q.id}>{q.name}</option>)}
+        </select>
+      </Field>
 
       <div class="row-actions" style={{ justifyContent: 'space-between', marginTop: '14px' }}>
-        <ConfirmBtn label="Delete milestone" confirmLabel="Delete?" class="mini ghost danger"
+        <ConfirmBtn label="Delete beat" confirmLabel="Delete?" class="mini ghost danger"
           onConfirm={() => { patch((d) => { d.chapters[ci].milestones.splice(mi, 1); }); onClose(); }} />
-        <button class={`btn ${m.done ? '' : 'primary'}`}
-          onClick={() => { upd((x) => { x.done = !x.done; }); }}>
-          {m.done ? 'Reopen ○' : 'Complete ✦'}
-        </button>
+        {!m.questId && (
+          <button class={`btn ${m.done ? '' : 'primary'}`}
+            onClick={() => { upd((x) => { x.done = !x.done; }); }}>
+            {m.done ? 'Reopen ○' : 'Complete ✦'}
+          </button>
+        )}
       </div>
     </Sheet>
   );
@@ -157,35 +161,70 @@ function ProgressPanel() {
   return (
     <>
       {chapters.map((c, ci) => {
-        const done = c.milestones.filter((m) => m.done).length;
-        const complete = done === c.milestones.length && c.milestones.length > 0;
+        const beatsDone = c.milestones.filter(beatDone).length;
+        const allBeats = c.milestones.length > 0 && beatsDone === c.milestones.length;
+        const chapterQuests = state.value.quests.filter((q) => q.chapter === c.id);
         return (
-          <div class={`card chapter ${complete ? 'complete' : ''}`}>
+          <div class={`card chapter ${c.done ? 'complete' : ''}`}>
             <div class="unit-top">
-              <span class={`ch-num${complete ? ' done' : ''}`}>{c.id}</span>
+              <span class={`ch-num${c.done ? ' done' : ''}`}>{c.id}</span>
               <div class="unit-id">
                 <div class="unit-name">{c.label}</div>
-                <div class="unit-meta">Levels {c.levels} · {done}/{c.milestones.length} milestones</div>
+                <div class="unit-meta">Levels {c.levels} · {beatsDone}/{c.milestones.length} beats</div>
               </div>
             </div>
+
+            {/* 1 — beats: manual toggle, or a derived ✓ for quest-linked ones */}
             <div class="milestones">
-              {c.milestones.map((m, mi) => (
-                <div class="milestone-row">
-                  <button class="ms-toggle" aria-label={m.done ? 'Reopen' : 'Complete'}
-                    onClick={() => patch((d) => { d.chapters[ci].milestones[mi].done = !d.chapters[ci].milestones[mi].done; })}>
-                    <span class="ms-mark">{m.done ? '✦' : '○'}</span>
-                  </button>
-                  <button class={`milestone${m.done ? ' done' : ''}`} onClick={() => setOpenMs({ ci, mi })}>
-                    {m.label}{m.notes ? <span class="ms-has-notes"> ✎</span> : null}
-                  </button>
-                </div>
-              ))}
+              {c.milestones.map((m, mi) => {
+                const linked = !!m.questId;
+                const done = beatDone(m);
+                const q = beatQuest(m);
+                return (
+                  <div class="milestone-row">
+                    <button class="ms-toggle" disabled={linked}
+                      aria-label={done ? 'Reopen' : 'Complete'}
+                      onClick={() => { if (!linked) patch((d) => { const x = d.chapters[ci].milestones[mi]; x.done = !x.done; }); }}>
+                      <span class="ms-mark">{done ? '✦' : '○'}</span>
+                    </button>
+                    <button class={`milestone${done ? ' done' : ''}`} onClick={() => setOpenMs({ ci, mi })}>
+                      {m.label}
+                      {linked && <span class="ms-link"> 🔗 {q?.name ?? 'quest'}</span>}
+                      {m.notes ? <span class="ms-has-notes"> ✎</span> : null}
+                    </button>
+                  </div>
+                );
+              })}
               <button class="btn mini ghost" style={{ alignSelf: 'flex-start', marginTop: '4px' }}
                 onClick={() => {
-                  patch((d) => { d.chapters[ci].milestones.push({ label: 'New milestone', done: false }); });
+                  patch((d) => { d.chapters[ci].milestones.push({ label: 'New beat', done: false }); });
                   setOpenMs({ ci, mi: c.milestones.length });
-                }}>+ Milestone</button>
+                }}>+ Beat</button>
             </div>
+
+            {/* 2 — chapter quests: the derived checklist, tap status to advance */}
+            {chapterQuests.length > 0 && (
+              <div class="chapter-quests">
+                <div class="field-label">Chapter quests</div>
+                {chapterQuests.map((q) => (
+                  <div class="ms-quest">
+                    <span class={`ms-quest-name${q.status === 'resolved' ? ' resolved' : ''}`}>
+                      {q.status === 'resolved' ? '✓ ' : ''}{q.name}
+                    </span>
+                    <button class={`standing q-${q.status}`}
+                      style={{ background: 'none', cursor: 'pointer', minHeight: '34px', flexShrink: 0 }}
+                      onClick={() => patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.status = NEXT_QUEST_STATUS[x.status]; })}
+                    >{q.status}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 3 — manual chapter completion; glows once every beat is done */}
+            <button class={`btn wide complete-chapter${allBeats && !c.done ? ' ready' : ''}`}
+              onClick={() => patch((d) => { d.chapters[ci].done = !d.chapters[ci].done; })}>
+              {c.done ? 'Chapter complete ✦ — reopen' : 'Complete chapter ✦'}
+            </button>
           </div>
         );
       })}

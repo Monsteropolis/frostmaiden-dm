@@ -8,7 +8,7 @@
 import { useState } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { Sheet } from './ui';
-import { startBroadcast, stopBroadcast, tvStatus, tvStatusDetail } from '../tv/broadcaster';
+import { startBroadcast, stopBroadcast, unmuteTv, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 import { projectPlayerView, type PokeKind } from '../tv/projection';
@@ -188,9 +188,19 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             <button class="btn ghost" onClick={() => { setYt(''); patch((d) => { d.tv.youtubeId = ''; if (d.tv.slotView === 'video') d.tv.slotView = 'scene'; }); }}>Stop</button>
           )}
         </div>
+        {state.value.tv.youtubeId && (
+          <button
+            class="btn wide"
+            style={{ marginTop: '8px' }}
+            disabled={status !== 'open'}
+            onClick={unmuteTv}
+          >🔊 Enable sound on TV</button>
+        )}
         <p class="stat-fine">
           {state.value.tv.youtubeId
-            ? `Loaded (${state.value.tv.youtubeId}). Choose 📺 Video above to show it, or leave it under the scene as audio. Starts muted — tap the 🔊 pill on the TV once to enable sound.`
+            ? status === 'open'
+              ? `Loaded (${state.value.tv.youtubeId}). Choose 📺 Video above to show it, or leave it as audio under the scene. It starts muted — tap 🔊 Enable sound on TV (here on your phone) to turn it up.`
+              : `Loaded (${state.value.tv.youtubeId}). Connect to the TV first, then 🔊 Enable sound on TV — the sound turns on from your phone, since the TV can't be tapped.`
             : 'Paste a link, then choose 📺 Video to show it — or keep it playing as audio under the scene art.'}
         </p>
       </div>
