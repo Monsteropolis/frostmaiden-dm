@@ -4,51 +4,10 @@ import { PC, Ally, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema
 import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod } from './monsters';
 import { ApiMonsterPanel, getApiMonster } from '../lib/api';
 import { CREATURES } from '../data';
-import { allNpcs, openNpc } from './npcs';
-import { Sheet, ConfirmBtn, Field, NumInput, CondEditor } from '../components/ui';
+import { allNpcs, openNpc, npcSpriteFor } from './npcs';
+import { Sheet, ConfirmBtn, Field, NumInput, CondEditor, Stepper } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
-import { ACTOR_SPRITES, ActorSprite } from '../data/actor-sprites';
-
-// ---------------------------------------------------------------- sprite picker
-
-/** Idle frame 0, zoomed so the (measured) character fills the thumb box. */
-function spriteThumbStyle(a: ActorSprite, size = 44): Record<string, string> {
-  const idle = a.anims.idle;
-  if (!idle) return {};
-  const z = (0.72 * size) / a.contentH;
-  return {
-    width: `${size}px`, height: `${size}px`,
-    backgroundImage: `url(${idle.file})`,
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: `${idle.frames * a.frameW * z}px auto`,
-    backgroundPosition: `${size / 2 - (a.frameW * z) / 2}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
-    imageRendering: 'pixelated',
-  };
-}
-
-/** "Who wears which sprite" — descriptor thumbnails + Default (classic look). */
-export function SpritePicker({ value, onPick }: { value?: string; onPick: (id?: string) => void }) {
-  return (
-    <div class="sprite-picker">
-      <button
-        class={`sprite-pick${!value ? ' on' : ''}`}
-        onClick={() => onPick(undefined)}
-        title="Classic atlas / emoji look"
-      ><span class="sprite-pick-default">✦</span><span class="sprite-pick-name">Default</span></button>
-      {ACTOR_SPRITES.map((a) => (
-        <button
-          key={a.id}
-          class={`sprite-pick${value === a.id ? ' on' : ''}`}
-          onClick={() => onPick(a.id)}
-          title={a.label}
-        >
-          <span class="sprite-pick-thumb" style={spriteThumbStyle(a)} />
-          <span class="sprite-pick-name">{a.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
+import { SpritePicker } from '../components/SpritePicker';
 
 // ---------------------------------------------------------------- helpers
 
@@ -92,6 +51,62 @@ function CondSummary({ conditions }: { conditions: string[] }) {
   return (
     <div class="cond-summary">
       {conditions.map((c) => <span class="cond-tag">{c}</span>)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- items
+
+/** One owner's item rows (stash = null): qty stepper, ⋯ (move/edit/remove),
+ *  and a quick-add row for improvised loot. Granting = revealing: everything
+ *  here reaches the Realm (except DM notes, which never leave the phone). */
+export function ItemRows({ ownerId }: { ownerId: string | null }) {
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [add, setAdd] = useState({ name: '', emoji: '🎁' });
+  const items = state.value.inventory.filter((it) => it.ownerId === ownerId);
+  const upd = (id: string, fn: (it: import('../state/schema').OwnedItem) => void) =>
+    patch((d) => { const it = d.inventory.find((x) => x.id === id); if (it) fn(it); });
+
+  return (
+    <div class="item-rows">
+      {items.map((it) => (
+        <div class="item-row-wrap" key={it.id}>
+          <div class="item-row">
+            <span class="item-emoji">{it.emoji}</span>
+            <span class="item-name">{it.name}</span>
+            <Stepper label="" value={it.qty}
+              onDelta={(dl) => upd(it.id, (x) => { x.qty = Math.max(1, x.qty + dl); })} />
+            <button class="btn mini ghost" aria-label="Item actions"
+              onClick={() => setMenuFor(menuFor === it.id ? null : it.id)}>⋯</button>
+          </div>
+          {menuFor === it.id && (
+            <div class="item-menu">
+              <label class="field-label" style={{ margin: 0 }}>Move to</label>
+              <select class="input" value={it.ownerId ?? ''}
+                onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd(it.id, (x) => { x.ownerId = v || null; }); setMenuFor(null); }}>
+                <option value="">🎒 Party stash</option>
+                {state.value.party.map((p) => <option value={p.id}>{p.name}</option>)}
+              </select>
+              <input class="input" value={it.name} aria-label="Item name"
+                onInput={(e) => upd(it.id, (x) => { x.name = (e.target as HTMLInputElement).value; })} />
+              <input class="input" style={{ width: '58px' }} value={it.emoji} aria-label="Item emoji"
+                onInput={(e) => upd(it.id, (x) => { x.emoji = (e.target as HTMLInputElement).value; })} />
+              <ConfirmBtn label="Remove" confirmLabel="Remove?" class="mini ghost danger"
+                onConfirm={() => { patch((d) => { d.inventory = d.inventory.filter((x) => x.id !== it.id); }); setMenuFor(null); }} />
+            </div>
+          )}
+        </div>
+      ))}
+      <div class="item-add">
+        <input class="input" style={{ width: '52px' }} value={add.emoji} aria-label="New item emoji"
+          onInput={(e) => { const v = (e.target as HTMLInputElement).value; setAdd((p) => ({ ...p, emoji: v })); }} />
+        <input class="input" style={{ flex: 1 }} placeholder="Improvised loot…" value={add.name}
+          onInput={(e) => { const v = (e.target as HTMLInputElement).value; setAdd((p) => ({ ...p, name: v })); }} />
+        <button class="btn mini" disabled={!add.name.trim()} onClick={() => {
+          patch((d) => { d.inventory.push({ id: `it${d.seq++}`, name: add.name.trim(), emoji: add.emoji || '🎁', qty: 1, ownerId }); });
+          setAdd({ name: '', emoji: '🎁' });
+        }}>+ Add</button>
+      </div>
     </div>
   );
 }
@@ -172,6 +187,9 @@ function PcCard({ pc }: { pc: PC }) {
               p.conditions = p.conditions.includes(c) ? p.conditions.filter((x) => x !== c) : [...p.conditions, c];
             })}
           />
+
+          <div class="field-label" style={{ marginTop: '10px' }}>Items</div>
+          <ItemRows ownerId={pc.id} />
 
           <label class="field" style={{ marginTop: '10px' }}>
             <span class="field-label">Notes (DM only)</span>
@@ -353,6 +371,8 @@ function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: bo
     id: '', name: '', emoji: '🐺', kind: '', category, level: 1, hp: 11, maxHp: 11, ac: 13, initMod: 2,
     scores: { str: 12, dex: 14, con: 12, int: 3, wis: 12, cha: 6 },
     attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '',
+    // Tasha's sidekicks are someone's companion by nature; recruited allies wander.
+    follow: category === 'sidekick' ? 'pc' : 'party',
   };
   const [f, setF] = useState<Ally>(blank);
   const set = (k: keyof Ally, v: unknown) => setF((prev) => ({ ...prev, [k]: v } as Ally));
@@ -379,14 +399,26 @@ function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: bo
               <button class={`cond-chip${f.sidekickClass === c ? ' on' : ''}`} onClick={() => setF((prev) => ({ ...prev, sidekickClass: prev.sidekickClass === c ? undefined : c }))}>{c}</button>
             ))}
           </div>
-          <Field label="Linked to (whose sidekick)">
-            <select class="input" value={f.linkedPcId ?? ''}
-              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; setF((prev) => ({ ...prev, linkedPcId: v || undefined })); }}>
-              <option value="">— the whole party —</option>
-              {state.value.party.map((p) => <option value={p.id}>{p.name}</option>)}
-            </select>
-          </Field>
         </>
+      )}
+      <div class="field-label">Follows — how they roam on the Realm</div>
+      <div class="chip-row" style={{ marginBottom: '12px' }}>
+        {([['pc', 'A character'], ['party', 'The whole party'], ['free', 'Roams free']] as const).map(([mode, label]) => (
+          <button
+            key={mode}
+            class={`cond-chip${(f.follow ?? (f.linkedPcId ? 'pc' : 'party')) === mode ? ' on' : ''}`}
+            onClick={() => setF((prev) => ({ ...prev, follow: mode }))}
+          >{label}</button>
+        ))}
+      </div>
+      {(f.follow ?? (f.linkedPcId ? 'pc' : 'party')) === 'pc' && (
+        <Field label="Linked to (whose companion)">
+          <select class="input" value={f.linkedPcId ?? ''}
+            onChange={(e) => { const v = (e.target as HTMLSelectElement).value; setF((prev) => ({ ...prev, linkedPcId: v || undefined })); }}>
+            <option value="">— pick a character —</option>
+            {state.value.party.map((p) => <option value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
       )}
       <div class="field-row">
         <Field label="Max HP"><NumInput value={f.maxHp} min={1} onInput={(n) => set('maxHp', n)} /></Field>
@@ -445,6 +477,7 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
         scores: a.scores ?? { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
         attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '',
         name: a.name, emoji: a.emoji, srcType: a.srcType, srcId: a.srcId,
+        sprite: a.sprite, follow: 'party',
       });
     });
 
@@ -482,7 +515,7 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
         {npcMatches.map((n) => (
           <button class="chip npc-chip" onClick={() => {
             const s = n.seed;
-            recruit({ name: n.name, emoji: n.emoji, maxHp: s?.hp ?? 10, ac: s?.ac ?? 12, srcType: 'npc', srcId: n.id, kind: n.role });
+            recruit({ name: n.name, emoji: n.emoji, maxHp: s?.hp ?? 10, ac: s?.ac ?? 12, srcType: 'npc', srcId: n.id, kind: n.role, sprite: npcSpriteFor(n.id) });
             onClose();
           }}>{n.emoji} {n.name}</button>
         ))}
@@ -530,6 +563,11 @@ export function PartyScreen() {
           onInput={(e) => patch((d) => { d.tv.partyLocation = (e.target as HTMLInputElement).value; })}
         />
         <p class="stat-fine" style={{ margin: '4px 0 0' }}>Shown top-left on the TV. While set, it overrides the journey route; clear it to let travel take over.</p>
+      </div>
+
+      <div class="card">
+        <h3>🎒 Party stash</h3>
+        <ItemRows ownerId={null} />
       </div>
 
       <div class="sub-tabs">

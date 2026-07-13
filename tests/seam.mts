@@ -48,6 +48,11 @@ patch((d) => {
   ];
   d.weather.log.push({ day: 2, weather: 'blizzard', note: 'SEAM_WEATHER_NOTE' });
   d.travel.log.push({ day: 2, text: 'SEAM_TRAVEL_NOTE' });
+  // Wave 4: items are visible by design — but their DM notes never are.
+  d.inventory = [
+    { id: 'it1', name: 'Frozen Locket', emoji: '🧿', qty: 1, ownerId: 'pc1', srcIndex: 'frozen-locket', notes: 'SEAM_ITEM_NOTES' },
+    { id: 'it2', name: 'Rope (50 ft)', emoji: '🎒', qty: 2, ownerId: null, notes: 'SEAM_ITEM_NOTES' },
+  ];
 });
 
 const pv = projectPlayerView(state.value);
@@ -78,6 +83,9 @@ const ALLOW = new Set<string>([
   'combat.combatants[].hpState', 'combat.combatants[].init', 'combat.combatants[].conditions[]',
   'combat.combatants[].active', 'combat.combatants[].next', 'combat.combatants[].deathS', 'combat.combatants[].deathF',
   'quests[].id', 'quests[].name', 'quests[].town', 'quests[].status', 'quests[].mainHook',
+  // Wave 4 — the items domain. Granting = revealing: these five are the whole
+  // item on the wire. OwnedItem.notes is deliberately absent (sentinel-guarded).
+  'inventory[].id', 'inventory[].name', 'inventory[].emoji', 'inventory[].qty', 'inventory[].ownerId',
   'sentAt',
 ]);
 

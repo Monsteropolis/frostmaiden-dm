@@ -157,7 +157,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-strip .tv-conn { font-size: 18px; }
 
 /* --- Panels ------------------------------------------------------------------ */
-.tv-combat { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; flex: 1; min-height: 0; }
+/* Wave 4: initiative narrows to a rail (~360–400px); the Realm gets the width —
+   the diorama is the emotional payload, not the list. */
+.tv-combat { display: grid; grid-template-columns: minmax(340px, 400px) 1fr; gap: 40px; flex: 1; min-height: 0; }
 .tv-explore { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; flex: 1; min-height: 0; }
 .tv-combat section, .tv-explore section {
   background: var(--surface);
@@ -178,15 +180,28 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-round.pulse { animation: tvRoundPulse 0.8s steps(2, jump-none); }
 @keyframes tvRoundPulse { from { color: var(--ink); text-shadow: 0 0 18px var(--frost-glow); } to { color: var(--frost); text-shadow: none; } }
 
-/* --- Initiative rail ---------------------------------------------------------- */
-.tv-init-list { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+/* --- Initiative rail (condensed: thumb · name · HP, one line) ------------------- */
+.tv-init-list { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
 .tv-init-row {
-  display: flex; align-items: center; gap: 18px;
-  font-size: 32px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 24px; padding: 6px 10px;
   border-radius: var(--radius-sm);
   border: 2px solid transparent;
+  white-space: nowrap; overflow: hidden;
 }
-.tv-init-row.active { background: var(--panel); border-color: var(--thread); }
+.tv-init-row.active {
+  background: var(--panel); border-color: var(--thread);
+  box-shadow: 0 0 14px var(--thread-glow);
+}
+.tv-init-thumb {
+  flex: 0 0 40px; width: 40px; height: 40px;
+  display: grid; place-items: center;
+  background: var(--surface); border-radius: 6px;
+  overflow: hidden;
+}
+.tv-init-row.active .tv-init-thumb { background: var(--thread-deep); }
+.tv-init-thumb-sprite { display: block; }
+.tv-init-thumb-emoji { font-size: 26px; line-height: 1; }
 /* 3-frame stepped flash when the turn changes */
 .tv-init-row.flash { animation: tvTurnFlash 0.6s steps(3, jump-none); }
 @keyframes tvTurnFlash {
@@ -487,8 +502,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 
 /* === PHASE 9: initiative-first combat, roster exploration, threads === */
 
-/* combat: the order is the focal element; the scene sets the mood */
-.tv-combat { grid-template-columns: 3fr 2fr !important; }
+/* combat (Wave 4 inversion): the Realm is the focal element; the order is a rail */
+.tv-combat { grid-template-columns: minmax(340px, 400px) 1fr !important; }
 .tv-combat .tv-scene { flex: none; min-height: 0; }
 .tv-init { min-height: 0; overflow: hidden; }
 .tv-init-list { min-height: 0; overflow: hidden; }

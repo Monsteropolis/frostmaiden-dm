@@ -8,6 +8,7 @@ import { CustomNpc, Standing, AllyAttack } from '../state/schema';
 import { NPCS, SeedNpc } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
+import { SpritePicker } from '../components/SpritePicker';
 
 /** Global NPC popup — call openNpc(id) from any screen. */
 export const npcPopupId = signal<string | null>(null);
@@ -42,6 +43,13 @@ export function allNpcs(): NpcView[] {
 
 export function npcStanding(id: string): Standing {
   return (state.value.npcOverrides[id]?.standing ?? 'neutral') as Standing;
+}
+
+/** Sprite resolution order for any NPC-derived actor:
+ *  NpcOverride.sprite → CustomNpc.sprite → undefined (name-match / emoji downstream). */
+export function npcSpriteFor(id: string): string | undefined {
+  return state.value.npcOverrides[id]?.sprite
+    ?? state.value.customNpcs.find((n) => n.id === id)?.sprite;
 }
 
 
@@ -164,6 +172,12 @@ function NpcDetail({ npc, open, onClose, onEdit }: { npc: NpcView; open: boolean
         </div>
       )}
 
+      <div class="field-label">Realm sprite — how they appear in initiative &amp; the Realm</div>
+      <SpritePicker
+        value={npcSpriteFor(npc.id)}
+        onPick={(id) => patch((d) => { d.npcOverrides[npc.id] = { ...d.npcOverrides[npc.id], sprite: id }; })}
+      />
+
       <Field label="Your notes">
         <textarea class="input" rows={3} value={notes}
           onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
@@ -209,6 +223,8 @@ export function NpcForm({ open, onClose, existing }: { open: boolean; onClose: (
         <Field label="Fears"><input class="input" value={f.fears} onInput={set('fears')} /></Field>
       </div>
       <Field label="Appearance"><input class="input" value={f.appearance} onInput={set('appearance')} /></Field>
+      <div class="field-label">Realm sprite — how they appear in initiative &amp; the Realm</div>
+      <SpritePicker value={f.sprite} onPick={(id) => setF((prev) => ({ ...prev, sprite: id }))} />
       <div class="field-row">
         <Field label="AC (optional)"><NumInput value={f.ac ?? 0} onInput={(n) => setF((prev) => ({ ...prev, ac: n || undefined }))} /></Field>
         <Field label="HP (optional)"><NumInput value={f.hp ?? 0} onInput={(n) => setF((prev) => ({ ...prev, hp: n || undefined }))} /></Field>

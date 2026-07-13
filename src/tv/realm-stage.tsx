@@ -231,6 +231,30 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     return () => clearInterval(iv);
   }, []);
 
+  // The item-get moment: Expressive state derived from successive views, like
+  // poses. A newly-appeared inventory id makes its owner (stash grant: the
+  // whole party) cheer with the item's emoji for ~2 ticks. Nothing persists —
+  // a published snapshot is a photograph and correctly does not replay this.
+  const prevInvIds = useRef<Set<string> | null>(null);
+  const [itemJoy, setItemJoy] = useState<{ until: number; byOwner: Record<string, string> } | null>(null);
+  useEffect(() => {
+    const inv = v.inventory ?? [];
+    const ids = new Set(inv.map((it) => it.id));
+    if (prevInvIds.current) {
+      const fresh = inv.filter((it) => !prevInvIds.current!.has(it.id));
+      if (fresh.length) {
+        const byOwner: Record<string, string> = {};
+        for (const it of fresh) byOwner[it.ownerId ?? '*party*'] = it.emoji;
+        setItemJoy({ until: Date.now() + 1500, byOwner });
+      }
+    }
+    prevInvIds.current = ids;
+  }, [v.inventory]);
+  const joyFor = (pcId: string): string | null => {
+    if (!itemJoy || Date.now() > itemJoy.until) return null;
+    return itemJoy.byOwner[pcId] ?? itemJoy.byOwner['*party*'] ?? null;
+  };
+
   // backdrop: the chosen scene if it's pixel art, else the auto pixel mood —
   // the diorama never letterboxes over a book scan.
   const chosen = sceneById(v.sceneId);
@@ -260,9 +284,14 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
   const actors: ActorRender[] = v.party.map((p, i) => {
     let pose = pickPose(p, i, behaviorTick, ctx);
     let flinch = false;
+    let joyBubble: string | null = null;
     if (pokeActive && !p.down && pokeHitsPc(pokeActive, p.id)) {
       if (pokeActive.kind === 'flinch') flinch = true;        // CSS shake, keeps its pose
       else pose = pokeActive.kind === 'cheer' || pokeActive.kind === 'taunt' ? 'cheer' : 'wave';
+    }
+    if (!p.down) {
+      const joy = joyFor(p.id);
+      if (joy) { pose = 'cheer'; joyBubble = joy; }           // item-get: cheer + the loot
     }
     const frames = POSE_FRAMES[pose];
     const drift = pose === 'walk' ? ((behaviorTick + i) % 2 ? 7 : -7) : 0;
@@ -274,7 +303,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       pose,
       frame: frames[tick % frames.length],
       name: p.name, hp: p.hp, maxHp: p.maxHp, hpState: pcHpState(p),
-      bubble: pickBubble(p, i, tick, ctx, pose),
+      bubble: joyBubble ?? pickBubble(p, i, tick, ctx, pose),
       flinch,
       active: inCombat && !!activePcName && p.name === activePcName,
       next: inCombat && !!nextPcName && p.name === nextPcName,
@@ -302,13 +331,37 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     };
   });
 
-  // familiars hover near their person, hopping between two offsets
-  const critters = v.allies.map((a: PvAlly, i) => {
-    const owner = actors.find((ac) => ac.key === a.linkedPcId);
-    const base = owner ? owner.x : 90 - i * 8;
-    const hop = (tick + i) % 6 < 3 ? -6 : 6;
-    return { key: a.id, x: base + hop, frame: (tick + i) % 2, down: a.down, name: a.name };
+  // Allies roam by mode (all seeded/deterministic — same idiom as poses):
+  //   pc    — hover near the linked PC, small hop (the classic familiar)
+  //   party — wander the party's x-range, slow triangle drift, wider swing
+  //   free  — roam the whole stage, indifferent to the party
+  const tri = (x: number) => Math.abs(((x % 2) + 2) % 2 - 1);   // 0→1→0 triangle wave
+  const pcXs = actors.map((ac) => ac.x);
+  const partyLo = pcXs.length ? Math.max(6, Math.min(...pcXs) - 6) : 30;
+  const partyHi = pcXs.length ? Math.min(94, Math.max(...pcXs) + 6) : 70;
+  const allyActors = v.allies.map((a: PvAlly, i) => {
+    const sprite = actorSpriteById(a.sprite);
+    const mode = a.linkedPcId === 'free' ? 'free' : a.linkedPcId ? 'pc' : 'party';
+    const phase = (hashStr(a.id) % 97) / 11;
+    let x: number;
+    if (mode === 'pc') {
+      const owner = actors.find((ac) => ac.key === a.linkedPcId);
+      const base = owner ? owner.x : 90 - i * 8;
+      x = base + ((tick + i) % 6 < 3 ? -6 : 6);
+    } else if (mode === 'party') {
+      x = partyLo + (partyHi - partyLo) * tri(phase + tick / 26);
+    } else {
+      x = 8 + 84 * tri(phase + tick / 40);                      // slow full-stage sweep
+    }
+    // roamers walk while their drift is steep; hoverers just idle
+    const moving = mode !== 'pc' && tick % 8 < 5;
+    return {
+      key: a.id, x, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
+      pose: a.down ? 'down' : moving ? 'walk' : 'idle',
+      frame: (tick + i) % 2,
+    };
   });
+  const critters = allyActors.filter((c) => !c.sprite);         // descriptor-less → 12px critter
 
   // cameo: a location-appropriate silhouette drifts by on a slow clock
   const CAMEO_BY_CAT: Record<string, number> = { pixel: 0, location: 0 };
@@ -334,6 +387,15 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             }}
           />
         )}
+        {allyActors.map((c) => c.sprite && (
+          <SpriteActor
+            key={c.key}
+            sprite={c.sprite} pose={c.pose} name={c.name}
+            hpState={c.hpState}
+            bubble={null} flinch={false} active={false} next={false}
+            x={c.x} pokeSeq={pokeSeq}
+          />
+        ))}
         {critters.map((c) => !c.down && (
           <span
             key={c.key}

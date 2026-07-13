@@ -991,7 +991,12 @@ console.log('\n═══ SCENE 27: World ▸ Encounters — tables & prebuilt �
   click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
   click(byText('.sub-tab', 'Encounters'), 'Encounters sub-tab'); await sleep(30);
   check('rollable tables render', bodyHas('Wilderness Travel') && bodyHas('Rollable tables'));
+  // Wave 4: everything is collapsed by default — a scannable index
+  check('tables are collapsed by default', $$('.enc-row').length === 0);
+  click($('.enc-toggle'), 'expand first table'); await sleep(20);
+  check('expanding a table reveals its rows', $$('.enc-row').length > 0);
   check('combat rows carry a Send button', $$('.enc-row .btn.primary').length > 0);
+  click($('.enc-section-head'), 'expand prebuilt section'); await sleep(20);
   check('prebuilt encounters present', bodyHas('Prebuilt encounters') && bodyHas('Bandit Ambush'));
 
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
@@ -1042,6 +1047,49 @@ console.log('\n═══ SCENE 28: Wave 3 — the 384×216 stage, sprite actors,
   check('unmatched foe stays an emoji token', html.includes('tv-foe-token') && html.includes('Frost Druid'));
   check('CSS steps animation attached', html.includes('realmSpriteRun') && html.includes('steps('));
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; d.tv.slotView = 'scene'; });
+}
+
+console.log('\n═══ SCENE 29: Wave 4 — ally sprites, roaming, the items domain ═══');
+{
+  const { render: rts } = await import('preact-render-to-string');
+  const { RealmStage } = await import('../src/tv/realm-stage.tsx');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { patch } = await import('../src/state/store.ts');
+
+  patch((d) => {
+    d.party = [
+      { id: 'w4pc', name: 'Hero', cls: 'Fighter', level: 3, race: 'Human', hp: 20, maxHp: 20, ac: 15, pp: 12, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0, notes: '' },
+    ];
+    d.sidekicks = [
+      { id: 'w4wolf', name: 'Fang', emoji: '🐺', kind: 'Wolf', category: 'ally', level: 1, hp: 11, maxHp: 11, ac: 13, initMod: 2, scores: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 }, attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '', sprite: 'wolf', follow: 'free' },
+      { id: 'w4cat', name: 'Mitts', emoji: '🐈', kind: 'Cat', category: 'sidekick', linkedPcId: 'w4pc', level: 1, hp: 5, maxHp: 5, ac: 12, initMod: 1, scores: { str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7 }, attacks: [], conditions: [], deathS: 0, deathF: 0, location: '', notes: '', follow: 'pc' },
+    ] as never;
+    d.inventory = [
+      { id: 'w4it1', name: 'Potion of Healing', emoji: '🧪', qty: 2, ownerId: 'w4pc', notes: 'stolen from Dzaan' },
+      { id: 'w4it2', name: 'Rope', emoji: '🎒', qty: 1, ownerId: null },
+    ];
+    d.combat = { active: false, round: 0, turn: 0, combatants: [] };
+    d.tv.slotView = 'realm';
+  });
+  const pv = projectPlayerView(state.value);
+  check('follow=free rides linkedPcId as a mode token', pv.allies[0].linkedPcId === 'free');
+  check('follow=pc keeps the real linked id', pv.allies[1].linkedPcId === 'w4pc');
+  check('inventory projected without DM notes', pv.inventory.length === 2 && !JSON.stringify(pv).includes('Dzaan'));
+  const html = rts(h(RealmStage, { v: pv }));
+  check('sprite ally renders as sprite actor, not critter', html.includes('realm-sprite-actor') && html.includes('Fang'));
+  check('descriptor-less ally still renders as critter', html.includes('tv-idle-critter'));
+
+  // roam ranges: free sweeps wider than party over a behavior cycle
+  const xsAt = (t: number) => {
+    // reproduce the renderer's triangle-drift math for the free ally
+    const tri = (x: number) => Math.abs(((x % 2) + 2) % 2 - 1);
+    return { free: 8 + 84 * tri(t / 40), party: 30 + 40 * tri(t / 26) };
+  };
+  const freeRange = Math.max(...[0, 20, 40, 60, 80].map((t) => xsAt(t).free)) - Math.min(...[0, 20, 40, 60, 80].map((t) => xsAt(t).free));
+  const partyRange = Math.max(...[0, 20, 40, 60, 80].map((t) => xsAt(t).party)) - Math.min(...[0, 20, 40, 60, 80].map((t) => xsAt(t).party));
+  check('free roams wider than party-wander', freeRange > partyRange);
+
+  patch((d) => { d.inventory = []; d.tv.slotView = 'scene'; });
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

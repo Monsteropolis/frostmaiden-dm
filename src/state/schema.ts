@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -46,6 +46,8 @@ export interface NpcOverride {
   standing?: Standing;
   lastSeen?: string;   // free-text context, e.g. "S3 — warned party about Sephek"
   notes?: string;
+  /** Sprite for a preset/module NPC — set without editing seed data. */
+  sprite?: string;
 }
 
 export interface WeatherLogEntry {
@@ -112,6 +114,8 @@ export interface Ally {
   notes: string;
   /** Actor sprite descriptor id (data/actor-sprites.ts); undefined = critter/emoji. */
   sprite?: string;
+  /** Realm roaming: hug a PC, wander the party, or roam the whole stage. */
+  follow?: 'pc' | 'party' | 'free';
 }
 
 export type CombatantSrc = 'pc' | 'ally' | 'monster' | 'custom' | 'api' | 'custommon';
@@ -171,6 +175,8 @@ export interface CustomNpc {
   ac?: number;
   hp?: number;
   attacks?: AllyAttack[];
+  /** Actor sprite descriptor id — how this NPC appears on the Realm/initiative. */
+  sprite?: string;
 }
 
 export type ArcStatus = 'dormant' | 'active' | 'escalating' | 'resolved';
@@ -268,6 +274,19 @@ export interface Chapter {
 /** A DM-dropped pin on the region map (native 1353×954 px coords). */
 export interface MapPin { id: string; name: string; x: number; y: number; kind: 'custom' }
 
+/** A thing the party carries. Items are things, not numbers — no weight,
+ *  no currency math (gold/rations live in travel). Granting = revealing:
+ *  everything here reaches the Realm except `notes`. */
+export interface OwnedItem {
+  id: string;
+  name: string;
+  emoji: string;
+  qty: number;
+  ownerId: string | null;   // null = party stash, else a PC id
+  srcIndex?: string;        // optional link back to the compendium entry
+  notes?: string;           // DM-only. NEVER projected — sentinel-guarded in the seam tests.
+}
+
 export type Pace = 'cautious' | 'normal' | 'dogsled';
 
 export interface Journey {
@@ -338,6 +357,8 @@ export interface AppState {
   /** The DM's own map pins (kind 'custom'). Seeded places live in data/map.ts.
    *  DM-only — never projected. */
   mapPins: MapPin[];
+  /** Everything the party carries — stash (ownerId null) + per-PC items. */
+  inventory: OwnedItem[];
 
   // NPC system — first-class from the start
   npcOverrides: Record<string, NpcOverride>;
@@ -366,6 +387,7 @@ export function defaultState(): AppState {
     travel: { activeJourney: null, log: [], rations: 10, partySize: 4, gold: 0 },
     towns: {},
     mapPins: [],
+    inventory: [],
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
