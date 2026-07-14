@@ -44,6 +44,7 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
   const [yt, setYt] = useState(state.value.tv.youtubeId);
   const [copied, setCopied] = useState<{ kb: string; withheld: number } | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
+  const [soundSent, setSoundSent] = useState(false);
   const status = tvStatus.value;
   const live = status === 'open' || status === 'connecting' || status === 'reconnecting';
 
@@ -193,8 +194,15 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
             class="btn wide"
             style={{ marginTop: '8px' }}
             disabled={status !== 'open'}
-            onClick={unmuteTv}
+            onClick={() => { unmuteTv(); setSoundSent(true); }}
           >🔊 Enable sound on TV</button>
+        )}
+        {soundSent && (
+          <p class="stat-fine" style={{ color: 'var(--frost)' }}>
+            Sound command sent. The TV keeps retrying for a few seconds — if it stays
+            silent, its browser wants one real press: click or hit OK on the TV once
+            and the sound comes on.
+          </p>
         )}
         <p class="stat-fine">
           {state.value.tv.youtubeId

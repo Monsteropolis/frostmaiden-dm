@@ -108,13 +108,54 @@ export function pickBubble(
   return null;
 }
 
-// --- positions: actors spread across the stage, walkers drift -------------------
-function homeX(i: number, n: number): number {
-  return 12 + (76 / Math.max(1, n - 1 || 1)) * i;            // % across the stage
+// --- the ground plane (Wave 5) ---------------------------------------------------
+// The walkable snow is a band on the 384×216 canvas. `y` is depth: 0 = the far
+// edge (treeline / back of camp), 1 = the near edge (foreground). Band height
+// MEASURED against the pixel backgrounds (bright-snow row scan): open scenes
+// carry snow up to ~42% from the bottom (camp, road), but the binding scenes
+// are peak (17%) and town (18% — buildings above). 16% fits inside every
+// scene's walkable ground AND keeps the old footline (bottom: 8%) at exactly
+// y = 0.5 — nothing jumped when the plane landed.
+export const GROUND_TOP = 16;   // bottom-% at y = 0
+export const GROUND_BOT = 0;    // bottom-% at y = 1
+
+const clamp01 = (y: number) => Math.max(0, Math.min(1, y));
+/** Screen mapping: depth y → CSS bottom-% on the stage canvas. */
+export function groundBottomPct(y: number): number {
+  return GROUND_TOP + (GROUND_BOT - GROUND_TOP) * clamp01(y);
 }
-// In combat the party gathers in the left half, foes in the right — loose ranks.
-function combatX(i: number, n: number, lo: number, hi: number): number {
-  return lo + ((hi - lo) / Math.max(1, n - 1 || 1)) * i;
+/** Painter's algorithm: higher y draws later, therefore in front. */
+export function depthZ(y: number): number {
+  return Math.round(clamp01(y) * 1000);
+}
+/** Perspective cue — subtle by decree. Applied via CSS scale (GPU-composited,
+ *  pixel art stays crisp); never by resampling the sprite's pixel dimensions. */
+export function depthScale(y: number): number {
+  return 0.85 + 0.15 * clamp01(y);
+}
+/** The three depth styles every grounded thing shares. */
+function groundStyle(y: number): Record<string, string | number> {
+  return { bottom: `${groundBottomPct(y)}%`, zIndex: depthZ(y), scale: String(depthScale(y)) };
+}
+
+// --- positions: actors scatter across the plane, walkers drift --------------------
+interface Pos { x: number; y: number }
+
+// Camp: a loose cluster — lanes in x for spacing, seeded scatter in x and y.
+function homePos(id: string, i: number, n: number): Pos {
+  const lane = 12 + (76 / Math.max(1, n - 1 || 1)) * i;      // % across the stage
+  return {
+    x: lane + (seeded(hashStr(id)) - 0.5) * 10,
+    y: 0.2 + 0.6 * seeded(hashStr(id) + 53),
+  };
+}
+// Combat: party left-ish, foes right-ish — but both scatter in depth instead of
+// forming two ranks. This is what un-stacks the name labels.
+function combatPos(id: string, i: number, n: number, lo: number, hi: number): Pos {
+  return {
+    x: lo + ((hi - lo) / Math.max(1, n - 1 || 1)) * i + (i % 2 ? 3 : -3),
+    y: 0.15 + 0.7 * seeded(hashStr(id) + 97),
+  };
 }
 
 // Foe chatter — sparse and deterministic, same seeded feel as party bubbles.
@@ -125,14 +166,14 @@ function pickFoeBubble(id: string, tick: number): string | null {
 }
 
 interface ActorRender {
-  key: string; x: number; row: number; pose: Pose; frame: number;
+  key: string; x: number; y: number; row: number; pose: Pose; frame: number;
   name: string; hp: number; maxHp: number; hpState: string; bubble: string | null;
   flinch: boolean; active: boolean; next: boolean;
   sprite?: ActorSprite;      // descriptor-backed actor; undefined = classic atlas
 }
 
 interface FoeRender {
-  key: string; x: number; emoji: string; name: string; hpState: HpState;
+  key: string; x: number; y: number; emoji: string; name: string; hpState: HpState;
   down: boolean; active: boolean; next: boolean; bubble: string | null;
   sprite?: ActorSprite;      // matched descriptor; undefined = emoji token
 }
@@ -141,6 +182,14 @@ interface FoeRender {
 
 export const STAGE_W = 384;
 export const STAGE_H = 216;
+
+/** The backdrop the stage will actually draw: the chosen scene if it's pixel
+ *  art, else the auto pixel mood. Exported so the trophy placement sheet
+ *  previews the very same background. */
+export function resolveStageScene(sceneId: string, ctx: { journeying: boolean; weatherId: string }): TvScene {
+  const chosen = sceneById(sceneId);
+  return chosen && chosen.cat === 'pixel' ? chosen : resolveScene('auto', ctx) ?? SCENES[0];
+}
 
 function useStageScale() {
   const ref = useRef<HTMLDivElement>(null);
@@ -181,11 +230,11 @@ function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
   } as Record<string, string>;
 }
 
-function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, pokeSeq }: {
+function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq }: {
   sprite: ActorSprite; pose: string; name: string;
   hp?: number; maxHp?: number; hpState: string;
   bubble: string | null; flinch: boolean; active: boolean; next: boolean;
-  x: number; pokeSeq: number;
+  x: number; y: number; pokeSeq: number;
 }) {
   const picked = animForPose(sprite, pose);
   if (!picked) return null;
@@ -198,7 +247,8 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
       style={{
         left: `${x}%`,
         width: `${sprite.frameW * s}px`,
-        bottom: `calc(8% - ${sprite.footPad * s}px)`,
+        ...groundStyle(y),
+        bottom: `calc(${groundBottomPct(y)}% - ${sprite.footPad * s}px)`,
       }}
     >
       {(active || next) && <span class="tv-turn-mark" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 4}px` }}>▼</span>}
@@ -257,10 +307,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
 
   // backdrop: the chosen scene if it's pixel art, else the auto pixel mood —
   // the diorama never letterboxes over a book scan.
-  const chosen = sceneById(v.sceneId);
-  const scene: TvScene = chosen && chosen.cat === 'pixel'
-    ? chosen
-    : resolveScene('auto', { journeying: !!v.travel, weatherId: v.weather.id }) ?? SCENES[0];
+  const scene = resolveStageScene(v.sceneId, { journeying: !!v.travel, weatherId: v.weather.id });
 
   const anyDown = v.party.some((p) => p.down);
   const ctx = {
@@ -295,23 +342,27 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     }
     const frames = POSE_FRAMES[pose];
     const drift = pose === 'walk' ? ((behaviorTick + i) % 2 ? 7 : -7) : 0;
-    const mingle = inCombat ? (i % 2 ? 3 : -3) : 0;           // mild ragged rank
+    const pos = inCombat ? combatPos(p.id, i, v.party.length, 8, 42) : homePos(p.id, i, v.party.length);
+    const active = inCombat && !!activePcName && p.name === activePcName;
     return {
       key: p.id,
-      x: (inCombat ? combatX(i, v.party.length, 8, 42) + mingle : homeX(i, v.party.length)) + drift,
+      x: pos.x + drift,
+      // the active combatant steps toward the viewer instead of hopping a rank
+      y: active ? Math.min(1, pos.y + 0.15) : pos.y,
       row: archetypeRow(p.cls),
       pose,
       frame: frames[tick % frames.length],
       name: p.name, hp: p.hp, maxHp: p.maxHp, hpState: pcHpState(p),
       bubble: joyBubble ?? pickBubble(p, i, tick, ctx, pose),
       flinch,
-      active: inCombat && !!activePcName && p.name === activePcName,
+      active,
       next: inCombat && !!nextPcName && p.name === nextPcName,
       sprite: actorSpriteById(p.sprite),
     };
   });
 
-  // Foes: emoji tokens, tinted by health, chattering now and then.
+  // Foes: sprites where the DM assigned or the name matches, else emoji tokens
+  // tinted by health, chattering now and then.
   const foes: FoeRender[] = foeCombatants.map((c, i) => {
     const down = c.hpState === 'down';
     let bubble = down ? null : pickFoeBubble(c.id, tick);
@@ -319,22 +370,26 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       && (pokeActive.kind === 'taunt' || pokeActive.kind === 'cheer')) {
       bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
     }
-    const mingle = i % 2 ? -3 : 3;
+    const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
     return {
       key: c.id,
-      x: combatX(i, foeCombatants.length, 58, 92) + mingle,
+      x: pos.x,
+      y: c.active ? Math.min(1, pos.y + 0.15) : pos.y,
       emoji: c.emoji, name: c.name, hpState: c.hpState, down,
       active: c.active, next: c.next, bubble,
-      // Matching runs on the projected name only (PvCombatant carries no srcId),
-      // so a DM-masked "???" foe can never match — the mask holds.
-      sprite: actorSpriteForFoe(undefined, c.name),
+      // Wave 5 resolution order: the appearance token (a descriptor id the DM
+      // assigned, riding the emoji path) → descriptor `matches` on the projected
+      // name → emoji token. A DM-masked "???" foe carries '❓' and can never
+      // match either way — the mask holds.
+      sprite: actorSpriteById(c.emoji) ?? actorSpriteForFoe(undefined, c.name),
     };
   });
 
-  // Allies roam by mode (all seeded/deterministic — same idiom as poses):
+  // Allies roam by mode (all seeded/deterministic — same idiom as poses),
+  // and since Wave 5 they roam the plane: x AND y.
   //   pc    — hover near the linked PC, small hop (the classic familiar)
   //   party — wander the party's x-range, slow triangle drift, wider swing
-  //   free  — roam the whole stage, indifferent to the party
+  //   free  — genuinely wanders the whole ground plane
   const tri = (x: number) => Math.abs(((x % 2) + 2) % 2 - 1);   // 0→1→0 triangle wave
   const pcXs = actors.map((ac) => ac.x);
   const partyLo = pcXs.length ? Math.max(6, Math.min(...pcXs) - 6) : 30;
@@ -343,20 +398,24 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     const sprite = actorSpriteById(a.sprite);
     const mode = a.linkedPcId === 'free' ? 'free' : a.linkedPcId ? 'pc' : 'party';
     const phase = (hashStr(a.id) % 97) / 11;
-    let x: number;
+    let x: number, y: number;
     if (mode === 'pc') {
       const owner = actors.find((ac) => ac.key === a.linkedPcId);
       const base = owner ? owner.x : 90 - i * 8;
       x = base + ((tick + i) % 6 < 3 ? -6 : 6);
+      // sit a half-step nearer than the owner, alternating sides of them in depth
+      y = clamp01((owner ? owner.y : 0.5) + (hashStr(a.id) % 2 ? 0.08 : -0.08));
     } else if (mode === 'party') {
       x = partyLo + (partyHi - partyLo) * tri(phase + tick / 26);
+      y = 0.2 + 0.6 * tri(phase * 1.7 + tick / 33);
     } else {
       x = 8 + 84 * tri(phase + tick / 40);                      // slow full-stage sweep
+      y = 0.05 + 0.9 * tri(phase * 1.3 + tick / 29);            // …and the full depth
     }
     // roamers walk while their drift is steep; hoverers just idle
     const moving = mode !== 'pc' && tick % 8 < 5;
     return {
-      key: a.id, x, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
+      key: a.id, x, y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
       pose: a.down ? 'down' : moving ? 'walk' : 'idle',
       frame: (tick + i) % 2,
     };
@@ -387,13 +446,28 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             }}
           />
         )}
+        {/* camp objects — trophies the DM put on display. Furniture, not actors:
+            they never move, they y-sort with everyone else, and a tap/hover
+            names them. */}
+        {(v.inventory ?? []).filter((it) => it.display).map((it) => (
+          <div
+            key={`obj-${it.id}`}
+            class="realm-object"
+            tabIndex={0}
+            title={it.name}
+            style={{ left: `${it.display!.x}%`, ...groundStyle(it.display!.y) }}
+          >
+            <span class="realm-object-emoji">{it.emoji}</span>
+            <span class="realm-object-label">{it.name}</span>
+          </div>
+        ))}
         {allyActors.map((c) => c.sprite && (
           <SpriteActor
             key={c.key}
             sprite={c.sprite} pose={c.pose} name={c.name}
             hpState={c.hpState}
             bubble={null} flinch={false} active={false} next={false}
-            x={c.x} pokeSeq={pokeSeq}
+            x={c.x} y={c.y} pokeSeq={pokeSeq}
           />
         ))}
         {critters.map((c) => !c.down && (
@@ -405,6 +479,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
               backgroundImage: `url(${critterUrl})`,
               backgroundPosition: `${-((c.frame + 2) % 4) * 12}px 0`,
               left: `${c.x}%`,
+              ...groundStyle(c.y),
             }}
           />
         ))}
@@ -414,13 +489,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             sprite={a.sprite} pose={a.pose} name={a.name}
             hp={a.hp} maxHp={a.maxHp} hpState={a.hpState}
             bubble={a.bubble} flinch={a.flinch} active={a.active} next={a.next}
-            x={a.x} pokeSeq={pokeSeq}
+            x={a.x} y={a.y} pokeSeq={pokeSeq}
           />
         ) : (
           <div
             key={a.flinch ? `${a.key}-flinch-${pokeSeq}` : a.key}
             class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
-            style={{ left: `${a.x}%` }}
+            style={{ left: `${a.x}%`, ...groundStyle(a.y) }}
           >
             {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
             {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
@@ -443,13 +518,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             sprite={f.sprite} pose={f.down ? 'down' : 'idle'} name={f.name}
             hpState={f.hpState}
             bubble={f.bubble} flinch={false} active={f.active} next={f.next}
-            x={f.x} pokeSeq={pokeSeq}
+            x={f.x} y={f.y} pokeSeq={pokeSeq}
           />
         ) : (
           <div
             key={f.key}
             class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
-            style={{ left: `${f.x}%` }}
+            style={{ left: `${f.x}%`, ...groundStyle(f.y) }}
             title={f.name}
           >
             {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}

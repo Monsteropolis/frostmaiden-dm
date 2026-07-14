@@ -7,10 +7,11 @@
 // Deviations from the Wave 3 brief's sketch, forced by measured
 // truth (the packs differ from the ones the brief anticipated):
 //  - `scale`: these packs are mini characters (~10–21 px content)
-//    centered in large padded frames (96/100 px). At the brief's
-//    "native 1×" they'd be half the size of a 2×-scaled legacy
-//    atlas actor, so descriptor actors carry their own integer
-//    scale (2 here) — same goal, one coherent game.
+//    centered in large padded frames (96/100 px). Wave 5 sets the
+//    whole game to 1× — characters read ~10% of stage height, so
+//    the 384×216 world feels roomy enough to hold a ground plane.
+//    (Legacy atlas actors and critters drop to 1× with them —
+//    one coherent sprite generation, same rule as Wave 3.)
 //  - `footPad`: measured empty pixels between the feet and the
 //    frame's bottom edge, so the stage can sit feet on the snow
 //    line instead of floating the frame.
@@ -64,7 +65,7 @@ export interface ActorSprite {
   contentH: number;
   /** measured empty px between the feet and the frame's bottom edge */
   footPad: number;
-  /** integer draw scale on the 384×216 stage (these packs: 2) */
+  /** integer draw scale on the 384×216 stage (Wave 5: 1 — the world is roomy) */
   scale: number;
   anims: Partial<Record<'idle' | 'walk' | 'hurt' | 'death' | 'attack' | 'run' | 'jump', ActorAnim>>;
   /** monsters: combatant srcId/name matching */
@@ -73,7 +74,7 @@ export interface ActorSprite {
 
 export const ACTOR_SPRITES: ActorSprite[] = [
   {
-    id: 'soldier', label: 'Soldier', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 2,
+    id: 'soldier', label: 'Soldier', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 1,
     anims: {
       idle:   { file: soldierIdle,   frames: 6, fps: 8,  layout: 'h' },
       walk:   { file: soldierWalk,   frames: 8, fps: 10, layout: 'h' },
@@ -83,7 +84,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'orc', label: 'Orc', frameW: 100, frameH: 100, contentH: 15, footPad: 43, scale: 2,
+    id: 'orc', label: 'Orc', frameW: 100, frameH: 100, contentH: 15, footPad: 43, scale: 1,
     matches: [/orc/i],
     anims: {
       idle:   { file: orcIdle,   frames: 6, fps: 8,  layout: 'h' },
@@ -94,7 +95,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'knight', label: 'Knight', frameW: 96, frameH: 96, contentH: 19, footPad: 38, scale: 2,
+    id: 'knight', label: 'Knight', frameW: 96, frameH: 96, contentH: 19, footPad: 38, scale: 1,
     anims: {
       idle:   { file: knightIdle,   frames: 6,  fps: 8,  layout: 'h' },
       walk:   { file: knightWalk,   frames: 8,  fps: 10, layout: 'h' },
@@ -104,7 +105,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'slime', label: 'Slime', frameW: 96, frameH: 96, contentH: 11, footPad: 39, scale: 2,
+    id: 'slime', label: 'Slime', frameW: 96, frameH: 96, contentH: 11, footPad: 39, scale: 1,
     matches: [/slime/i],
     anims: {
       idle:   { file: slimeIdle,   frames: 6,  fps: 8,  layout: 'h' },
@@ -115,7 +116,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'wolf', label: 'Wolf', frameW: 16, frameH: 16, contentH: 10, footPad: 2, scale: 2,
+    id: 'wolf', label: 'Wolf', frameW: 16, frameH: 16, contentH: 10, footPad: 2, scale: 1,
     matches: [/wolf/i],
     anims: {
       idle:  { file: wolfSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
@@ -124,7 +125,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'bear', label: 'Bear', frameW: 24, frameH: 24, contentH: 15, footPad: 3, scale: 2,
+    id: 'bear', label: 'Bear', frameW: 24, frameH: 24, contentH: 15, footPad: 3, scale: 1,
     matches: [/bear/i],   // polar bears, cave bears…
     anims: {
       idle:  { file: bearSheet, frames: 4, fps: 4, layout: 'h', row: 0 },

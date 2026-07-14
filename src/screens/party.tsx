@@ -1,7 +1,8 @@
-import { useState } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
 import { state, patch } from '../state/store';
-import { PC, Ally, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
-import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod } from './monsters';
+import { PC, Ally, OwnedItem, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
+import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod, monsterSpriteFor } from './monsters';
+import { resolveStageScene, groundBottomPct, depthScale, depthZ, GROUND_TOP } from '../tv/realm-stage';
 import { ApiMonsterPanel, getApiMonster } from '../lib/api';
 import { CREATURES } from '../data';
 import { allNpcs, openNpc, npcSpriteFor } from './npcs';
@@ -57,14 +58,87 @@ function CondSummary({ conditions }: { conditions: string[] }) {
 
 // ---------------------------------------------------------------- items
 
+/** Wave 5 — "we take the dragon head!" The placement sheet: the 384×216 stage
+ *  as a picker. Tap a spot, drag to adjust; the emoji previews at the exact
+ *  depth-scale it will have in the world, over the exact backdrop the stage
+ *  draws right now. DM-authored (Canonical) — players rearranging camp is a
+ *  later wave. */
+function PlacementSheet({ item, onClose }: { item: OwnedItem; onClose: () => void }) {
+  const [pos, setPos] = useState(item.display ?? { x: 50, y: 0.7 });
+  const dragging = useRef(false);
+  const s = state.value;
+  const scene = resolveStageScene(s.tv.sceneId ?? 'auto', {
+    journeying: !!s.travel.activeJourney, weatherId: s.weather.current,
+  });
+  const others = s.inventory.filter((it) => it.id !== item.id && it.display);
+
+  const posFrom = (e: PointerEvent, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, ((e.clientX - r.left) / r.width) * 100));
+    const bottomPct = ((r.bottom - e.clientY) / r.height) * 100;
+    const y = Math.max(0, Math.min(1, (GROUND_TOP - bottomPct) / GROUND_TOP));
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 100) / 100 };
+  };
+  const commit = (p: { x: number; y: number }) =>
+    patch((d) => { const it = d.inventory.find((x) => x.id === item.id); if (it) it.display = p; });
+
+  return (
+    <Sheet open title={`${item.emoji} ${item.name} — display in camp`} onClose={onClose}>
+      <p class="stat-fine" style={{ marginTop: 0 }}>
+        Tap the snow to place it; drag to adjust. Lower on the screen = nearer —
+        the party can stand in front of it or behind it.
+      </p>
+      <div
+        class="place-stage"
+        style={{ backgroundImage: `url(${scene.url})` }}
+        onPointerDown={(e) => {
+          dragging.current = true;
+          const p = posFrom(e, e.currentTarget as HTMLElement); setPos(p); commit(p);
+          // capture keeps the drag alive when the finger wanders off the stage;
+          // it must never be able to kill the tap itself
+          try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* fine */ }
+        }}
+        onPointerMove={(e) => { if (dragging.current) setPos(posFrom(e, e.currentTarget as HTMLElement)); }}
+        onPointerUp={(e) => {
+          if (!dragging.current) return;
+          dragging.current = false;
+          const p = posFrom(e, e.currentTarget as HTMLElement); setPos(p); commit(p);
+        }}
+      >
+        <div class="place-band" style={{ height: `${GROUND_TOP}%` }} />
+        {others.map((it) => (
+          <span key={it.id} class="place-ghost" style={{
+            left: `${it.display!.x}%`, bottom: `${groundBottomPct(it.display!.y)}%`,
+            zIndex: depthZ(it.display!.y), scale: String(depthScale(it.display!.y)),
+          }}>{it.emoji}</span>
+        ))}
+        <span class="place-item" style={{
+          left: `${pos.x}%`, bottom: `${groundBottomPct(pos.y)}%`,
+          zIndex: depthZ(pos.y), scale: String(depthScale(pos.y)),
+        }}>{item.emoji}</span>
+      </div>
+      <div class="row-actions" style={{ marginTop: '12px' }}>
+        {item.display && (
+          <button class="btn ghost danger" onClick={() => {
+            patch((d) => { const it = d.inventory.find((x) => x.id === item.id); if (it) delete it.display; });
+            onClose();
+          }}>Remove from display</button>
+        )}
+        <button class="btn primary" onClick={onClose}>Done</button>
+      </div>
+    </Sheet>
+  );
+}
+
 /** One owner's item rows (stash = null): qty stepper, ⋯ (move/edit/remove),
  *  and a quick-add row for improvised loot. Granting = revealing: everything
  *  here reaches the Realm (except DM notes, which never leave the phone). */
 export function ItemRows({ ownerId }: { ownerId: string | null }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [placing, setPlacing] = useState<string | null>(null);
   const [add, setAdd] = useState({ name: '', emoji: '🎁' });
   const items = state.value.inventory.filter((it) => it.ownerId === ownerId);
-  const upd = (id: string, fn: (it: import('../state/schema').OwnedItem) => void) =>
+  const upd = (id: string, fn: (it: OwnedItem) => void) =>
     patch((d) => { const it = d.inventory.find((x) => x.id === id); if (it) fn(it); });
 
   return (
@@ -73,7 +147,7 @@ export function ItemRows({ ownerId }: { ownerId: string | null }) {
         <div class="item-row-wrap" key={it.id}>
           <div class="item-row">
             <span class="item-emoji">{it.emoji}</span>
-            <span class="item-name">{it.name}</span>
+            <span class="item-name">{it.name}{it.display && <span title="On display in camp"> 🏕</span>}</span>
             <Stepper label="" value={it.qty}
               onDelta={(dl) => upd(it.id, (x) => { x.qty = Math.max(1, x.qty + dl); })} />
             <button class="btn mini ghost" aria-label="Item actions"
@@ -81,6 +155,10 @@ export function ItemRows({ ownerId }: { ownerId: string | null }) {
           </div>
           {menuFor === it.id && (
             <div class="item-menu">
+              <button class="btn mini" style={{ flexBasis: '100%' }}
+                onClick={() => { setPlacing(it.id); setMenuFor(null); }}>
+                🏕 {it.display ? 'Move in camp' : 'Display in camp'} ▸
+              </button>
               <label class="field-label" style={{ margin: 0 }}>Move to</label>
               <select class="input" value={it.ownerId ?? ''}
                 onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd(it.id, (x) => { x.ownerId = v || null; }); setMenuFor(null); }}>
@@ -95,6 +173,10 @@ export function ItemRows({ ownerId }: { ownerId: string | null }) {
                 onConfirm={() => { patch((d) => { d.inventory = d.inventory.filter((x) => x.id !== it.id); }); setMenuFor(null); }} />
             </div>
           )}
+          {placing === it.id && (() => {
+            const live = state.value.inventory.find((x) => x.id === it.id);
+            return live ? <PlacementSheet item={live} onClose={() => setPlacing(null)} /> : null;
+          })()}
         </div>
       ))}
       <div class="item-add">
@@ -482,19 +564,21 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
     });
 
   const fromBestiary = async (e: BestiaryEntry) => {
+    // Monster sprites (Wave 5) bake in at recruitment, the npcSpriteFor pattern.
+    const sprite = monsterSpriteFor(e.srcId);
     if (e.src === 'rime') {
       const c = CREATURES.find((x) => x.id === e.srcId)!;
-      recruit({ name: String(c.name), emoji: String(c.emoji), maxHp: Number(c.hp), ac: Number(c.ac), initMod: abilityMod(c.dex), srcType: 'monster', srcId: e.srcId, kind: String(c.type) });
+      recruit({ name: String(c.name), emoji: String(c.emoji), maxHp: Number(c.hp), ac: Number(c.ac), initMod: abilityMod(c.dex), srcType: 'monster', srcId: e.srcId, kind: String(c.type), sprite });
     } else if (e.src === 'custom') {
       const m = customMonsterById(e.srcId)!;
-      recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: e.srcId, kind: m.type });
+      recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: e.srcId, kind: m.type, sprite });
     } else {
       setBusy(e.key);
       const d = await getApiMonster(e.srcId);
       setBusy(null);
       const hp = d?.hit_points ?? 10;
       const ac = Array.isArray(d?.armor_class) ? d!.armor_class[0]?.value ?? 12 : (d?.armor_class as number | undefined) ?? 12;
-      recruit({ name: e.name, emoji: '👾', maxHp: hp, ac, initMod: abilityMod(d?.dexterity), srcType: 'api', srcId: e.srcId, kind: String(d?.type ?? '') });
+      recruit({ name: e.name, emoji: '👾', maxHp: hp, ac, initMod: abilityMod(d?.dexterity), srcType: 'api', srcId: e.srcId, kind: String(d?.type ?? ''), sprite });
     }
     onClose();
   };
@@ -532,7 +616,7 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
       </div>
       <button class="btn ghost" style={{ marginTop: '10px' }} onClick={() => setBuilding(true)}>+ Build a stat block</button>
       {building && <MonsterForm open onClose={() => setBuilding(false)} onCreated={(m) => {
-        recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: m.id, kind: m.type });
+        recruit({ name: m.name, emoji: m.emoji, maxHp: m.hp, ac: m.ac, initMod: abilityMod(m.dex), srcType: 'custommon', srcId: m.id, kind: m.type, sprite: m.sprite });
         onClose();
       }} />}
     </Sheet>

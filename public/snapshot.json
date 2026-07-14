@@ -111,7 +111,7 @@
       "mainHook": false
     }
   ],
-  "sentAt": 1783870327563,
+  "sentAt": 1783996734800,
   "inventory": [
     {
       "id": "demo-it1",
@@ -119,6 +119,17 @@
       "emoji": "🎒",
       "qty": 1,
       "ownerId": null
+    },
+    {
+      "id": "demo-it4",
+      "name": "Wolf Skull Trophy",
+      "emoji": "🐺",
+      "qty": 1,
+      "ownerId": null,
+      "display": {
+        "x": 72,
+        "y": 0.35
+      }
     },
     {
       "id": "demo-it2",

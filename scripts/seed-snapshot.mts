@@ -34,6 +34,11 @@ patch((d) => {
   ];
   d.weather = { current: 'clear', day: 5, log: [{ day: 5, weather: 'clear' }] };
   d.travel = { activeJourney: null, log: [], rations: 8, partySize: 4, gold: 620 };
+  // Wave 5: one trophy on display so the ground plane has furniture on first open.
+  d.inventory = [
+    { id: 'seed-it1', name: 'Wolf Skull Trophy', emoji: '🐺', qty: 1, ownerId: null, display: { x: 72, y: 0.35 } },
+    { id: 'seed-it2', name: 'Potion of Healing', emoji: '🧪', qty: 2, ownerId: 'pc2' },
+  ];
   d.tv = { ...d.tv, sceneId: 'camp', partyLocation: 'Camp near Bryn Shander', slotView: 'realm' };
   d.quests = [
     { id: 'sq1', name: 'The Cold-Hearted Killer', status: 'escalating', town: 'Bryn Shander', chapter: 1, mainHook: true, trigger: '', development: '', notes: '', custom: false },

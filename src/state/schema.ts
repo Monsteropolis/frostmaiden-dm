@@ -4,7 +4,7 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -221,6 +221,8 @@ export interface CustomMonster {
   senses: string;
   traits: { n: string; d: string }[];
   actions: { n: string; d: string }[];
+  /** Actor sprite descriptor id — how this monster appears on the Realm/initiative. */
+  sprite?: string;
 }
 
 // --- Phase 4: sessions, quests, travel ----------------------------------------
@@ -285,6 +287,10 @@ export interface OwnedItem {
   ownerId: string | null;   // null = party stash, else a PC id
   srcIndex?: string;        // optional link back to the compendium entry
   notes?: string;           // DM-only. NEVER projected — sentinel-guarded in the seam tests.
+  /** Placed in the world (Wave 5 trophies): x = % across the stage (0–100),
+   *  y = depth on the ground plane (0 far … 1 near). Absent = in the pack.
+   *  Placement is DM-authored (Canonical) — player rearrangement is a later wave. */
+  display?: { x: number; y: number };
 }
 
 export type Pace = 'cautious' | 'normal' | 'dogsled';
@@ -364,6 +370,9 @@ export interface AppState {
   npcOverrides: Record<string, NpcOverride>;
   customNpcs: CustomNpc[];
   customMonsters: CustomMonster[];
+  /** Sprite for a preset bestiary entry (Rime id or 5e API index) — monster id →
+   *  descriptor id, mirroring npcOverrides. Custom monsters carry their own `sprite`. */
+  monsterOverrides: Record<string, string>;
 
   tv: TvSettings;
 
@@ -391,6 +400,7 @@ export function defaultState(): AppState {
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],
+    monsterOverrides: {},
     tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false, slotView: 'scene', idleFull: false, poke: { seq: 0, target: 'party', kind: 'wave' } },
     seq: 1,
   };

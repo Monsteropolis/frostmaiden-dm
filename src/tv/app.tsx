@@ -88,9 +88,19 @@ function HpPill({ s }: { s: HpState }) {
   return <span class={`tv-hp-pill ${s}`}>{HP_LABEL[s]}</span>;
 }
 
-function TvHpBar({ hp, max }: { hp: number; max: number }) {
+function TvHpBar({ hp, max, slim = false }: { hp: number; max: number; slim?: boolean }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (hp / max) * 100)) : 0;
   const state: HpState = hp <= 0 ? 'down' : pct <= 25 ? 'critical' : pct <= 50 ? 'bloodied' : 'healthy';
+  // slim (Wave 5 initiative rows): the numbers sit beside the bar, not inside —
+  // the bar is a 12px color signal, not a gauge to read at a squint.
+  if (slim) {
+    return (
+      <span class="tv-hpslim">
+        <span class={`tv-hpbar slim ${state}`}><span class="tv-hpbar-fill" style={{ width: `${pct}%` }} /></span>
+        <span class="tv-hpbar-num">{hp}/{max}</span>
+      </span>
+    );
+  }
   return (
     <div class={`tv-hpbar ${state}`}>
       <div class="tv-hpbar-fill" style={{ width: `${pct}%` }} />
@@ -154,16 +164,21 @@ function SceneCard({ v }: { v: PlayerView }) {
 const MAX_INIT_ROWS = 9;
 
 /** The sprite in the row thumbnail, resolved from already-projected fields:
- *  friendlies match their party/ally record by name; foes match descriptors
- *  by name (so a masked "???" stays an emoji — the mask holds here too). */
+ *  friendlies match their party/ally record by name; foes resolve their
+ *  appearance token (a descriptor id the DM assigned, riding the emoji path)
+ *  then descriptor `matches` on the name. A masked "???" carries '❓' and
+ *  matches nothing — the mask holds here too. */
 function combatantSprite(c: PvCombatant, v: PlayerView): ActorSprite | undefined {
   if (c.friendly) {
     const rec = v.party.find((p) => p.name === c.name) ?? v.allies.find((a) => a.name === c.name);
     return actorSpriteById(rec?.sprite);
   }
-  return actorSpriteForFoe(undefined, c.name);
+  return actorSpriteById(c.emoji) ?? actorSpriteForFoe(undefined, c.name);
 }
 
+// Wave 5 restack: thumb · name on a full line · slim HP bar underneath.
+// Wave 4 over-condensed this row — the wide bar starved the name column until
+// "Bandit" truncated to "B". Color carries the health signal now.
 function InitRow({ c, v, flash }: { c: PvCombatant; v: PlayerView; flash: boolean }) {
   const sprite = combatantSprite(c, v);
   return (
@@ -174,13 +189,18 @@ function InitRow({ c, v, flash }: { c: PvCombatant; v: PlayerView; flash: boolea
           ? <span class="tv-init-thumb-sprite" style={spriteThumbStyle(sprite, 40)} />
           : <span class="tv-init-thumb-emoji">{c.emoji}</span>}
       </span>
-      <span class="tv-init-name">{c.name}{c.next && <span class="tv-next-tag">NEXT</span>}</span>
-      <CondChips conds={c.conditions} />
-      {c.deathS !== null && c.deathF !== null && <DeathPips s={c.deathS} f={c.deathF} />}
-      <span class="tv-init-hp">
-        {c.friendly && c.hp !== null && c.maxHp !== null
-          ? <TvHpBar hp={c.hp} max={c.maxHp} />
-          : <HpPill s={c.hpState} />}
+      <span class="tv-init-main">
+        <span class="tv-init-nameline">
+          <span class="tv-init-name">{c.name}</span>
+          {c.next && <span class="tv-next-tag">NEXT</span>}
+          <CondChips conds={c.conditions} />
+          {c.deathS !== null && c.deathF !== null && <DeathPips s={c.deathS} f={c.deathF} />}
+        </span>
+        <span class="tv-init-sub">
+          {c.friendly && c.hp !== null && c.maxHp !== null
+            ? <TvHpBar hp={c.hp} max={c.maxHp} slim />
+            : <HpPill s={c.hpState} />}
+        </span>
       </span>
     </div>
   );
@@ -311,6 +331,20 @@ function AmbiencePlayer({ v }: { v: PlayerView | null }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const id = v?.youtubeId ?? '';
   const show = !!v?.mediaVisible;
+  // true when the DM asked for sound but the browser refused a script-side
+  // unmute (autoplay policy) — we then wait for any gesture on the TV itself
+  const [needsGesture, setNeedsGesture] = useState(false);
+
+  // The YT command channel. `listening` is the iframe-API handshake: it makes
+  // the player honor commands and stream its state (muted/volume) back to us.
+  const post = (payload: Record<string, unknown>) =>
+    iframeRef.current?.contentWindow?.postMessage(JSON.stringify(payload), '*');
+  const ytHandshake = () => post({ event: 'listening', id: 'fmdm-ambience' });
+  const ytUnmute = () => {
+    post({ event: 'command', func: 'unMute', args: [] });
+    post({ event: 'command', func: 'setVolume', args: [60] });
+    post({ event: 'command', func: 'playVideo', args: [] });
+  };
 
   useEffect(() => {
     const el = ref.current;
@@ -336,26 +370,66 @@ function AmbiencePlayer({ v }: { v: PlayerView | null }) {
 
   // The DM taps "Enable sound on TV" on their phone; it arrives as a signal
   // bump here and we unmute the player. (A muted autoplay is already running.)
+  // Wave 5 bug fix — the single fire-and-forget command was silently lost when
+  // the player wasn't ready yet, and Chrome's autoplay policy can refuse a
+  // script unmute outright on a page nobody has touched. So: handshake first,
+  // retry for a few seconds, read the player's own muted state back to confirm,
+  // and if the browser still refuses, ask for one press on the TV itself.
   useEffect(() => {
-    if (unmuteSignal.value <= 0) return;
-    const win = iframeRef.current?.contentWindow;
-    const cmd = (func: string, args: unknown[] = []) =>
-      win?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-    cmd('unMute'); cmd('setVolume', [60]); cmd('playVideo');
+    if (unmuteSignal.value <= 0 || !id) return;
+    let confirmed = false;
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      try {
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        const info = (d as { info?: { muted?: boolean; volume?: number } })?.info;
+        if (info && info.muted === false && (info.volume ?? 100) > 0) {
+          confirmed = true;
+          setNeedsGesture(false);
+        }
+      } catch { /* not a YT message */ }
+    };
+    window.addEventListener('message', onMsg);
+    ytHandshake(); ytUnmute();
+    const retries = [400, 1000, 2000, 3200].map((ms) =>
+      setTimeout(() => { if (!confirmed) { ytHandshake(); ytUnmute(); } }, ms));
+    const giveUp = setTimeout(() => { if (!confirmed) setNeedsGesture(true); }, 4200);
+    return () => {
+      window.removeEventListener('message', onMsg);
+      retries.forEach(clearTimeout); clearTimeout(giveUp);
+    };
   }, [unmuteSignal.value, id]);
+
+  // Gesture fallback: any click or key (a TV remote's OK button counts) is a
+  // real user activation, which is all the autoplay policy wanted.
+  useEffect(() => {
+    if (!needsGesture) return;
+    const go = () => { ytUnmute(); setNeedsGesture(false); };
+    window.addEventListener('pointerdown', go);
+    window.addEventListener('keydown', go);
+    return () => { window.removeEventListener('pointerdown', go); window.removeEventListener('keydown', go); };
+  }, [needsGesture]);
 
   if (!id) return null;
   const origin = typeof location !== 'undefined' ? location.origin : '';
   return (
-    <div ref={ref} class="tv-yt" aria-hidden={!show}>
-      <iframe
-        ref={iframeRef}
-        class="tv-yt-frame"
-        src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`}
-        allow="autoplay; encrypted-media"
-        title="Ambience"
-      />
-    </div>
+    <>
+      <div ref={ref} class="tv-yt" aria-hidden={!show}>
+        <iframe
+          ref={iframeRef}
+          class="tv-yt-frame"
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&rel=0&enablejsapi=1&origin=${encodeURIComponent(origin)}`}
+          allow="autoplay; encrypted-media"
+          title="Ambience"
+          onLoad={ytHandshake}
+        />
+      </div>
+      {/* rendered outside .tv-yt — the player collapses to a speck in
+          audio-only mode, and this hint must survive that */}
+      {needsGesture && (
+        <div class="tv-sound-hint">🔊 PRESS OK / CLICK ONCE ON THE TV TO ENABLE SOUND</div>
+      )}
+    </>
   );
 }
 
