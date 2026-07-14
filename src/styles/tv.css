@@ -669,24 +669,25 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   object-fit: cover; image-rendering: pixelated;
 }
 
-/* actors stand on the scene's snow line (~86% down the art).
-   Transition rule: legacy atlas actors draw at 2× (16×24 → 32×48 box) so mixed
-   parties read as one sprite generation on the 384×216 canvas. */
+/* actors stand on the ground plane (Wave 5): the stage hands every grounded
+   thing an inline bottom (depth y → ground band), z-index (painter's sort)
+   and a CSS `scale` (subtle perspective, GPU-composited so pixels stay crisp —
+   kept OFF the transform so emote/flinch keyframes never stomp it).
+   Wave 5 transition rule: everything draws at 1× — one sprite generation. */
 .tv-idle-actor {
-  position: absolute; bottom: 8%;
+  position: absolute;
   width: 16px; height: 24px;
-  transform: scale(2) translateX(-50%);
-  transform-origin: bottom left;
-  transition: left 1.4s steps(10);
-  z-index: 3;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  transition: left 1.4s steps(10), bottom 1.4s steps(10);
 }
 
 /* --- descriptor-backed actors: the sheet runs on CSS steps() --- */
 .realm-sprite-actor {
   position: absolute;
   transform: translateX(-50%);
+  transform-origin: bottom center;
   transition: left 1.4s steps(10), bottom 0.4s var(--ease);
-  z-index: 3;
   display: flex; flex-direction: column; align-items: center;
 }
 .realm-sprite {
@@ -704,7 +705,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 }
 .realm-sprite-actor .tv-turn-mark { bottom: auto; }
 .realm-sprite-actor .tv-idle-bubble.realm-bubble { transform: translateX(-50%) scale(0.8); bottom: auto; }
-.realm-sprite-actor .tv-idle-minihp.realm-minihp { bottom: auto; left: 50%; width: 26px; margin-left: -13px; }
+.realm-sprite-actor .tv-idle-minihp.realm-minihp { bottom: auto; left: 50%; width: 20px; margin-left: -10px; }
 /* health tint + down fade mirror the atlas/token behaviors */
 .realm-sprite-actor.hp-critical .realm-sprite { filter: sepia(0.4) hue-rotate(-40deg) saturate(1.6); }
 .realm-sprite-actor.hp-bloodied .realm-sprite { filter: sepia(0.25) hue-rotate(-25deg) saturate(1.3); }
@@ -743,9 +744,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   100% { transform: translateX(0);      filter: none; }
 }
 
+/* atlas actors no longer inherit a 2× parent scale — the label compensates
+   so it stays ~8px on screen, same as .realm-sprite-name (legibility rule) */
 .tv-idle-name {
   position: absolute; top: 100%; left: 50%;
-  transform: translateX(-50%) scale(0.32);
+  transform: translateX(-50%) scale(0.5);
   transform-origin: top center;
   font-family: var(--font-px); font-size: 16px;
   color: var(--ink-dim); white-space: nowrap;
@@ -763,10 +766,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-idle-actor.hp-bloodied .tv-idle-minihp span { background: var(--warn); }
 .tv-idle-actor.hp-critical .tv-idle-minihp span { background: var(--thread); }
 
-/* thought bubbles */
+/* thought bubbles — parents no longer carry a 2× scale, so the bubble holds
+   its own on-screen size (~17px glyphs) */
 .tv-idle-bubble {
   position: absolute; bottom: calc(100% + 5px); left: 50%;
-  transform: translateX(-50%) scale(0.4);
+  transform: translateX(-50%) scale(0.8);
   transform-origin: bottom center;
   font-size: 22px; line-height: 1;
   padding: 3px 5px;
@@ -775,66 +779,63 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   white-space: nowrap;
   animation: tvBubblePop 0.4s steps(2, jump-none);
 }
-@keyframes tvBubblePop { from { transform: translateX(-50%) scale(0.2); } to { transform: translateX(-50%) scale(0.4); } }
+@keyframes tvBubblePop { from { transform: translateX(-50%) scale(0.3); } to { transform: translateX(-50%) scale(0.8); } }
 
-/* familiars */
+/* familiars — 1× like everyone else (Wave 5) */
 .tv-idle-critter {
-  position: absolute; bottom: 8%;
+  position: absolute;
   width: 12px; height: 10px;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  transform: scale(2) translateX(-50%);   /* transition rule: critters 2× */
-  transform-origin: bottom left;
-  transition: left 2s steps(8);
-  z-index: 2;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  transition: left 2s steps(8), bottom 2s steps(8);
   opacity: 0.95;
 }
 
-/* passing cameo silhouette, far background */
+/* passing cameo silhouette, far background — above the treeline, behind the plane */
 .tv-idle-cameo {
   position: absolute; bottom: 22%;
   width: 20px; height: 20px;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  transform: scale(2);   /* transition rule: cameos 2× */
-  transform-origin: bottom left;
   transition: left 0.7s linear;
   opacity: 0.45;
-  z-index: 1;
+  z-index: 0;
 }
 
 /* --- combat ambience: foe tokens + turn markers + round chip --- */
 .tv-foe-token {
-  position: absolute; bottom: 8%;
+  position: absolute;
   transform: translateX(-50%);
   transform-origin: bottom center;
-  z-index: 3;
   display: flex; flex-direction: column; align-items: center;
   transition: bottom 0.4s var(--ease), left 1.4s steps(10);
 }
 .tv-foe-emoji {
-  font-size: 34px; line-height: 1;                 /* ~2× the familiar's size */
+  /* sized to the content height of a 1× descriptor sprite (~15–21px), so a
+     bandit token and a wolf sprite read as the same species of thing */
+  font-size: 16px; line-height: 1;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7));
 }
 .tv-foe-token.hp-bloodied .tv-foe-emoji { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)) sepia(0.5) hue-rotate(-30deg) saturate(1.5); }
 .tv-foe-token.hp-critical .tv-foe-emoji { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)) sepia(0.7) hue-rotate(-45deg) saturate(2); }
 .tv-foe-token.down { opacity: 0.3; }
 .tv-foe-name {
-  font-family: var(--font-px); font-size: 9px;
+  font-family: var(--font-px); font-size: 8px;
   color: var(--ink-dim); white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0,0,0,0.9);
   margin-top: 2px;
 }
-/* active combatant steps forward (up) with a bobbing ▼; next up gets a faint one */
-.tv-foe-token.active-turn { bottom: 13%; }
-.tv-idle-actor.active-turn { bottom: 12%; }
+/* active combatant steps toward the viewer (the stage bumps its y);
+   a bobbing ▼ marks it, next-up gets a faint one */
 .tv-turn-mark {
   position: absolute; bottom: 100%; left: 50%;
   transform: translateX(-50%);
   color: var(--frost); font-size: 10px;
   animation: tvTurnBob 1s ease-in-out infinite;
 }
-.tv-idle-actor .tv-turn-mark { font-size: 4px; margin-bottom: 1px; } /* actor is scaled 3–4× */
+.tv-idle-actor .tv-turn-mark { font-size: 9px; margin-bottom: 1px; }
 .next-turn .tv-turn-mark { opacity: 0.4; animation: none; }
 @keyframes tvTurnBob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-2px); } }
 .tv-realm-round {
@@ -852,3 +853,65 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   .tv-idle-actor.flinch .tv-idle-sprite { animation: none; }
   .tv-turn-mark { animation: none; }
 }
+
+/* === WAVE 5: THE GROUND PLANE === */
+
+/* camp objects — trophies the DM put on display. Furniture, not actors:
+   absolutely still (no movement transition), y-sorted with everyone else. */
+.realm-object {
+  position: absolute;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  display: flex; flex-direction: column; align-items: center;
+  outline: none;
+}
+.realm-object-emoji {
+  font-size: 14px; line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.65));
+}
+.realm-object-label {
+  position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-px); font-size: 8px;
+  color: var(--ink); white-space: nowrap;
+  background: rgba(13, 14, 34, 0.88);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  display: none;
+  pointer-events: none;
+}
+.realm-object:hover .realm-object-label,
+.realm-object:focus .realm-object-label,
+.realm-object:active .realm-object-label { display: block; }
+
+/* === WAVE 5: initiative rows — thumb · name on top · slim bar underneath ===
+   The bar's color carries the health signal, so it gave its width back to the
+   name; nobody truncates to a single letter anymore. */
+.tv-init-row { padding: 8px 10px; }
+.tv-init-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tv-init-nameline { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.tv-init-nameline .tv-init-name { flex: 0 1 auto; }
+.tv-init-nameline .tv-deathsaves { margin: 0 0 0 auto; }
+.tv-init-sub { display: flex; align-items: center; min-height: 22px; }
+.tv-init-sub .tv-hp-pill { font-size: 16px; padding: 2px 10px; }
+.tv-hpslim { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.tv-hpbar.slim { height: 12px; flex: 0 1 220px; width: auto; border-width: 1px; }
+.tv-hpslim .tv-hpbar-num {
+  position: static; display: block;
+  font-size: 17px; color: var(--ink-dim); text-shadow: none;
+}
+
+/* === WAVE 5: ambience sound fallback hint ===
+   Shown only when the DM asked for sound and the browser demanded a real
+   gesture on the TV page. One press of the remote clears it. */
+.tv-sound-hint {
+  position: fixed; left: 50%; bottom: 7vh; z-index: 60;
+  transform: translateX(-50%);
+  font-family: var(--font-px); font-size: 22px; letter-spacing: 0.08em;
+  color: var(--ink);
+  background: rgba(13, 14, 34, 0.92);
+  border: 2px solid var(--frost-deep);
+  padding: 12px 26px;
+  animation: tvPipBlink 1.6s steps(2, jump-none) infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) { .tv-sound-hint { animation: none; } }

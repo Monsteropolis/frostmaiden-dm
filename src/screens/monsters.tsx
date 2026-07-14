@@ -9,6 +9,7 @@ import { CREATURES, SeedCreature } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
 import { getMonstersWithCr, CrListItem } from '../lib/api';
+import { SpritePicker } from '../components/SpritePicker';
 
 export function abilityMod(score: unknown): number {
   return typeof score === 'number' ? Math.floor((score - 10) / 2) : 0;
@@ -77,6 +78,41 @@ export function customMonsterById(id?: string): CustomMonster | undefined {
   return state.value.customMonsters.find((m) => m.id === id);
 }
 
+/** Sprite resolution for any monster-derived actor (mirrors npcSpriteFor):
+ *  monsterOverrides[id] → CustomMonster.sprite → undefined (name-match /
+ *  emoji token downstream). `id` is a Rime id, 5e API index, or custom id. */
+export function monsterSpriteFor(id?: string): string | undefined {
+  if (!id) return undefined;
+  return state.value.monsterOverrides?.[id]
+    ?? state.value.customMonsters.find((m) => m.id === id)?.sprite;
+}
+
+/** The picker every bestiary surface shares — one component, per the brief.
+ *  Presets (Rime / 5e API) write the override map; custom monsters carry
+ *  their own field. */
+export function MonsterSpriteRow({ src, srcId }: { src: 'rime' | 'custom' | 'api'; srcId: string }) {
+  const value = src === 'custom'
+    ? state.value.monsterOverrides?.[srcId] ?? customMonsterById(srcId)?.sprite
+    : state.value.monsterOverrides?.[srcId];
+  const pick = (id?: string) => patch((d) => {
+    if (src === 'custom') {
+      const m = d.customMonsters.find((x) => x.id === srcId);
+      if (m) m.sprite = id;
+      delete d.monsterOverrides[srcId];   // the record is the truth for customs
+    } else if (id) {
+      d.monsterOverrides[srcId] = id;
+    } else {
+      delete d.monsterOverrides[srcId];
+    }
+  });
+  return (
+    <>
+      <div class="field-label" style={{ marginTop: '10px' }}>Realm sprite — how it appears on the TV &amp; initiative</div>
+      <SpritePicker value={value} onPick={pick} />
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- custom monster builder
 
 export function MonsterForm({ open, onClose, existing, onCreated }: {
@@ -134,6 +170,8 @@ export function MonsterForm({ open, onClose, existing, onCreated }: {
         ))}
       </div>
       <Field label="Senses / skills (optional)"><input class="input" placeholder="darkvision 60 ft., passive Perception 12" value={f.senses} onInput={txt('senses')} /></Field>
+      <div class="field-label">Realm sprite — how it appears on the TV &amp; initiative</div>
+      <SpritePicker value={f.sprite} onPick={(id) => setF((p) => ({ ...p, sprite: id }))} />
       {rows('traits', 'Traits', 'Pack Tactics. The creature has advantage on…')}
       {rows('actions', 'Actions', 'Bite. Melee Weapon Attack: +4 to hit… Hit: 7 (1d8+2) piercing.')}
       <p class="stat-fine" style={{ margin: '10px 0 0' }}>Write actions like the book — "+X to hit" and "(XdY+Z)" become rollable buttons automatically.</p>
@@ -249,6 +287,7 @@ export function BestiaryCard({ e, action, onAction, ApiPanel }: {
           {rime && <StatPanel m={rimeAsStatBlock(rime)} />}
           {custom && <StatPanel m={custom} />}
           {e.src === 'api' && <ApiPanel index={e.srcId} name={e.name} />}
+          <MonsterSpriteRow src={e.src} srcId={e.srcId} />
           {custom && (
             <div class="row-actions">
               <button class="btn mini ghost" onClick={() => setEditing(true)}>Edit</button>

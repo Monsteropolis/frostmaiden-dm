@@ -1092,5 +1092,76 @@ console.log('\n═══ SCENE 29: Wave 4 — ally sprites, roaming, the items d
   patch((d) => { d.inventory = []; d.tv.slotView = 'scene'; });
 }
 
+console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monster sprites ═══');
+{
+  const { render: rts } = await import('preact-render-to-string');
+  const { RealmStage, GROUND_TOP, groundBottomPct, depthZ } = await import('../src/tv/realm-stage.tsx');
+  const { projectPlayerView } = await import('../src/tv/projection.ts');
+  const { CombatView } = await import('../src/tv/app.tsx');
+  const { patch } = await import('../src/state/store.ts');
+  const { migrate } = await import('../src/state/migrations.ts');
+
+  // -- migration v9 → v10: the monster override map arrives empty
+  const v9 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
+  v9.version = 9;
+  delete v9.monsterOverrides;
+  const m10 = migrate(v9);
+  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 10);
+
+  // -- the ground band: depth ↔ screen mapping
+  check('ground band: y=0 draws at the treeline', groundBottomPct(0) === GROUND_TOP);
+  check('ground band: y=1 draws at the frame edge', groundBottomPct(1) === 0);
+  check('old footline (bottom 8%) is mid-plane — nothing jumped', Math.abs(groundBottomPct(0.5) - 8) < 0.01);
+  check('painter sort: nearer y draws in front', depthZ(0.9) > depthZ(0.2));
+
+  // -- fixture: a displayed trophy, an overridden foe, a masked foe
+  patch((d) => {
+    d.party = [
+      { id: 'w5pc', name: 'Hero', cls: 'Fighter', level: 4, race: 'Human', hp: 30, maxHp: 40, ac: 16, pp: 12, initMod: 0, conditions: [], inspiration: false, deathS: 0, deathF: 0, notes: '', sprite: 'soldier' },
+    ];
+    d.sidekicks = [];
+    d.inventory = [
+      { id: 'w5it', name: 'Dragon Skull', emoji: '🐲', qty: 1, ownerId: null, display: { x: 70, y: 0.9 }, notes: 'SEAM_TROPHY_NOTES' },
+    ];
+    d.monsterOverrides = { bandit: 'orc' };
+    d.combat = {
+      active: true, round: 1, turn: 0,
+      combatants: [
+        { id: 'w5c0', name: 'Hero', emoji: '🛡️', hp: 30, maxHp: 40, ac: 16, init: 16, initMod: 0, conditions: [], srcType: 'pc', srcId: 'w5pc' },
+        { id: 'w5f1', name: 'Bandit Captain', emoji: '🗡️', hp: 65, maxHp: 65, ac: 15, init: 14, initMod: 2, conditions: [], srcType: 'api', srcId: 'bandit' },
+        { id: 'w5f2', name: 'Frost Druid', emoji: '🌲', hp: 45, maxHp: 45, ac: 11, init: 8, initMod: 1, conditions: [], srcType: 'monster', srcId: 'frost_druid' },
+      ],
+    };
+    d.tv.hiddenCombatantIds = ['w5f2'];
+    d.tv.slotView = 'realm';
+  });
+  const pv = projectPlayerView(state.value);
+  const trophy = pv.inventory[0];
+  check('trophy position projected (x + y, nothing else)', trophy.display?.x === 70 && trophy.display?.y === 0.9);
+  check('trophy DM notes still never leave the phone', !JSON.stringify(pv).includes('SEAM_TROPHY_NOTES'));
+  check('overridden foe carries the appearance token', pv.combat!.combatants[1].emoji === 'orc');
+  check('masked foe stays ❓ — the mask outranks the sprite', pv.combat!.combatants[2].emoji === '❓' && pv.combat!.combatants[2].name === '???');
+  check('friendly combatant emoji untouched', pv.combat!.combatants[0].emoji === '🛡️');
+
+  const stage = rts(h(RealmStage, { v: pv }));
+  check('trophy renders as a camp object', stage.includes('realm-object') && stage.includes('Dragon Skull'));
+  check('trophy y-sorted by its depth', stage.includes(`z-index:${depthZ(0.9)}`) || stage.includes(`z-index: ${depthZ(0.9)}`));
+  check('overridden foe renders as a sprite actor', (stage.match(/realm-sprite-actor/g) ?? []).length >= 2 && stage.includes('Bandit Captain'));
+  check('masked foe stays an emoji token', stage.includes('tv-foe-token') && stage.includes('❓'));
+  check('actors carry depth styles (perspective scale)', /scale:\s*0\.\d+/.test(stage));
+
+  // -- initiative rows: full name on its own line, slim bar underneath
+  const cb = rts(h(CombatView, { v: pv, flash: false, roundPulse: false }));
+  check('init row restacked (nameline + slim bar)', cb.includes('tv-init-main') && cb.includes('tv-hpbar slim'));
+  check('full names, no single-letter truncation', cb.includes('Bandit Captain'));
+  check('foes keep the masked HEALTHY chip', cb.includes('HEALTHY') && cb.includes('???'));
+
+  patch((d) => {
+    d.inventory = []; d.monsterOverrides = {};
+    d.combat = { active: false, round: 0, turn: 0, combatants: [] };
+    d.tv.hiddenCombatantIds = []; d.tv.slotView = 'scene';
+  });
+}
+
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);
 if (fail) process.exit(1);

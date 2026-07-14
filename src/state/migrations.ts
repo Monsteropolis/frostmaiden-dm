@@ -103,6 +103,14 @@ const migrations: Record<number, Migration> = {
     }));
     return { ...s, sidekicks, inventory: Array.isArray(s.inventory) ? s.inventory : [], version: 9 };
   },
+  // v9 → v10: monster sprites. Preset bestiary entries get theirs via the
+  // monsterOverrides map (id → descriptor id, the npcOverrides pattern);
+  // CustomMonster.sprite / OwnedItem.display are optional-undefined — no backfill.
+  9: (s) => ({
+    ...s,
+    monsterOverrides: s.monsterOverrides && typeof s.monsterOverrides === 'object' ? s.monsterOverrides : {},
+    version: 10,
+  }),
 };
 
 export function migrate(raw: unknown): AppState {

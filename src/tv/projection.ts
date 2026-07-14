@@ -18,6 +18,7 @@ import {
   AppState, Combatant, WEATHER, WeatherId, QuestStatus, Poke, PokeKind,
 } from '../state/schema';
 import { resolveScene } from './scenes';
+import { actorSpriteById } from '../data/actor-sprites';
 
 export const PV_VERSION = 2;
 
@@ -73,6 +74,11 @@ export interface PvCombatant {
   id: string;
   /** Masked to "???" when hidden by the DM */
   name: string;
+  /** The appearance token (Wave 5): an actor-sprite descriptor id when the DM
+   *  assigned one to this monster (monsterOverrides / CustomMonster.sprite),
+   *  else an emoji glyph. Same allowed seam path either way — the TV tries
+   *  actorSpriteById(emoji) first and falls back to drawing it as text.
+   *  Masked foes are always '❓', so a hidden monster never reveals its sprite. */
   emoji: string;
   friendly: boolean;          // PC or ally — gets exact HP on the TV
   hp: number | null;          // exact for friendlies, null for monsters
@@ -103,6 +109,9 @@ export interface PvItem {
   emoji: string;
   qty: number;
   ownerId: string | null;   // null = party stash
+  /** On display in camp (Wave 5): x = % across the stage, y = ground-plane depth.
+   *  Key omitted entirely when the item is in the pack. */
+  display?: { x: number; y: number };
 }
 
 export interface PvTravel {
@@ -158,10 +167,21 @@ function isFriendly(c: Combatant): boolean {
   return c.srcType === 'pc' || c.srcType === 'ally';
 }
 
+/** Wave 5 monster sprites, resolution order per the brief:
+ *  monsterOverrides[srcId] → CustomMonster.sprite → undefined (name-match /
+ *  emoji token downstream). Only ids that resolve to a real descriptor ride —
+ *  a stale override can't turn a foe's token into junk text. */
+function monsterSpriteId(c: Combatant, s: AppState): string | undefined {
+  if (!c.srcId) return undefined;
+  const id = s.monsterOverrides?.[c.srcId]
+    ?? (c.srcType === 'custommon' ? s.customMonsters.find((m) => m.id === c.srcId)?.sprite : undefined);
+  return id && actorSpriteById(id) ? id : undefined;
+}
+
 function projectCombatant(
-  c: Combatant, idx: number, turn: number, count: number, hidden: Set<string>,
-  party: AppState['party'], sidekicks: AppState['sidekicks'],
+  c: Combatant, idx: number, turn: number, count: number, hidden: Set<string>, s: AppState,
 ): PvCombatant {
+  const { party, sidekicks } = s;
   const friendly = isFriendly(c);
   const masked = !friendly && hidden.has(c.id);
   const pc = c.hp > 0 ? undefined
@@ -171,7 +191,9 @@ function projectCombatant(
   return {
     id: c.id,
     name: masked ? '???' : c.name,
-    emoji: masked ? '❓' : c.emoji,
+    // The mask outranks everything; then the assigned sprite id (appearance
+    // token — see PvCombatant.emoji); then the plain emoji glyph.
+    emoji: masked ? '❓' : (!friendly && monsterSpriteId(c, s)) || c.emoji,
     friendly,
     hp: friendly ? c.hp : null,
     maxHp: friendly ? c.maxHp : null,
@@ -244,7 +266,7 @@ export function projectPlayerView(s: AppState): PlayerView {
       ? {
           round: s.combat.round,
           combatants: s.combat.combatants.map((c, i) =>
-            projectCombatant(c, i, s.combat.turn, s.combat.combatants.length, hidden, s.party, s.sidekicks)),
+            projectCombatant(c, i, s.combat.turn, s.combat.combatants.length, hidden, s)),
         }
       : null,
 
@@ -253,8 +275,11 @@ export function projectPlayerView(s: AppState): PlayerView {
       .map((q) => ({ id: q.id, name: q.name, town: q.town, status: q.status, mainHook: q.mainHook })),
 
     // Explicit field list — OwnedItem.notes (DM-only) must never ride along.
+    // `display` (Wave 5 trophies) is copied field-by-field and the key is
+    // omitted entirely for pack items, so the seam shape stays exact.
     inventory: (s.inventory ?? []).map((it) => ({
       id: it.id, name: it.name, emoji: it.emoji, qty: it.qty, ownerId: it.ownerId,
+      ...(it.display ? { display: { x: it.display.x, y: it.display.y } } : {}),
     })),
 
     sentAt: Date.now(),

@@ -1472,3 +1472,35 @@ details.loc summary::marker { color: var(--frost-deep); }
 
 /* party location card */
 .party-loc-card { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+
+/* === WAVE 5: trophy placement sheet (Party ▸ items ▸ 🏕 Display in camp) === */
+.place-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-size: cover;
+  background-position: center;
+  image-rendering: pixelated;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  touch-action: none;      /* the drag owns the gesture — no page scroll */
+  cursor: crosshair;
+}
+/* the walkable snow band, faintly marked so "lower = nearer" reads instantly */
+.place-band {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(rgba(155, 215, 232, 0.16), transparent 30%);
+  border-top: 1px dashed rgba(155, 215, 232, 0.45);
+  pointer-events: none;
+}
+.place-item, .place-ghost {
+  position: absolute;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  font-size: 15px; line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.6));
+}
+.place-item { text-shadow: 0 0 8px var(--frost-glow); }
+.place-ghost { opacity: 0.45; }

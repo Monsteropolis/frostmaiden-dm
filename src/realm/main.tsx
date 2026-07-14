@@ -106,6 +106,7 @@ function Pack({ v }: { v: PlayerView }) {
               <button class="realm-pack-item" key={it.id}
                 onClick={() => setOpenItem(openItem === it.id ? null : it.id)}>
                 {it.emoji} {it.name}{it.qty > 1 ? ` ×${it.qty}` : ''}
+                {it.display && <span class="realm-pack-camp" title="On display in camp"> 🏕</span>}
               </button>
             ))}
           </div>
@@ -120,6 +121,7 @@ function Pack({ v }: { v: PlayerView }) {
               <div class="realm-pack-pop-name">{it.name}{it.qty > 1 ? ` ×${it.qty}` : ''}</div>
               <div class="realm-pack-pop-owner">
                 {it.ownerId === null ? 'In the party stash' : `Carried by ${v.party.find((p) => p.id === it.ownerId)?.name ?? 'someone'}`}
+                {it.display ? ' · 🏕 on display in camp' : ''}
               </div>
             </div>
           </div>
