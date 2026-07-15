@@ -13,6 +13,7 @@
     "test:seam": "vite-node tests/seam.mts"
   },
   "dependencies": {
+    "@fontsource/pixelify-sans": "^5.2.7",
     "@fontsource/silkscreen": "^5.2.8",
     "@fontsource/space-grotesk": "^5.1.0",
     "@fontsource/spectral": "^5.1.0",

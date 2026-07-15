@@ -192,7 +192,8 @@ function InitRow({ c, v, flash }: { c: PvCombatant; v: PlayerView; flash: boolea
       <span class="tv-init-main">
         <span class="tv-init-nameline">
           <span class="tv-init-name">{c.name}</span>
-          {c.next && <span class="tv-next-tag">NEXT</span>}
+          {/* Wave 7 (QA #8): the NEXT pill is gone — the `›` caret in the marker
+              column already flags the on-deck combatant. */}
           <CondChips conds={c.conditions} />
           {c.deathS !== null && c.deathF !== null && <DeathPips s={c.deathS} f={c.deathF} />}
         </span>

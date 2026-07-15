@@ -14,6 +14,9 @@ import { useEffect, useState } from 'preact/hooks';
 import '@fontsource/space-grotesk/400.css';
 import '@fontsource/space-grotesk/600.css';
 import '@fontsource/silkscreen/400.css';
+// Wave 7 (QA #1): legible pixel font for in-world name labels.
+import '@fontsource/pixelify-sans/400.css';
+import '@fontsource/pixelify-sans/600.css';
 import '../styles/tokens.css';
 import '../styles/tv.css';
 import '../styles/realm.css';

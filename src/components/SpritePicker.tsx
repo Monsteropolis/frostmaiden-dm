@@ -16,12 +16,18 @@ export function spriteThumbStyle(a: ActorSprite, size = 44): Record<string, stri
   const idle = a.anims.idle;
   if (!idle) return {};
   const z = (0.72 * size) / a.contentH;
+  // Scale the WHOLE native sheet by z (aspect preserved off the width), so
+  // multi-column sheets like the frost guardian — whose sheet is far wider than
+  // one anim's strip — index their grid correctly instead of squishing. sheetW
+  // defaults to a single strip's width. footOffsetX re-centers off-center art.
+  const sheetW = (idle.sheetW ?? idle.frames * a.frameW) * z;
+  const off = (a.footOffsetX ?? 0) * z;
   return {
     width: `${size}px`, height: `${size}px`,
     backgroundImage: `url(${idle.file})`,
     backgroundRepeat: 'no-repeat',
-    backgroundSize: `${idle.frames * a.frameW * z}px auto`,
-    backgroundPosition: `${size / 2 - (a.frameW * z) / 2}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
+    backgroundSize: `${sheetW}px auto`,
+    backgroundPosition: `${size / 2 - (a.frameW * z) / 2 - off}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
     imageRendering: 'pixelated',
   };
 }

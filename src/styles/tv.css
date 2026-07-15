@@ -181,7 +181,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 @keyframes tvRoundPulse { from { color: var(--ink); text-shadow: 0 0 18px var(--frost-glow); } to { color: var(--frost); text-shadow: none; } }
 
 /* --- Initiative rail (condensed: thumb · name · HP, one line) ------------------- */
-.tv-init-list { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.tv-init-list { display: flex; flex-direction: column; gap: 5px; overflow: hidden; padding-bottom: 4px; }
 .tv-init-row {
   display: flex; align-items: center; gap: 12px;
   font-size: 24px; padding: 6px 10px;
@@ -238,7 +238,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px;
   overflow: hidden;
 }
-.tv-hpbar-fill { height: 100%; background: var(--ok); }
+/* display:block is load-bearing (QA #7): the slim initiative bars render their
+   fill as a <span>, and an inline span ignores width%/height — so the bars came
+   up blank and never moved with HP. As a block the width% now tracks hp/maxHp. */
+.tv-hpbar-fill { display: block; height: 100%; background: var(--ok); }
 .tv-hpbar.bloodied .tv-hpbar-fill { background: var(--warn); }
 .tv-hpbar.critical .tv-hpbar-fill, .tv-hpbar.down .tv-hpbar-fill { background: var(--thread); }
 .tv-hpbar-num {
@@ -299,6 +302,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
    ============================================================ */
 
 :root { --font-px: 'Silkscreen', monospace; }
+/* Wave 7 (QA #1): in-world name labels get a compact, high-legibility pixel
+   font. Silkscreen (chrome font) stays for HUD numbers/headers; only the
+   diorama's floating names swap to this — clear letterforms at ~9px, still
+   crisp against both snow and cave once outlined. */
+:root { --font-label: 'Pixelify Sans', 'Silkscreen', monospace; }
 
 /* --- Cosmic backdrop: stars are little fates ---------------------------------- */
 .tvfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
@@ -710,14 +718,25 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   display: block;
   background-repeat: no-repeat;
   image-rendering: pixelated;
+  /* the frame box clips to one frame (QA #2). The real frost-guardian fix was
+     the background-size math in spriteAnimStyle — a CSS background can't bleed
+     past its box — but this guards any future frame-content spill regardless. */
+  overflow: hidden;
 }
 @keyframes realmSpriteRun { from { background-position-x: 0; } to { background-position-x: var(--realm-to); } }
 .realm-sprite-name {
+  /* Wave 7 (QA #3): anchored by its TOP just below the sprite's foot line —
+     the component passes an inline `top` computed from frameH−footPad, so the
+     transparent pad is accounted for and the gap is visual, not geometric.
+     The label never covers the character. */
   position: absolute; left: 50%; transform: translateX(-50%);
-  font-family: var(--font-px); font-size: 8px;
+  font-family: var(--font-label); font-size: 9px; line-height: 1;
   color: var(--ink); white-space: nowrap;
-  /* true 1px outline (QA #2): a drop shadow washed out on white snow */
+  /* true 4-direction 1px outline (QA #1) … */
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+  /* … plus a subtle dark pill so names hold up over busy tile ground (QA #1) */
+  background: rgba(13, 14, 34, 0.55);
+  padding: 0 3px 1px; border-radius: 3px;
   pointer-events: none;
 }
 .realm-sprite-actor .tv-turn-mark { bottom: auto; }
@@ -767,9 +786,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   position: absolute; top: 100%; left: 50%;
   transform: translateX(-50%) scale(0.5);
   transform-origin: top center;
-  font-family: var(--font-px); font-size: 16px;
+  font-family: var(--font-label); font-size: 18px;
   color: var(--ink); white-space: nowrap;
-  /* 1px outline at the pre-scale 16px size → crisp half-px ring on screen */
+  /* 1px outline at the pre-scale size → crisp half-px ring on screen */
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
 }
 .tv-idle-actor.pose-down .tv-idle-name { color: var(--thread); }
@@ -798,6 +817,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   animation: tvBubblePop 0.4s steps(2, jump-none);
 }
 @keyframes tvBubblePop { from { transform: translateX(-50%) scale(0.3); } to { transform: translateX(-50%) scale(0.8); } }
+/* emote bubbles (QA #10): a lone glyph floats with no box — transparent
+   background, no border, a soft shadow keeps it readable over any scene. */
+.tv-idle-bubble.emote {
+  background: transparent; border: none; padding: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.85));
+}
+.realm-sprite-actor .tv-idle-bubble.realm-bubble.emote { background: transparent; border: none; }
 
 /* familiars — 1× like everyone else (Wave 5) */
 .tv-idle-critter {
@@ -840,10 +866,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-foe-token.hp-critical .tv-foe-emoji { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)) sepia(0.7) hue-rotate(-45deg) saturate(2); }
 .tv-foe-token.down { opacity: 0.3; }
 .tv-foe-name {
-  font-family: var(--font-px); font-size: 8px;
+  font-family: var(--font-label); font-size: 9px; line-height: 1;
   color: var(--ink); white-space: nowrap;
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-  margin-top: 2px;
+  background: rgba(13, 14, 34, 0.55);
+  padding: 0 3px 1px; border-radius: 3px;
+  margin-top: 3px;
 }
 /* active combatant steps toward the viewer (the stage bumps its y);
    a bobbing ▼ marks it, next-up gets a faint one */
@@ -891,7 +919,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .realm-object-label {
   position: absolute; bottom: calc(100% + 3px); left: 50%;
   transform: translateX(-50%);
-  font-family: var(--font-px); font-size: 8px;
+  font-family: var(--font-label); font-size: 9px;
   color: var(--ink); white-space: nowrap;
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   background: rgba(13, 14, 34, 0.88);
@@ -907,12 +935,15 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 /* === WAVE 5: initiative rows — thumb · name on top · slim bar underneath ===
    The bar's color carries the health signal, so it gave its width back to the
    name; nobody truncates to a single letter anymore. */
-.tv-init-row { padding: 8px 10px; }
-.tv-init-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Wave 7 (QA #7): rows trimmed a touch (padding 8→6, sub 22→20) and the list
+   given a hair of bottom padding, so the last row + its padding clear the
+   panel instead of the box getting cut off on shorter viewports. */
+.tv-init-row { padding: 6px 10px; }
+.tv-init-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .tv-init-nameline { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .tv-init-nameline .tv-init-name { flex: 0 1 auto; }
 .tv-init-nameline .tv-deathsaves { margin: 0 0 0 auto; }
-.tv-init-sub { display: flex; align-items: center; min-height: 22px; }
+.tv-init-sub { display: flex; align-items: center; min-height: 20px; }
 .tv-init-sub .tv-hp-pill { font-size: 16px; padding: 2px 10px; }
 .tv-hpslim { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .tv-hpbar.slim { height: 12px; flex: 0 1 220px; width: auto; border-width: 1px; }
