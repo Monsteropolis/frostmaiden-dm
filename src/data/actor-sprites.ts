@@ -44,6 +44,23 @@ import slimeAttack from '../assets/actors/slime/Monster_Slime_Attack1-Sheet.png'
 // Retro RPG Wildlife (grid sheets, 4 columns; wolf 16×16, bear 24×24)
 import wolfSheet from '../assets/actors/wolf/Wolf.png';
 import bearSheet from '../assets/actors/bear/Bear.png';
+// Wave 6 bosses: Frost Guardian (192×128 frames, one sheet, 5 anim rows) and
+// Bringer of Death (140×93 frames; the pack's composite sheet wraps anims
+// across rows, so per-anim strips were assembled 1:1 from its frames)
+import frostGuardianSheet from '../assets/actors/frost-guardian/sheet.png';
+import bringerIdle from '../assets/actors/bringer/idle.png';
+import bringerWalk from '../assets/actors/bringer/walk.png';
+import bringerHurt from '../assets/actors/bringer/hurt.png';
+import bringerDeath from '../assets/actors/bringer/death.png';
+
+// Lively NPCs v3.1 — 50 single-anim idle strips (32 or 34 px square frames),
+// globbed so the descriptor table below stays the source of measured truth.
+const LIVELY_SHEETS = import.meta.glob<string>(
+  '../assets/actors/lively/*/*.png',
+  { eager: true, import: 'default' },
+);
+
+export type ActorCategory = 'hero' | 'npc' | 'monster' | 'beast' | 'boss';
 
 export interface ActorAnim {
   file: string;
@@ -59,22 +76,81 @@ export interface ActorAnim {
 export interface ActorSprite {
   id: string;
   label: string;
+  /** picker tab (Wave 6) — hero/npc/monster/beast/boss */
+  category: ActorCategory;
   frameW: number;
   frameH: number;
   /** measured character height inside the frame */
   contentH: number;
   /** measured empty px between the feet and the frame's bottom edge */
   footPad: number;
-  /** integer draw scale on the 384×216 stage (Wave 5: 1 — the world is roomy) */
+  /** integer draw scale on the stage (Wave 5: 1 — the world is roomy) */
   scale: number;
   anims: Partial<Record<'idle' | 'walk' | 'hurt' | 'death' | 'attack' | 'run' | 'jump', ActorAnim>>;
   /** monsters: combatant srcId/name matching */
   matches?: (RegExp | string)[];
 }
 
+// --- Lively NPCs: one measured row per sheet ------------------------------------
+// [stem, frames, frame px, contentH, footPad] — all from the Wave 6 intake scan.
+type LivelyRow = [string, number, number, number, number];
+const LIVELY: Record<string, LivelyRow[]> = {
+  medieval: [
+    ['adventurer_01', 5, 34, 30, 1], ['adventurer_02', 5, 34, 28, 2], ['adventurer_03', 4, 32, 32, 0],
+    ['adventurer_04', 4, 32, 31, 0], ['adventurer_05', 4, 32, 27, 0], ['barkeep', 5, 34, 31, 1],
+    ['barmaid', 5, 34, 32, 1], ['beggar', 5, 34, 18, 3], ['blacksmith', 5, 34, 30, 1],
+    ['captain', 4, 32, 30, 0], ['dog', 4, 32, 21, 0], ['dwarf', 4, 32, 27, 0],
+    ['elder', 4, 32, 24, 0], ['fairy', 4, 32, 19, 5], ['farmer_01', 5, 32, 24, 2],
+    ['farmer_02', 5, 32, 27, 0], ['guard', 4, 32, 31, 0], ['jester', 5, 34, 28, 3],
+    ['king', 5, 34, 32, 1], ['merchant', 5, 32, 30, 0], ['mermaid', 4, 32, 24, 3],
+    ['minstrel', 5, 34, 30, 2], ['priestess', 5, 32, 29, 0], ['princess', 4, 32, 25, 0],
+    ['seer', 6, 34, 28, 2], ['shady_guy', 5, 34, 30, 2], ['stranger', 4, 32, 28, 0],
+    ['villager_01', 5, 34, 27, 2], ['villager_02', 5, 34, 29, 2], ['witch', 5, 34, 32, 1],
+  ],
+  elementals: [
+    ['crystal_mauler', 4, 32, 23, 1], ['fire_knight', 4, 32, 29, 1], ['ground_monk', 4, 32, 28, 1],
+    ['leaf_ranger', 4, 32, 27, 1], ['metal_bladekeeper', 4, 32, 28, 1], ['water_priestess', 4, 32, 29, 1],
+    ['wind_hashashin', 4, 32, 28, 1],
+  ],
+  steampunk: [
+    ['aristocrat_01', 4, 32, 31, 1], ['aristocrat_02', 4, 32, 30, 1], ['bartender', 4, 32, 31, 1],
+    ['engineer_01', 4, 32, 25, 3], ['engineer_02', 4, 32, 24, 3], ['gunslinger', 5, 32, 31, 1],
+    ['masked_man', 4, 32, 30, 1], ['masked_woman', 4, 32, 30, 1], ['steambot_01', 4, 32, 31, 1],
+    ['steambot_02', 4, 32, 30, 1], ['steambot_03', 5, 32, 29, 1], ['trader', 4, 32, 29, 1],
+  ],
+};
+// per-sheet exceptions to the folder default category / foe matching
+const LIVELY_CATEGORY: Record<string, ActorCategory> = { dog: 'beast' };
+const LIVELY_MATCHES: Record<string, (RegExp | string)[]> = {
+  dog: [/\bdog\b|mastiff/i],
+  witch: [/\bhag\b/i],           // Maud Chiselbone and her sisters
+};
+
+const label = (stem: string) =>
+  stem.replace(/_0?(\d+)$/, ' $1').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+function livelySprites(): ActorSprite[] {
+  const out: ActorSprite[] = [];
+  for (const [folder, rows] of Object.entries(LIVELY)) {
+    const defaultCat: ActorCategory = folder === 'elementals' ? 'hero' : 'npc';
+    for (const [stem, frames, frame, contentH, footPad] of rows) {
+      const file = LIVELY_SHEETS[`../assets/actors/lively/${folder}/${stem}.png`];
+      if (!file) continue;   // sheet missing from the build — never a broken tile
+      out.push({
+        id: `lively_${stem}`, label: label(stem),
+        category: LIVELY_CATEGORY[stem] ?? defaultCat,
+        frameW: frame, frameH: frame, contentH, footPad, scale: 1,
+        matches: LIVELY_MATCHES[stem],
+        anims: { idle: { file, frames, fps: 5, layout: 'h' } },
+      });
+    }
+  }
+  return out;
+}
+
 export const ACTOR_SPRITES: ActorSprite[] = [
   {
-    id: 'soldier', label: 'Soldier', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 1,
+    id: 'soldier', label: 'Soldier', category: 'hero', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 1,
     anims: {
       idle:   { file: soldierIdle,   frames: 6, fps: 8,  layout: 'h' },
       walk:   { file: soldierWalk,   frames: 8, fps: 10, layout: 'h' },
@@ -84,7 +160,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'orc', label: 'Orc', frameW: 100, frameH: 100, contentH: 15, footPad: 43, scale: 1,
+    id: 'orc', label: 'Orc', category: 'monster', frameW: 100, frameH: 100, contentH: 15, footPad: 43, scale: 1,
     matches: [/orc/i],
     anims: {
       idle:   { file: orcIdle,   frames: 6, fps: 8,  layout: 'h' },
@@ -95,7 +171,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'knight', label: 'Knight', frameW: 96, frameH: 96, contentH: 19, footPad: 38, scale: 1,
+    id: 'knight', label: 'Knight', category: 'hero', frameW: 96, frameH: 96, contentH: 19, footPad: 38, scale: 1,
     anims: {
       idle:   { file: knightIdle,   frames: 6,  fps: 8,  layout: 'h' },
       walk:   { file: knightWalk,   frames: 8,  fps: 10, layout: 'h' },
@@ -105,7 +181,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'slime', label: 'Slime', frameW: 96, frameH: 96, contentH: 11, footPad: 39, scale: 1,
+    id: 'slime', label: 'Slime', category: 'monster', frameW: 96, frameH: 96, contentH: 11, footPad: 39, scale: 1,
     matches: [/slime/i],
     anims: {
       idle:   { file: slimeIdle,   frames: 6,  fps: 8,  layout: 'h' },
@@ -116,7 +192,8 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'wolf', label: 'Wolf', frameW: 16, frameH: 16, contentH: 10, footPad: 2, scale: 1,
+    // footPad re-measured in Wave 6 after the stray shadow-bar row was cleared
+    id: 'wolf', label: 'Wolf', category: 'beast', frameW: 16, frameH: 16, contentH: 10, footPad: 3, scale: 1,
     matches: [/wolf/i],
     anims: {
       idle:  { file: wolfSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
@@ -125,7 +202,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'bear', label: 'Bear', frameW: 24, frameH: 24, contentH: 15, footPad: 3, scale: 1,
+    id: 'bear', label: 'Bear', category: 'beast', frameW: 24, frameH: 24, contentH: 15, footPad: 3, scale: 1,
     matches: [/bear/i],   // polar bears, cave bears…
     anims: {
       idle:  { file: bearSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
@@ -133,6 +210,34 @@ export const ACTOR_SPRITES: ActorSprite[] = [
       death: { file: bearSheet, frames: 4, fps: 6, layout: 'h', row: 13, once: true },
     },
   },
+  // --- Wave 6 bosses -------------------------------------------------------------
+  {
+    // one 3072×640 sheet, 192×128 frames; anim rows measured: idle 6 / walk 10 /
+    // attack 14 / hurt 7 / death 16. Content 92px tall — a boss towers on purpose.
+    id: 'frost_guardian', label: 'Frost Guardian', category: 'boss',
+    frameW: 192, frameH: 128, contentH: 92, footPad: 18, scale: 1,
+    matches: [/frost ?guardian/i, /ice ?golem/i, /snow ?golem/i, /coldlight/i],
+    anims: {
+      idle:   { file: frostGuardianSheet, frames: 6,  fps: 6,  layout: 'h', row: 0 },
+      walk:   { file: frostGuardianSheet, frames: 10, fps: 8,  layout: 'h', row: 1 },
+      attack: { file: frostGuardianSheet, frames: 14, fps: 10, layout: 'h', row: 2 },
+      hurt:   { file: frostGuardianSheet, frames: 7,  fps: 10, layout: 'h', row: 3 },
+      death:  { file: frostGuardianSheet, frames: 16, fps: 8,  layout: 'h', row: 4, once: true },
+    },
+  },
+  {
+    id: 'bringer_of_death', label: 'Bringer of Death', category: 'boss',
+    frameW: 140, frameH: 93, contentH: 54, footPad: 1, scale: 1,
+    matches: [/bringer/i, /reaper/i, /wraith/i, /spect(er|re)/i],
+    anims: {
+      idle:  { file: bringerIdle,  frames: 8,  fps: 8,  layout: 'h' },
+      walk:  { file: bringerWalk,  frames: 8,  fps: 10, layout: 'h' },
+      hurt:  { file: bringerHurt,  frames: 3,  fps: 10, layout: 'h' },
+      death: { file: bringerDeath, frames: 10, fps: 8,  layout: 'h', once: true },
+    },
+  },
+  // --- Lively NPCs (Wave 6): 50 idle-strip townsfolk, elementals, steampunk ------
+  ...livelySprites(),
 ];
 
 const BY_ID = new Map(ACTOR_SPRITES.map((a) => [a.id, a]));

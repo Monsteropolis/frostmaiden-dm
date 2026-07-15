@@ -85,14 +85,18 @@ export function MapPicker({ initialA, initialB, terrain, paceMult, onUse, onClos
     [a, b, terr, paceMult],
   );
 
-  // A tap: near a pin (within ~14 native px) snaps; otherwise a crosshair point.
+  // A tap: near a pin snaps; otherwise a crosshair point. The snap radius is
+  // measured in SCREEN pixels (~14, a fingertip) so the invisible tap target
+  // stays comfortable however the map is zoomed — while the visible dot is
+  // small (QA #5). Ground between two dots stays reachable past that ring.
   const tap = (e: MouseEvent) => {
     const el = e.currentTarget as HTMLElement;
     const rc = el.getBoundingClientRect();
     const x = Math.round(((e.clientX - rc.left) / rc.width) * MAP_CAL.imgW);
     const y = Math.round(((e.clientY - rc.top) / rc.height) * MAP_CAL.imgH);
+    const pxPerNative = rc.width / MAP_CAL.imgW;
     const near = places
-      .map((p) => ({ p, d: Math.hypot(p.x - x, p.y - y) }))
+      .map((p) => ({ p, d: Math.hypot(p.x - x, p.y - y) * pxPerNative }))
       .filter((c) => c.d <= 14)
       .sort((m, n) => m.d - n.d)[0]?.p;
     const picked: PickedPlace = near ?? { name: `Point (${x}, ${y})`, x, y, kind: 'point' };

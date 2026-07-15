@@ -21,6 +21,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { PlayerView, PvPc, PvAlly, PvCombatant, HpState, PokeActive } from './projection';
 import { sceneById, resolveScene, SCENES, TvScene } from './scenes';
+import { TileScene, tileSceneById, groundCells, objectRuns } from './tiles';
 import { ActorSprite, ActorAnim, actorSpriteById, actorSpriteForFoe, animForPose } from '../data/actor-sprites';
 import actorsUrl from '../assets/idle/idle_actors.png';
 import critterUrl from '../assets/idle/idle_critter.png';
@@ -108,21 +109,28 @@ export function pickBubble(
   return null;
 }
 
-// --- the ground plane (Wave 5) ---------------------------------------------------
-// The walkable snow is a band on the 384×216 canvas. `y` is depth: 0 = the far
-// edge (treeline / back of camp), 1 = the near edge (foreground). Band height
-// MEASURED against the pixel backgrounds (bright-snow row scan): open scenes
-// carry snow up to ~42% from the bottom (camp, road), but the binding scenes
-// are peak (17%) and town (18% — buildings above). 16% fits inside every
-// scene's walkable ground AND keeps the old footline (bottom: 8%) at exactly
-// y = 0.5 — nothing jumped when the plane landed.
-export const GROUND_TOP = 16;   // bottom-% at y = 0
-export const GROUND_BOT = 0;    // bottom-% at y = 1
+// --- the ground plane (Wave 5, re-measured for the 224 canvas in Wave 6) ---------
+// The walkable snow is a band on the stage canvas. `y` is depth: 0 = the far
+// edge (treeline / back of camp), 1 = the near edge (foreground). Wave 5
+// measured the band as 16% of the 216 canvas (34.56px); the Wave 6 canvas is
+// 224 tall with flat art anchored to the bottom, so the same PIXEL line is
+// kept — nothing jumps — by re-expressing it as a % of 224. Tiled scenes
+// carry their own band (deeper — you can walk up to a building's door).
+export const GROUND_TOP = (16 * 216) / 224;   // bottom-% at y = 0 (≈15.43)
+export const GROUND_BOT = 0;                  // bottom-% at y = 1
+
+export interface GroundBand { top: number; bottom: number }
+const DEFAULT_BAND: GroundBand = { top: GROUND_TOP, bottom: GROUND_BOT };
+
+/** The walkable band for a resolved scene — tiled scenes may override it. */
+export function stageGroundBand(sceneId: string): GroundBand {
+  return tileSceneById(sceneId)?.ground ?? DEFAULT_BAND;
+}
 
 const clamp01 = (y: number) => Math.max(0, Math.min(1, y));
 /** Screen mapping: depth y → CSS bottom-% on the stage canvas. */
-export function groundBottomPct(y: number): number {
-  return GROUND_TOP + (GROUND_BOT - GROUND_TOP) * clamp01(y);
+export function groundBottomPct(y: number, band: GroundBand = DEFAULT_BAND): number {
+  return band.top + (band.bottom - band.top) * clamp01(y);
 }
 /** Painter's algorithm: higher y draws later, therefore in front. */
 export function depthZ(y: number): number {
@@ -134,8 +142,8 @@ export function depthScale(y: number): number {
   return 0.85 + 0.15 * clamp01(y);
 }
 /** The three depth styles every grounded thing shares. */
-function groundStyle(y: number): Record<string, string | number> {
-  return { bottom: `${groundBottomPct(y)}%`, zIndex: depthZ(y), scale: String(depthScale(y)) };
+function groundStyle(y: number, band: GroundBand = DEFAULT_BAND): Record<string, string | number> {
+  return { bottom: `${groundBottomPct(y, band)}%`, zIndex: depthZ(y), scale: String(depthScale(y)) };
 }
 
 // --- positions: actors scatter across the plane, walkers drift --------------------
@@ -178,10 +186,12 @@ interface FoeRender {
   sprite?: ActorSprite;      // matched descriptor; undefined = emoji token
 }
 
-// --- the stage canvas: fixed 384×216 logical px, integer-scaled to fit -----------
+// --- the stage canvas: fixed 384×224 logical px, integer-scaled to fit -----------
+// 224 = 14 rows of 16px tiles (216 fit no tile grid). Flat 384×216 art anchors
+// to the bottom; the 8px surplus reads as sky above the scene.
 
 export const STAGE_W = 384;
-export const STAGE_H = 216;
+export const STAGE_H = 224;
 
 /** The backdrop the stage will actually draw: the chosen scene if it's pixel
  *  art, else the auto pixel mood. Exported so the trophy placement sheet
@@ -209,6 +219,58 @@ function useStageScale() {
   return { ref, k };
 }
 
+// --- tiled backdrop (Wave 6) -------------------------------------------------------
+// Ground cells are plain divs behind everything. Object layers arrive as
+// column-runs (a tree, one wall of a house) anchored at their base row; each
+// run maps its base line into the walkable band and takes depthZ(y) — the
+// SAME painter's sort the actors use, which is what lets a PC walk behind a
+// building and in front of a crate. No second sorting system.
+
+/** Base row → depth y in the scene's own band (unclamped; depthZ clamps). */
+function rowDepthY(baseRow: number, ts: TileScene, band: GroundBand): number {
+  const bottomPx = (ts.gridH - 1 - baseRow) * 16;
+  const bottomPct = (bottomPx / STAGE_H) * 100;
+  return (band.top - bottomPct) / (band.top - band.bottom || 1);
+}
+
+function tileBgStyle(tile: number, ts: { src: string; cols: number }): Record<string, string> {
+  return {
+    backgroundImage: `url(${ts.src})`,
+    backgroundPosition: `${-(tile % ts.cols) * 16}px ${-Math.floor(tile / ts.cols) * 16}px`,
+  };
+}
+
+function TiledBackdrop({ scene, band }: { scene: TileScene; band: GroundBand }) {
+  return (
+    <>
+      <div class="tv-tile-ground">
+        {groundCells(scene).map((g, i) => (
+          <span
+            key={`g${i}`}
+            class="tv-tile"
+            style={{ left: `${g.col * 16}px`, top: `${g.row * 16}px`, ...tileBgStyle(g.tile, g.tileset) }}
+          />
+        ))}
+      </div>
+      {objectRuns(scene).map((run, i) => (
+        <div
+          key={`r${i}`}
+          class="tv-tile-run"
+          style={{
+            left: `${run.col * 16}px`,
+            bottom: `${(scene.gridH - 1 - run.baseRow) * 16}px`,
+            zIndex: depthZ(rowDepthY(run.baseRow, scene, band)),
+          }}
+        >
+          {run.tiles.map((t, j) => (
+            <span key={j} class="tv-tile" style={{ left: '0', bottom: `${j * 16}px`, ...tileBgStyle(t, run.tileset) }} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 // --- descriptor-backed actor: CSS steps() runs the frames, not JS -----------------
 
 function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
@@ -230,11 +292,11 @@ function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
   } as Record<string, string>;
 }
 
-function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq }: {
+function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq, band = DEFAULT_BAND }: {
   sprite: ActorSprite; pose: string; name: string;
   hp?: number; maxHp?: number; hpState: string;
   bubble: string | null; flinch: boolean; active: boolean; next: boolean;
-  x: number; y: number; pokeSeq: number;
+  x: number; y: number; pokeSeq: number; band?: GroundBand;
 }) {
   const picked = animForPose(sprite, pose);
   if (!picked) return null;
@@ -247,8 +309,8 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
       style={{
         left: `${x}%`,
         width: `${sprite.frameW * s}px`,
-        ...groundStyle(y),
-        bottom: `calc(${groundBottomPct(y)}% - ${sprite.footPad * s}px)`,
+        ...groundStyle(y, band),
+        bottom: `calc(${groundBottomPct(y, band)}% - ${sprite.footPad * s}px)`,
       }}
     >
       {(active || next) && <span class="tv-turn-mark" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 4}px` }}>▼</span>}
@@ -308,6 +370,9 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
   // backdrop: the chosen scene if it's pixel art, else the auto pixel mood —
   // the diorama never letterboxes over a book scan.
   const scene = resolveStageScene(v.sceneId, { journeying: !!v.travel, weatherId: v.weather.id });
+  // tiled scenes draw live from tile data and may carry their own ground band
+  const tiled = tileSceneById(scene.id);
+  const band = tiled?.ground ?? { top: GROUND_TOP, bottom: GROUND_BOT };
 
   const anyDown = v.party.some((p) => p.down);
   const ctx = {
@@ -435,7 +500,9 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
   return (
     <div class={`tv-idle-stage tv-realm-viewport${full ? ' full' : ''}`} ref={vpRef}>
       <div class="tv-realm-canvas" style={{ width: `${STAGE_W}px`, height: `${STAGE_H}px`, transform: `scale(${k})` }}>
-        <img src={scene.url} alt="" class="tv-idle-bg" />
+        {tiled
+          ? <TiledBackdrop scene={tiled} band={band} />
+          : <img src={scene.url} alt="" class="tv-idle-bg" />}
         {cameoOn && (
           <span
             class="tv-idle-cameo"
@@ -455,7 +522,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             class="realm-object"
             tabIndex={0}
             title={it.name}
-            style={{ left: `${it.display!.x}%`, ...groundStyle(it.display!.y) }}
+            style={{ left: `${it.display!.x}%`, ...groundStyle(it.display!.y, band) }}
           >
             <span class="realm-object-emoji">{it.emoji}</span>
             <span class="realm-object-label">{it.name}</span>
@@ -467,7 +534,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             sprite={c.sprite} pose={c.pose} name={c.name}
             hpState={c.hpState}
             bubble={null} flinch={false} active={false} next={false}
-            x={c.x} y={c.y} pokeSeq={pokeSeq}
+            x={c.x} y={c.y} pokeSeq={pokeSeq} band={band}
           />
         ))}
         {critters.map((c) => !c.down && (
@@ -479,7 +546,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
               backgroundImage: `url(${critterUrl})`,
               backgroundPosition: `${-((c.frame + 2) % 4) * 12}px 0`,
               left: `${c.x}%`,
-              ...groundStyle(c.y),
+              ...groundStyle(c.y, band),
             }}
           />
         ))}
@@ -489,13 +556,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             sprite={a.sprite} pose={a.pose} name={a.name}
             hp={a.hp} maxHp={a.maxHp} hpState={a.hpState}
             bubble={a.bubble} flinch={a.flinch} active={a.active} next={a.next}
-            x={a.x} y={a.y} pokeSeq={pokeSeq}
+            x={a.x} y={a.y} pokeSeq={pokeSeq} band={band}
           />
         ) : (
           <div
             key={a.flinch ? `${a.key}-flinch-${pokeSeq}` : a.key}
             class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
-            style={{ left: `${a.x}%`, ...groundStyle(a.y) }}
+            style={{ left: `${a.x}%`, ...groundStyle(a.y, band) }}
           >
             {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
             {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
@@ -518,13 +585,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             sprite={f.sprite} pose={f.down ? 'down' : 'idle'} name={f.name}
             hpState={f.hpState}
             bubble={f.bubble} flinch={false} active={f.active} next={f.next}
-            x={f.x} y={f.y} pokeSeq={pokeSeq}
+            x={f.x} y={f.y} pokeSeq={pokeSeq} band={band}
           />
         ) : (
           <div
             key={f.key}
             class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
-            style={{ left: `${f.x}%`, ...groundStyle(f.y) }}
+            style={{ left: `${f.x}%`, ...groundStyle(f.y, band) }}
             title={f.name}
           >
             {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}

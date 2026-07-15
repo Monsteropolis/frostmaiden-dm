@@ -653,9 +653,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 
 .tv-idle-stage { position: absolute; inset: 0; }
 
-/* --- the stage canvas: 384×216 logical px, integer-scaled to its container.
-       Legacy 128×72 scenes fill it at exactly 3×; native 384×216 scenes at 1×.
-       Everything inside positions in canvas pixels. --- */
+/* --- the stage canvas: 384×224 logical px (24×14 tiles), integer-scaled to
+       its container. Flat 16:9 art anchors to the bottom (128×72 at 3×,
+       384×216 at 1×) with an 8px sky band above. Everything inside positions
+       in canvas pixels. --- */
 .tv-realm-viewport { display: grid; place-items: center; overflow: hidden; background: var(--bg); }
 .tv-realm-canvas {
   position: relative; flex: none;
@@ -664,10 +665,25 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   overflow: hidden;
 }
 
+/* flat scenes on the 224-tall canvas (Wave 6): the art is 16:9 (128×72 or
+   384×216) and anchors to the BOTTOM — the ground band keeps its exact pixel
+   line, and the 8px surplus above reads as sky. */
 .tv-idle-bg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
+  position: absolute; left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; height: 216px;
   object-fit: cover; image-rendering: pixelated;
 }
+
+/* === WAVE 6: tiled worlds === */
+.tv-tile-ground { position: absolute; inset: 0; z-index: 0; }
+.tv-tile {
+  position: absolute; width: 16px; height: 16px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+/* a column-run: one thing (tree, wall, crate stack) anchored at its base row;
+   height 0 so the children hang upward from the base line */
+.tv-tile-run { position: absolute; width: 16px; height: 0; }
 
 /* actors stand on the ground plane (Wave 5): the stage hands every grounded
    thing an inline bottom (depth y → ground band), z-index (painter's sort)
@@ -699,8 +715,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .realm-sprite-name {
   position: absolute; left: 50%; transform: translateX(-50%);
   font-family: var(--font-px); font-size: 8px;
-  color: var(--ink-dim); white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  color: var(--ink); white-space: nowrap;
+  /* true 1px outline (QA #2): a drop shadow washed out on white snow */
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   pointer-events: none;
 }
 .realm-sprite-actor .tv-turn-mark { bottom: auto; }
@@ -751,8 +768,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   transform: translateX(-50%) scale(0.5);
   transform-origin: top center;
   font-family: var(--font-px); font-size: 16px;
-  color: var(--ink-dim); white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  color: var(--ink); white-space: nowrap;
+  /* 1px outline at the pre-scale 16px size → crisp half-px ring on screen */
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
 }
 .tv-idle-actor.pose-down .tv-idle-name { color: var(--thread); }
 
@@ -823,8 +841,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-foe-token.down { opacity: 0.3; }
 .tv-foe-name {
   font-family: var(--font-px); font-size: 8px;
-  color: var(--ink-dim); white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  color: var(--ink); white-space: nowrap;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   margin-top: 2px;
 }
 /* active combatant steps toward the viewer (the stage bumps its y);
@@ -841,6 +859,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-realm-round {
   position: absolute; top: 6px; right: 8px; z-index: 5;
   font-family: var(--font-px); font-size: 10px;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   color: var(--ink); background: rgba(13, 14, 34, 0.8);
   border: 1px solid var(--border);
   padding: 3px 7px; border-radius: 4px;
@@ -874,6 +893,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   transform: translateX(-50%);
   font-family: var(--font-px); font-size: 8px;
   color: var(--ink); white-space: nowrap;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   background: rgba(13, 14, 34, 0.88);
   border: 1px solid var(--border);
   padding: 1px 5px;

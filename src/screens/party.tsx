@@ -2,7 +2,7 @@ import { useState, useRef } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { PC, Ally, OwnedItem, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
 import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod, monsterSpriteFor } from './monsters';
-import { resolveStageScene, groundBottomPct, depthScale, depthZ, GROUND_TOP } from '../tv/realm-stage';
+import { resolveStageScene, stageGroundBand, groundBottomPct, depthScale, depthZ } from '../tv/realm-stage';
 import { ApiMonsterPanel, getApiMonster } from '../lib/api';
 import { CREATURES } from '../data';
 import { allNpcs, openNpc, npcSpriteFor } from './npcs';
@@ -70,13 +70,15 @@ function PlacementSheet({ item, onClose }: { item: OwnedItem; onClose: () => voi
   const scene = resolveStageScene(s.tv.sceneId ?? 'auto', {
     journeying: !!s.travel.activeJourney, weatherId: s.weather.current,
   });
+  // tiled scenes carry a deeper walkable band — the sheet mirrors the stage
+  const band = stageGroundBand(scene.id);
   const others = s.inventory.filter((it) => it.id !== item.id && it.display);
 
   const posFrom = (e: PointerEvent, el: HTMLElement) => {
     const r = el.getBoundingClientRect();
     const x = Math.max(2, Math.min(98, ((e.clientX - r.left) / r.width) * 100));
     const bottomPct = ((r.bottom - e.clientY) / r.height) * 100;
-    const y = Math.max(0, Math.min(1, (GROUND_TOP - bottomPct) / GROUND_TOP));
+    const y = Math.max(0, Math.min(1, (band.top - bottomPct) / (band.top - band.bottom || 1)));
     return { x: Math.round(x * 10) / 10, y: Math.round(y * 100) / 100 };
   };
   const commit = (p: { x: number; y: number }) =>
@@ -105,15 +107,15 @@ function PlacementSheet({ item, onClose }: { item: OwnedItem; onClose: () => voi
           const p = posFrom(e, e.currentTarget as HTMLElement); setPos(p); commit(p);
         }}
       >
-        <div class="place-band" style={{ height: `${GROUND_TOP}%` }} />
+        <div class="place-band" style={{ height: `${band.top}%` }} />
         {others.map((it) => (
           <span key={it.id} class="place-ghost" style={{
-            left: `${it.display!.x}%`, bottom: `${groundBottomPct(it.display!.y)}%`,
+            left: `${it.display!.x}%`, bottom: `${groundBottomPct(it.display!.y, band)}%`,
             zIndex: depthZ(it.display!.y), scale: String(depthScale(it.display!.y)),
           }}>{it.emoji}</span>
         ))}
         <span class="place-item" style={{
-          left: `${pos.x}%`, bottom: `${groundBottomPct(pos.y)}%`,
+          left: `${pos.x}%`, bottom: `${groundBottomPct(pos.y, band)}%`,
           zIndex: depthZ(pos.y), scale: String(depthScale(pos.y)),
         }}>{item.emoji}</span>
       </div>
@@ -316,7 +318,7 @@ function PcForm({ open, onClose, existing }: { open: boolean; onClose: () => voi
       </div>
       <Field label="Race / lineage"><input class="input" value={f.race} onInput={(e) => set('race', (e.target as HTMLInputElement).value)} /></Field>
       <div class="field-label">Realm sprite — how they appear on the TV &amp; Realm</div>
-      <SpritePicker value={f.sprite} onPick={(id) => set('sprite', id)} />
+      <SpritePicker value={f.sprite} surface="hero" onPick={(id) => set('sprite', id)} />
       <div class="field-row">
         <Field label="Max HP"><NumInput value={f.maxHp} min={1} onInput={(n) => set('maxHp', n)} /></Field>
         <Field label="AC"><NumInput value={f.ac} onInput={(n) => set('ac', n)} /></Field>
@@ -472,7 +474,7 @@ function AllyForm({ open, onClose, existing, category = 'sidekick' }: { open: bo
         <Field label="Level"><NumInput value={f.level} min={0} onInput={(n) => set('level', n)} /></Field>
       </div>
       <div class="field-label">Realm sprite — how they appear on the TV &amp; Realm</div>
-      <SpritePicker value={f.sprite} onPick={(id) => set('sprite', id)} />
+      <SpritePicker value={f.sprite} surface="beast" onPick={(id) => set('sprite', id)} />
       {(f.category ?? 'sidekick') === 'sidekick' && (
         <>
           <div class="field-label">Sidekick class (Tasha's)</div>

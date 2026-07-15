@@ -108,7 +108,7 @@ export function MonsterSpriteRow({ src, srcId }: { src: 'rime' | 'custom' | 'api
   return (
     <>
       <div class="field-label" style={{ marginTop: '10px' }}>Realm sprite — how it appears on the TV &amp; initiative</div>
-      <SpritePicker value={value} onPick={pick} />
+      <SpritePicker value={value} surface="monster" onPick={pick} />
     </>
   );
 }
@@ -171,7 +171,7 @@ export function MonsterForm({ open, onClose, existing, onCreated }: {
       </div>
       <Field label="Senses / skills (optional)"><input class="input" placeholder="darkvision 60 ft., passive Perception 12" value={f.senses} onInput={txt('senses')} /></Field>
       <div class="field-label">Realm sprite — how it appears on the TV &amp; initiative</div>
-      <SpritePicker value={f.sprite} onPick={(id) => setF((p) => ({ ...p, sprite: id }))} />
+      <SpritePicker value={f.sprite} surface="monster" onPick={(id) => setF((p) => ({ ...p, sprite: id }))} />
       {rows('traits', 'Traits', 'Pack Tactics. The creature has advantage on…')}
       {rows('actions', 'Actions', 'Bite. Melee Weapon Attack: +4 to hit… Hit: 7 (1d8+2) piercing.')}
       <p class="stat-fine" style={{ margin: '10px 0 0' }}>Write actions like the book — "+X to hit" and "(XdY+Z)" become rollable buttons automatically.</p>

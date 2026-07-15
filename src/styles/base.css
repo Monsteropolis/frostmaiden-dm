@@ -634,8 +634,25 @@ body { min-height: 100dvh; }
   padding: 6px 10px 10px;
 }
 
-/* === REALM SPRITE PICKER (character/ally editors) === */
-.sprite-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
+/* === REALM SPRITE PICKER (character/ally/NPC/monster editors) === */
+/* Wave 6: 50+ sprites — tabs + search over the grid, grid capped and scrolly */
+.sprite-picker-panel { margin: 6px 0 14px; }
+.sprite-picker-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.sprite-picker-tabs { margin: 0; }
+.sprite-picker-search {
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.sprite-picker-search:focus { outline: 2px solid var(--frost); outline-offset: 0; border-color: transparent; }
+.sprite-picker-empty { flex-basis: 100%; margin: 4px 2px; }
+.sprite-picker {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 264px; overflow-y: auto;
+  padding: 2px;
+}
 .sprite-pick {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 6px 8px; min-width: 60px;
@@ -657,18 +674,24 @@ body { min-height: 100dvh; }
 .mp-canvas { position: relative; cursor: crosshair; }
 .mp-img { display: block; width: 100%; height: auto; user-select: none; }
 .mp-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* QA #5: the dot is small (≈⅓ the old area) so it stops swallowing towns;
+   the TAP target is unrelated — snapping happens in screen-px in the picker. */
 .mp-pin {
-  position: absolute; width: 12px; height: 12px;
+  position: absolute; width: 7px; height: 7px;
   transform: translate(-50%, -50%);
   border-radius: 50%; box-sizing: border-box;
-  border: 2px solid rgba(13, 14, 34, 0.9);
+  border: 1px solid rgba(13, 14, 34, 0.9);
   pointer-events: none;   /* taps land on the canvas; snapping is distance-based */
 }
 .mp-pin.town { background: var(--frost); }
 .mp-pin.landmark { background: var(--silver-dim); }
 .mp-pin.custom { background: var(--warn); }
 .mp-pin.point { background: var(--thread); }
-.mp-pin.picked { width: 16px; height: 16px; box-shadow: 0 0 8px var(--thread-glow); border-color: var(--thread); }
+.mp-pin.picked {
+  width: 11px; height: 11px;
+  border-width: 2px; border-color: var(--thread);
+  box-shadow: 0 0 8px var(--thread-glow), 0 0 0 3px rgba(13, 14, 34, 0.45);
+}
 .mp-endpoint { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .mp-dot {
   flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
@@ -844,6 +867,8 @@ body { min-height: 100dvh; }
 .input.num { width: 84px; text-align: center; }
 select.input { appearance: none; }
 textarea.input { resize: vertical; font-family: var(--font-read); }
+/* session prep/debrief boxes (QA #3): tall by default, never shrink to a slit */
+.session-note { min-height: 64px; }
 
 .btn.wide { width: 100%; }
 .btn.mini { min-height: 36px; padding: 0 12px; font-size: 12.5px; }
@@ -1477,9 +1502,9 @@ details.loc summary::marker { color: var(--frost-deep); }
 .place-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 384 / 224;   /* the Wave 6 stage canvas */
   background-size: cover;
-  background-position: center;
+  background-position: center bottom;   /* flat art anchors to the bottom, like the stage */
   image-rendering: pixelated;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);

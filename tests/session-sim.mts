@@ -695,7 +695,7 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
   check('all four art categories present', (['location', 'map', 'monster', 'npc'] as const)
     .every((c) => SCENES.some((s) => s.cat === c)));
   check('scene cat filter list matches', SCENE_CATS.length === 5);
-  check('36 art pieces + 12 pixel scenes (incl. 2 glacial 384×216)', SCENES.length === 48, `${SCENES.length}`);
+  check('36 art pieces + 15 pixel scenes (incl. 3 tiled worlds, Wave 6)', SCENES.length === 51, `${SCENES.length}`);
   check('maps include all Ten-Towns art', ['map-bremen', 'map-bryn-shander', 'map-targos', 'map-easthaven'].every((id) => !!sceneById(id)));
   check('art has real urls', SCENES.every((s) => s.url.length > 0));
 
@@ -1040,7 +1040,7 @@ console.log('\n═══ SCENE 28: Wave 3 — the 384×216 stage, sprite actors,
   const pv = projectPlayerView(state.value);
   check('projection carries PC sprite id', pv.party[0].sprite === 'soldier' && pv.party[1].sprite === undefined);
   const html = rts(h(RealmStage, { v: pv }));
-  check('stage canvas present (384×216)', html.includes('tv-realm-canvas') && /width:\s*384px/.test(html) && /height:\s*216px/.test(html));
+  check('stage canvas present (384×224, Wave 6)', html.includes('tv-realm-canvas') && /width:\s*384px/.test(html) && /height:\s*224px/.test(html));
   check('descriptor PC renders as sprite actor', html.includes('realm-sprite-actor') && html.includes('Sprity'));
   check('atlas PC still renders the classic way', html.includes('tv-idle-actor') && html.includes('Atlas'));
   check('matched foe renders as sprite (wolf)', (html.match(/realm-sprite-actor/g) ?? []).length >= 2 && html.includes('Winter Wolf'));
@@ -1111,7 +1111,8 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
   // -- the ground band: depth ↔ screen mapping
   check('ground band: y=0 draws at the treeline', groundBottomPct(0) === GROUND_TOP);
   check('ground band: y=1 draws at the frame edge', groundBottomPct(1) === 0);
-  check('old footline (bottom 8%) is mid-plane — nothing jumped', Math.abs(groundBottomPct(0.5) - 8) < 0.01);
+  // Wave 6: the same PIXEL line (8% of 216 = 17.28px), re-expressed on the 224 canvas
+  check('old footline pixel line is mid-plane — nothing jumped', Math.abs(groundBottomPct(0.5) - (8 * 216) / 224) < 0.01);
   check('painter sort: nearer y draws in front', depthZ(0.9) > depthZ(0.2));
 
   // -- fixture: a displayed trophy, an overridden foe, a masked foe
