@@ -548,7 +548,9 @@ console.log('\n═══ SCENE 21: TV Phase 2 — hide toggle + TV layouts rende
   check('TV never shows monster AC or exact HP', !html.includes('AC 12') && !html.includes('51'));
   check('TV shows PC exact HP', html.includes('30/44'));
   check('TV marks active turn', html.includes('tv-init-row active'));
-  check('TV marks next up', html.includes('NEXT'));
+  // Wave 7 (QA #8): the NEXT pill was removed; the on-deck combatant is marked
+  // by the `›` caret in the marker column instead.
+  check('TV marks next up', html.includes('›') && !html.includes('NEXT'));
 
   click(byText('.tv-hide-btn', 'Reveal on TV'), 'reveal Yeti'); await sleep(20);
   pv = projectPlayerView(state.value);
@@ -695,7 +697,7 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
   check('all four art categories present', (['location', 'map', 'monster', 'npc'] as const)
     .every((c) => SCENES.some((s) => s.cat === c)));
   check('scene cat filter list matches', SCENE_CATS.length === 5);
-  check('36 art pieces + 15 pixel scenes (incl. 3 tiled worlds, Wave 6)', SCENES.length === 51, `${SCENES.length}`);
+  check('36 art pieces + 18 pixel scenes (incl. 6 tiled worlds, Waves 6–7)', SCENES.length === 54, `${SCENES.length}`);
   check('maps include all Ten-Towns art', ['map-bremen', 'map-bryn-shander', 'map-targos', 'map-easthaven'].every((id) => !!sceneById(id)));
   check('art has real urls', SCENES.every((s) => s.url.length > 0));
 

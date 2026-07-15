@@ -28,6 +28,10 @@ import peak from '../assets/scenes/peak.png';
 import thumbCampWinter from '../assets/tiles/thumbs/camp_winter.png';
 import thumbTownTentowns from '../assets/tiles/thumbs/town_tentowns.png';
 import thumbCaveDark from '../assets/tiles/thumbs/cave_dark.png';
+// Wave 7 tiled worlds
+import thumbTownMarket from '../assets/tiles/thumbs/town_market.png';
+import thumbFrozenLake from '../assets/tiles/thumbs/frozen_lake.png';
+import thumbCaveDeep from '../assets/tiles/thumbs/cave_deep.png';
 
 // --- module artwork: locations ---
 import locTheCaer from '../assets/art/loc-the-caer.png';
@@ -104,6 +108,11 @@ export const SCENES: TvScene[] = [
   { id: 'camp_winter', name: 'Winter camp', url: thumbCampWinter, cat: 'pixel' },
   { id: 'town_tentowns', name: 'Ten-Towns street', url: thumbTownTentowns, cat: 'pixel' },
   { id: 'cave_dark', name: 'Dark cave', url: thumbCaveDark, cat: 'pixel' },
+  // Wave 7 tiled worlds ('Ice flats' distinguishes the walkable lake from the
+  // pixel 'Frozen lake' backdrop)
+  { id: 'town_market', name: 'Market square', url: thumbTownMarket, cat: 'pixel' },
+  { id: 'frozen_lake', name: 'Ice flats', url: thumbFrozenLake, cat: 'pixel' },
+  { id: 'cave_deep', name: 'Deep hall', url: thumbCaveDeep, cat: 'pixel' },
 
   // locations — mood-setting module art
   { id: 'loc-the-caer', name: 'The Caer', url: locTheCaer, cat: 'location' },

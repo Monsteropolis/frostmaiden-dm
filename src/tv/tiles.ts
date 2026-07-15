@@ -188,14 +188,15 @@ function buildTownTentowns(): TileScene {
 
   const timber = at(16);
   const buildings = blank();
-  // building A (left, deep): the full 6×6 timber house — roof, gabled window,
-  // door at its right side. Base row 5 — actors never get behind this one.
-  stamp(buildings, 16, 8, 2, 6, 6, 2, 0);
-  // building B (right, nearer): same kit shifted down — base row 7, so the
-  // street runs BEHIND it. This is the depth-sort proof on screen.
-  stamp(buildings, 16, 8, 2, 6, 6, 16, 2);
-  // chimney on A
-  stamp(buildings, 16, 1, 0, 3, 3, 2, -1);
+  // Wave 7 (QA #11): the old 6×6 block off (8,2) had a HOLE at the roof ridge —
+  // the apex tile lives in the LEFT gable house, not that block, so the roof read
+  // as truncated. Both buildings now stamp the complete 4×6 gable house at (4,2),
+  // whose peaked roof (ridge cap and all) renders whole; the only transparent
+  // pixels are the sky triangles beside the eaves, which correctly show the scene.
+  // A stays deep (base row 5), B nearer (base row 7) — the street still runs
+  // BEHIND B, which is the depth-sort proof on screen.
+  stamp(buildings, 16, 4, 2, 4, 6, 2, 0);    // building A (left, deep)
+  stamp(buildings, 16, 4, 2, 4, 6, 16, 2);   // building B (right, nearer)
 
   const fences = blank();
   stamp(fences, 16, 12, 0, 4, 1, 4, 9);     // fence run left of the path, near
@@ -283,10 +284,163 @@ function buildCaveDark(): TileScene {
   };
 }
 
+// --- town_market (Wave 7) — a Ten-Towns market square -------------------------
+// Snow underfoot with a trodden lane; a gable shop at the back, two stall awnings
+// at different depths with goods heaped beneath, a low stone well, a snowy tree.
+function buildTownMarket(): TileScene {
+  const w = at(16);
+  const ground = blank();
+  fillGround(ground, [
+    w(0, 1), w(0, 1), w(0, 1), w(0, 1), w(0, 1), w(0, 1), w(0, 1), w(0, 2), w(0, 4),
+  ], 37);
+  // a trodden market lane down the middle, framed by the stalls
+  const trod = [w(0, 6), w(1, 6), w(2, 6), w(3, 6), w(0, 7), w(2, 7)];
+  const lane = blank();
+  for (let y = 5; y < H; y++) {
+    for (let x = 9; x <= 14; x++) {
+      if (seeded(300 + x * 7 + y * 13) < 0.5) lane[y * W + x] = trod[Math.floor(seeded(x * 3 + y * 5) * trod.length)];
+    }
+  }
+
+  const buildings = blank();
+  stamp(buildings, 16, 4, 2, 4, 6, 1, 0);     // gable shop, deep back-left
+
+  // stall awnings — a horizontal roof strip on the timber kit, two depths
+  const stalls = blank();
+  stamp(stalls, 16, 7, 4, 3, 1, 6, 6);        // awning A (deeper)
+  stamp(stalls, 16, 7, 4, 3, 1, 16, 8);       // awning B (nearer)
+
+  const winter = blank();
+  stamp(winter, 16, 11, 0, 5, 7, 18, -2);     // snowy tree towering back-right
+  stamp(winter, 16, 4, 8, 1, 2, 3, 11);       // snow boulder front-left
+
+  // the well — a low snow-capped stone ring (winter stone-wall tiles)
+  const well = blank();
+  stamp(well, 16, 2, 10, 2, 1, 11, 6);        // capped top
+  stamp(well, 16, 2, 11, 2, 1, 11, 7);        // stone body
+
+  const cozy = at(15);
+  const goods = blank();
+  stamp(goods, 15, 2, 0, 3, 2, 5, 7);         // market table under awning A
+  stamp(goods, 15, 1, 3, 2, 2, 16, 9);        // barrels under awning B
+  stamp(goods, 15, 3, 3, 2, 2, 6, 11);        // sacks near the front
+  goods[9 * W + 20] = cozy(6, 2); goods[9 * W + 21] = cozy(7, 2);   // crate/chest, right
+  goods[12 * W + 15] = cozy(0, 3);            // a jug spilled on the lane
+
+  return {
+    id: 'town_market', label: 'Market square', tileset: 'mana_winter',
+    gridW: W, gridH: H,
+    layers: [
+      { kind: 'ground', tiles: ground },
+      { kind: 'ground', tiles: lane },
+      { kind: 'object', tiles: buildings, tileset: 'mana_timber' },
+      { kind: 'object', tiles: winter },
+      { kind: 'object', tiles: stalls, tileset: 'mana_timber' },
+      { kind: 'object', tiles: well },
+      { kind: 'object', tiles: goods, tileset: 'mana_cozy' },
+    ],
+    ground: { top: pct(rowBottomPx(6) + 8), bottom: pct(4) },
+  };
+}
+
+// --- frozen_lake (Wave 7) — the ice out past the shore -------------------------
+// Snowy bank across the back, a wide pale-ice expanse with teal cracked patches,
+// dead reeds at the waterline, a boulder and an ice-rock cairn out on the ice.
+function buildFrozenLake(): TileScene {
+  const w = at(16);
+  const ground = blank();
+  // the frozen surface: mostly pale grey ice, a few teal cracked-open patches
+  fillGround(ground, [
+    w(11, 15), w(11, 15), w(11, 15), w(11, 15), w(11, 15), w(12, 15), w(11, 15), w(12, 13),
+  ], 71);
+  // snowy shore across the back three rows
+  for (let y = 0; y < 3; y++) for (let x = 0; x < W; x++) ground[y * W + x] = w(0, 1);
+
+  // cracked-ice decals scattered mid-lake
+  const cracks = blank();
+  cracks[7 * W + 6] = w(12, 13); cracks[9 * W + 15] = w(13, 13);
+  cracks[8 * W + 19] = w(12, 14); cracks[11 * W + 10] = w(13, 14);
+  cracks[10 * W + 3] = w(12, 13);
+
+  // shore life — a dead tree back-left and reeds along the waterline
+  const shore = blank();
+  stamp(shore, 16, 11, 0, 5, 7, 1, -2);       // snowy dead tree
+  shore[3 * W + 8] = w(0, 8); shore[3 * W + 9] = w(0, 9);
+  shore[3 * W + 16] = w(0, 9); shore[3 * W + 17] = w(0, 8);
+  shore[3 * W + 21] = w(0, 8);
+
+  const rocks = blank();
+  stamp(rocks, 16, 4, 8, 1, 2, 6, 10);        // snow boulder on the ice
+  stamp(rocks, 16, 1, 12, 2, 3, 20, 9);       // ice-rock cairn, near-right
+
+  return {
+    id: 'frozen_lake', label: 'Frozen lake', tileset: 'mana_winter',
+    gridW: W, gridH: H,
+    layers: [
+      { kind: 'ground', tiles: ground },
+      { kind: 'ground', tiles: cracks },
+      { kind: 'object', tiles: shore },
+      { kind: 'object', tiles: rocks },
+    ],
+    // walkable: from just past the reedy bank out to the near ice
+    ground: { top: pct(rowBottomPx(4) + 4), bottom: pct(3) },
+  };
+}
+
+// --- cave_deep (Wave 7) — a pillared hall over a chasm ------------------------
+// The RPGW cave interior again, composed as a deeper place: a colonnade of stone
+// spires marching back, rubble underfoot, and a black chasm cutting across the
+// mid-floor (null ground cells = the void showing through).
+function buildCaveDeep(): TileScene {
+  const m = at(102);                          // caves_main
+  const ground = blank();
+  fillGround(ground, [m(2, 56), m(4, 56), m(6, 56), m(2, 57), m(5, 57), m(4, 58), m(5, 55)], 59);
+  // the north wall (same black mass with a lit rim as cave_dark)
+  stamp(ground, 102, 0, 18, 12, 4, 0, 0);
+  stamp(ground, 102, 1, 18, 11, 4, 12, 0);
+  stamp(ground, 102, 11, 18, 1, 4, 23, 0);
+  // the chasm: a band of floor simply removed — the dark canvas beneath reads as
+  // a drop. Kept to the mid-depth so actors mill on the near lip.
+  for (let x = 5; x <= 19; x++) { ground[8 * W + x] = null; ground[9 * W + x] = null; }
+
+  const d = at(26);                           // caves_deco
+  const pillars = blank();
+  // a colonnade — spires standing where their bases land on solid floor
+  stamp(pillars, 26, 8, 18, 4, 6, 3, 0);      // back-left column
+  stamp(pillars, 26, 8, 18, 4, 6, 17, 0);     // back-right column
+  stamp(pillars, 26, 4, 21, 2, 3, 8, 5);      // near-left short pillar (lip of chasm)
+  stamp(pillars, 26, 4, 21, 2, 3, 15, 5);     // near-right short pillar
+
+  const glitter = blank();
+  stamp(glitter, 26, 2, 38, 2, 2, 2, 11);     // blue crystal cluster, front-left
+  stamp(glitter, 26, 12, 38, 2, 2, 20, 11);   // green crystal cluster, front-right
+  glitter[10 * W + 12] = d(1, 37);            // lone shard on the near lip
+
+  const rubble = blank();                     // ground decals along the chasm lip
+  stamp(rubble, 26, 0, 46, 3, 2, 6, 10);
+  stamp(rubble, 26, 10, 46, 3, 2, 15, 10);
+  rubble[11 * W + 4] = d(1, 50); rubble[12 * W + 18] = d(4, 51); rubble[7 * W + 11] = d(1, 50);
+
+  return {
+    id: 'cave_deep', label: 'Deep hall', tileset: 'caves_main',
+    gridW: W, gridH: H,
+    layers: [
+      { kind: 'ground', tiles: ground },
+      { kind: 'ground', tiles: rubble, tileset: 'caves_deco' },
+      { kind: 'object', tiles: pillars, tileset: 'caves_deco' },
+      { kind: 'object', tiles: glitter, tileset: 'caves_deco' },
+    ],
+    ground: { top: pct(rowBottomPx(5)), bottom: pct(3) },
+  };
+}
+
 export const TILE_SCENES: TileScene[] = [
   buildCampWinter(),
   buildTownTentowns(),
   buildCaveDark(),
+  buildTownMarket(),
+  buildFrozenLake(),
+  buildCaveDeep(),
 ];
 
 const SCENE_BY_ID = new Map(TILE_SCENES.map((s) => [s.id, s]));

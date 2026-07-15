@@ -52,6 +52,36 @@ import bringerIdle from '../assets/actors/bringer/idle.png';
 import bringerWalk from '../assets/actors/bringer/walk.png';
 import bringerHurt from '../assets/actors/bringer/hurt.png';
 import bringerDeath from '../assets/actors/bringer/death.png';
+// Wave 7 — finishing the library. All measured, none guessed:
+//  - cat: FREE_Cat 2D Pixel Art, 64px per-anim strips (Chillitita's familiar).
+//  - ice zombie: the 0x72 dungeon pack's 16×16 4-frame idle, assembled 1:1 into
+//    a horizontal strip (the frames ship as individual PNGs).
+//  - demon / blood monster: Tiny RPG Pack 02, 100px per-anim strips, the exact
+//    format of the Wave 3 soldier/orc. (Demon's Attack sheets are 700px = ÷28,
+//    so the corruption tripwire rejects them — and 'attack' is never a rendered
+//    Realm pose anyway, so no loss.)
+//  - goblin / skeleton / ogre: 0x72 dungeon monsters, idle+run assembled from
+//    individual frames. The pack's playable HEROES (knight/elf/dwarf/wizard/
+//    lizard) are all 16×28 → the ÷28 tripwire refuses them, as designed.
+import catIdle from '../assets/actors/cat/idle.png';
+import catWalk from '../assets/actors/cat/walk.png';
+import catRun from '../assets/actors/cat/run.png';
+import catHurt from '../assets/actors/cat/hurt.png';
+import iceZombieIdle from '../assets/actors/ice-zombie/idle.png';
+import demonIdle from '../assets/actors/demon/idle.png';
+import demonWalk from '../assets/actors/demon/walk.png';
+import demonHurt from '../assets/actors/demon/hurt.png';
+import demonDeath from '../assets/actors/demon/death.png';
+import bloodIdle from '../assets/actors/blood-monster/idle.png';
+import bloodWalk from '../assets/actors/blood-monster/walk.png';
+import bloodHurt from '../assets/actors/blood-monster/hurt.png';
+import bloodDeath from '../assets/actors/blood-monster/death.png';
+import goblinIdle from '../assets/actors/goblin/idle.png';
+import goblinWalk from '../assets/actors/goblin/walk.png';
+import skeletonIdle from '../assets/actors/skeleton/idle.png';
+import skeletonWalk from '../assets/actors/skeleton/walk.png';
+import ogreIdle from '../assets/actors/ogre/idle.png';
+import ogreWalk from '../assets/actors/ogre/walk.png';
 
 // Lively NPCs v3.1 — 50 single-anim idle strips (32 or 34 px square frames),
 // globbed so the descriptor table below stays the source of measured truth.
@@ -69,6 +99,11 @@ export interface ActorAnim {
   layout: 'h' | 'v';
   /** grid sheets: which row of the sheet this strip lives on (h layout) */
   row?: number;
+  /** native sheet width in px, when the sheet is WIDER than this anim's own
+   *  strip (a shared multi-anim sheet like the frost guardian's 16-column one).
+   *  Defaults to frames*frameW. Load-bearing: background-size scales the whole
+   *  sheet by this, so a 6-frame idle on a 16-wide sheet still shows ONE frame. */
+  sheetW?: number;
   /** play once and hold the last frame (death) */
   once?: boolean;
 }
@@ -84,6 +119,10 @@ export interface ActorSprite {
   contentH: number;
   /** measured empty px between the feet and the frame's bottom edge */
   footPad: number;
+  /** measured px the content sits off horizontal-center in its frame (assembled
+   *  strips can land off-center); +right / −left. Applied to the sprite art so
+   *  the character stands centered on its ground position. Default 0. */
+  footOffsetX?: number;
   /** integer draw scale on the stage (Wave 5: 1 — the world is roomy) */
   scale: number;
   anims: Partial<Record<'idle' | 'walk' | 'hurt' | 'death' | 'attack' | 'run' | 'jump', ActorAnim>>;
@@ -217,23 +256,99 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     id: 'frost_guardian', label: 'Frost Guardian', category: 'boss',
     frameW: 192, frameH: 128, contentH: 92, footPad: 18, scale: 1,
     matches: [/frost ?guardian/i, /ice ?golem/i, /snow ?golem/i, /coldlight/i],
+    // one shared 3072×640 sheet (16 cols × 5 rows) — every anim carries sheetW so
+    // background-size scales the whole sheet, not just its own frames' worth.
     anims: {
-      idle:   { file: frostGuardianSheet, frames: 6,  fps: 6,  layout: 'h', row: 0 },
-      walk:   { file: frostGuardianSheet, frames: 10, fps: 8,  layout: 'h', row: 1 },
-      attack: { file: frostGuardianSheet, frames: 14, fps: 10, layout: 'h', row: 2 },
-      hurt:   { file: frostGuardianSheet, frames: 7,  fps: 10, layout: 'h', row: 3 },
-      death:  { file: frostGuardianSheet, frames: 16, fps: 8,  layout: 'h', row: 4, once: true },
+      idle:   { file: frostGuardianSheet, frames: 6,  fps: 6,  layout: 'h', row: 0, sheetW: 3072 },
+      walk:   { file: frostGuardianSheet, frames: 10, fps: 8,  layout: 'h', row: 1, sheetW: 3072 },
+      attack: { file: frostGuardianSheet, frames: 14, fps: 10, layout: 'h', row: 2, sheetW: 3072 },
+      hurt:   { file: frostGuardianSheet, frames: 7,  fps: 10, layout: 'h', row: 3, sheetW: 3072 },
+      death:  { file: frostGuardianSheet, frames: 16, fps: 8,  layout: 'h', row: 4, sheetW: 3072, once: true },
     },
   },
   {
+    // Wave 7 re-measure (QA #9): the assembled strips carry the figure in the
+    // RIGHT third of the 140px frame — content spans x[81:128], center 104.5 vs
+    // the frame's 70. footOffsetX shifts the art 35px left so it stands centered.
+    // contentH corrected 54→56 (content spans y[36:92]); footPad 1 was right.
     id: 'bringer_of_death', label: 'Bringer of Death', category: 'boss',
-    frameW: 140, frameH: 93, contentH: 54, footPad: 1, scale: 1,
+    frameW: 140, frameH: 93, contentH: 56, footPad: 1, footOffsetX: -35, scale: 1,
     matches: [/bringer/i, /reaper/i, /wraith/i, /spect(er|re)/i],
     anims: {
       idle:  { file: bringerIdle,  frames: 8,  fps: 8,  layout: 'h' },
       walk:  { file: bringerWalk,  frames: 8,  fps: 10, layout: 'h' },
       hurt:  { file: bringerHurt,  frames: 3,  fps: 10, layout: 'h' },
       death: { file: bringerDeath, frames: 10, fps: 8,  layout: 'h', once: true },
+    },
+  },
+  // --- Wave 7 additions: the rest of the usable art ------------------------------
+  {
+    // Chillitita's cat (Ben asked twice). 64px frames; content 28px tall centered
+    // with 16px of foot padding. 'run' rides the walk fallback; 'hurt' → down.
+    id: 'cat', label: 'Cat', category: 'beast',
+    frameW: 64, frameH: 64, contentH: 28, footPad: 16, scale: 1,
+    matches: [/\bcat\b/i, /feline/i, /kitt(en|y)/i, /familiar/i],
+    anims: {
+      idle: { file: catIdle, frames: 10, fps: 5,  layout: 'h' },
+      walk: { file: catWalk, frames: 15, fps: 8,  layout: 'h' },
+      run:  { file: catRun,  frames: 10, fps: 10, layout: 'h' },
+      hurt: { file: catHurt, frames: 5,  fps: 10, layout: 'h' },
+    },
+  },
+  {
+    // 16×16 4-frame idle assembled from the dungeon pack's individual frames.
+    id: 'ice_zombie', label: 'Ice Zombie', category: 'monster',
+    frameW: 16, frameH: 16, contentH: 16, footPad: 0, scale: 1,
+    matches: [/ice.?zombie/i, /frozen (dead|corpse|undead|zombie)/i, /zombie/i],
+    anims: { idle: { file: iceZombieIdle, frames: 4, fps: 4, layout: 'h' } },
+  },
+  {
+    id: 'demon', label: 'Demon', category: 'monster',
+    frameW: 100, frameH: 100, contentH: 21, footPad: 41, scale: 1,
+    matches: [/demon/i, /devil/i, /fiend/i, /quasit/i, /imp\b/i],
+    anims: {
+      idle:  { file: demonIdle,  frames: 6, fps: 8,  layout: 'h' },
+      walk:  { file: demonWalk,  frames: 8, fps: 10, layout: 'h' },
+      hurt:  { file: demonHurt,  frames: 4, fps: 10, layout: 'h' },
+      death: { file: demonDeath, frames: 4, fps: 8,  layout: 'h', once: true },
+    },
+  },
+  {
+    id: 'blood_monster', label: 'Blood Monster', category: 'monster',
+    frameW: 100, frameH: 100, contentH: 16, footPad: 42, scale: 1,
+    matches: [/blood (monster|ooze|slime|fiend)/i, /red ooze/i],
+    anims: {
+      idle:  { file: bloodIdle,  frames: 6, fps: 8,  layout: 'h' },
+      walk:  { file: bloodWalk,  frames: 8, fps: 10, layout: 'h' },
+      hurt:  { file: bloodHurt,  frames: 4, fps: 10, layout: 'h' },
+      death: { file: bloodDeath, frames: 4, fps: 8,  layout: 'h', once: true },
+    },
+  },
+  {
+    id: 'goblin', label: 'Goblin', category: 'monster',
+    frameW: 16, frameH: 16, contentH: 12, footPad: 0, scale: 1,
+    matches: [/goblin/i],
+    anims: {
+      idle: { file: goblinIdle, frames: 4, fps: 4, layout: 'h' },
+      walk: { file: goblinWalk, frames: 4, fps: 8, layout: 'h' },
+    },
+  },
+  {
+    id: 'skeleton', label: 'Skeleton', category: 'monster',
+    frameW: 16, frameH: 16, contentH: 16, footPad: 0, scale: 1,
+    matches: [/skelet(on)?/i],
+    anims: {
+      idle: { file: skeletonIdle, frames: 4, fps: 4, layout: 'h' },
+      walk: { file: skeletonWalk, frames: 4, fps: 8, layout: 'h' },
+    },
+  },
+  {
+    id: 'ogre', label: 'Ogre', category: 'monster',
+    frameW: 32, frameH: 36, contentH: 26, footPad: 0, scale: 1,
+    matches: [/ogre/i, /verbeeg/i, /\bbrute\b/i],
+    anims: {
+      idle: { file: ogreIdle, frames: 4, fps: 4, layout: 'h' },
+      walk: { file: ogreWalk, frames: 4, fps: 8, layout: 'h' },
     },
   },
   // --- Lively NPCs (Wave 6): 50 idle-strip townsfolk, elementals, steampunk ------

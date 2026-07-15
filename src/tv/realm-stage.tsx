@@ -166,6 +166,38 @@ function combatPos(id: string, i: number, n: number, lo: number, hi: number): Po
   };
 }
 
+// A bubble that's pure glyph (no letters) is an EMOTE — 😈 taunt, 🍖❗ hunger,
+//💰💤❄️ — and floats with no box (QA #10). Lettered chatter ('arrrg') keeps its
+// speech box for legibility.
+const isEmote = (s: string) => !/[a-z]/i.test(s);
+
+// --- soft obstacles (Wave 7): placed things block the drift plane ----------------
+// A footprint is the ground cell(s) a placed object occupies. Actors don't
+// NAVIGATE — this just keeps a seeded drift target from landing on an occupied
+// cell: if a target falls inside a footprint, it's pushed out along the shallower
+// axis (one deterministic pass, no per-frame physics). Enough to read as "the
+// rock is in the way" — the bear steers around it instead of walking through.
+interface Obstacle { x: number; y: number; rx: number; ry: number }
+const OBS_PAD_X = 1.5;    // extra % breathing room around a footprint in x
+const OBS_PAD_Y = 0.05;   // …and in depth
+
+/** Nudge (x,y) out of any footprint it lands in. Single separation pass. */
+function steerAround(x: number, y: number, obs: Obstacle[]): Pos {
+  let ax = x, ay = y;
+  for (const o of obs) {
+    const ex = o.rx + OBS_PAD_X, ey = o.ry + OBS_PAD_Y;
+    const dx = ax - o.x, dy = ay - o.y;
+    const penX = ex - Math.abs(dx), penY = ey - Math.abs(dy);
+    if (penX > 0 && penY > 0) {                 // overlapping the footprint
+      // resolve along whichever axis is least dug-in (normalized), so the actor
+      // slides past the side of the object rather than teleporting over it
+      if (penX / ex <= penY / ey) ax = o.x + (dx < 0 ? -ex : ex);
+      else ay = o.y + (dy < 0 ? -ey : ey);
+    }
+  }
+  return { x: ax, y: clamp01(ay) };
+}
+
 // Foe chatter — sparse and deterministic, same seeded feel as party bubbles.
 const FOE_BUBBLES = ['arrrg', 'grr', '!', '⚔️', '😤'];
 function pickFoeBubble(id: string, tick: number): string | null {
@@ -277,19 +309,26 @@ function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
   const s = a.scale;
   const loopFrames = anim.once ? Math.max(1, anim.frames - 1) : anim.frames;
   const dur = loopFrames / anim.fps;
-  // sheet is drawn pre-scaled via background-size, so positions are scaled px too
-  const sheetLen = anim.frames * (anim.layout === 'h' ? a.frameW : a.frameH) * s;
+  // background-size scales the WHOLE native sheet by s (aspect preserved off the
+  // sized axis), so positions below index the native grid. The QA #2 frost-guardian
+  // bug lived here: the old code sized to frames*frameW, which for a 6-frame idle on
+  // a 16-column sheet squished the entire 3072px sheet into 1152px — so a slice of
+  // every column bled through one frame box. sheetW carries the true sheet width.
+  const sheetW = (anim.sheetW ?? anim.frames * a.frameW) * s;
+  const vLen = anim.frames * a.frameH * s;
+  const dx = (a.footOffsetX ?? 0) * s;   // re-center off-center art (e.g. the bringer)
   return {
     width: `${a.frameW * s}px`,
     height: `${a.frameH * s}px`,
     backgroundImage: `url(${anim.file})`,
-    backgroundSize: anim.layout === 'h' ? `${sheetLen}px auto` : `auto ${sheetLen}px`,
+    backgroundSize: anim.layout === 'h' ? `${sheetW}px auto` : `auto ${vLen}px`,
     backgroundPositionY: anim.layout === 'h' ? `${-(anim.row ?? 0) * a.frameH * s}px` : '0px',
+    transform: dx ? `translateX(${dx}px)` : undefined,
     '--realm-to': `${-loopFrames * a.frameW * s}px`,
     animation: anim.frames > 1
       ? `realmSpriteRun ${dur}s steps(${loopFrames}) ${anim.once ? '1 forwards' : 'infinite'}`
       : 'none',
-  } as Record<string, string>;
+  } as Record<string, string | undefined>;
 }
 
 function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq, band = DEFAULT_BAND }: {
@@ -314,14 +353,17 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
       }}
     >
       {(active || next) && <span class="tv-turn-mark" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 4}px` }}>▼</span>}
-      {bubble && <span class="tv-idle-bubble realm-bubble" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 2}px` }}>{bubble}</span>}
+      {bubble && <span class={`tv-idle-bubble realm-bubble${isEmote(bubble) ? ' emote' : ''}`} style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 2}px` }}>{bubble}</span>}
       {hpState !== 'healthy' && pose !== 'down' && typeof hp === 'number' && typeof maxHp === 'number' && (
         <span class="tv-idle-minihp realm-minihp" style={{ bottom: `${(sprite.footPad + sprite.contentH) * s + 2}px` }}>
           <span style={{ width: `${Math.max(4, (hp / Math.max(1, maxHp)) * 100)}%` }} />
         </span>
       )}
       <span class="realm-sprite" style={spriteAnimStyle(sprite, picked.anim)} />
-      <span class="realm-sprite-name" style={{ bottom: `${Math.max(0, sprite.footPad * s - 12)}px` }}>{name}</span>
+      {/* label sits below the foot line: the sprite's in-flow height is frameH·s,
+          feet are footPad·s above its bottom, so (frameH−footPad)·s is the foot
+          line from the top; +2px is a purely visual gap (QA #3). */}
+      <span class="realm-sprite-name" style={{ top: `${(sprite.frameH - sprite.footPad) * s + 2}px` }}>{name}</span>
     </div>
   );
 }
@@ -374,6 +416,24 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
   const tiled = tileSceneById(scene.id);
   const band = tiled?.ground ?? { top: GROUND_TOP, bottom: GROUND_BOT };
 
+  // Soft obstacles (Wave 7): every tiled object's base cell + any displayed
+  // trophy becomes a footprint on the drift plane. Derived wholly from data the
+  // stage already has — no new projection path crosses the seam.
+  const CELL_RX = ((16 / STAGE_W) * 100) / 2;
+  const obstacles: Obstacle[] = [];
+  if (tiled) {
+    for (const run of objectRuns(tiled)) {
+      obstacles.push({
+        x: ((run.col * 16 + 8) / STAGE_W) * 100,
+        y: rowDepthY(run.baseRow, tiled, band),
+        rx: CELL_RX, ry: 0.03,
+      });
+    }
+  }
+  for (const it of v.inventory ?? []) {
+    if (it.display) obstacles.push({ x: it.display.x, y: it.display.y, rx: CELL_RX, ry: 0.03 });
+  }
+
   const anyDown = v.party.some((p) => p.down);
   const ctx = {
     sceneCat: scene.cat, sceneId: scene.id, weatherId: v.weather.id, anyDown,
@@ -409,11 +469,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     const drift = pose === 'walk' ? ((behaviorTick + i) % 2 ? 7 : -7) : 0;
     const pos = inCombat ? combatPos(p.id, i, v.party.length, 8, 42) : homePos(p.id, i, v.party.length);
     const active = inCombat && !!activePcName && p.name === activePcName;
+    // the active combatant steps toward the viewer instead of hopping a rank
+    const rawY = active ? Math.min(1, pos.y + 0.15) : pos.y;
+    const st = steerAround(pos.x + drift, rawY, obstacles);
     return {
       key: p.id,
-      x: pos.x + drift,
-      // the active combatant steps toward the viewer instead of hopping a rank
-      y: active ? Math.min(1, pos.y + 0.15) : pos.y,
+      x: st.x,
+      y: st.y,
       row: archetypeRow(p.cls),
       pose,
       frame: frames[tick % frames.length],
@@ -436,10 +498,11 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
     }
     const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
+    const st = steerAround(pos.x, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
     return {
       key: c.id,
-      x: pos.x,
-      y: c.active ? Math.min(1, pos.y + 0.15) : pos.y,
+      x: st.x,
+      y: st.y,
       emoji: c.emoji, name: c.name, hpState: c.hpState, down,
       active: c.active, next: c.next, bubble,
       // Wave 5 resolution order: the appearance token (a descriptor id the DM
@@ -479,8 +542,9 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     }
     // roamers walk while their drift is steep; hoverers just idle
     const moving = mode !== 'pc' && tick % 8 < 5;
+    const st = steerAround(x, y, obstacles);   // steer the familiar around placed things
     return {
-      key: a.id, x, y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
+      key: a.id, x: st.x, y: st.y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
       pose: a.down ? 'down' : moving ? 'walk' : 'idle',
       frame: (tick + i) % 2,
     };
@@ -565,7 +629,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             style={{ left: `${a.x}%`, ...groundStyle(a.y, band) }}
           >
             {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
-            {a.bubble && <span class="tv-idle-bubble">{a.bubble}</span>}
+            {a.bubble && <span class={`tv-idle-bubble${isEmote(a.bubble) ? ' emote' : ''}`}>{a.bubble}</span>}
             {a.hpState !== 'healthy' && a.pose !== 'down' && (
               <span class="tv-idle-minihp"><span style={{ width: `${Math.max(4, (a.hp / Math.max(1, a.maxHp)) * 100)}%` }} /></span>
             )}
@@ -595,7 +659,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             title={f.name}
           >
             {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}
-            {f.bubble && <span class="tv-idle-bubble">{f.bubble}</span>}
+            {f.bubble && <span class={`tv-idle-bubble${isEmote(f.bubble) ? ' emote' : ''}`}>{f.bubble}</span>}
             <span class="tv-foe-emoji">{f.down ? '💀' : f.emoji}</span>
             <span class="tv-foe-name">{f.name}</span>
           </div>
