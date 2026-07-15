@@ -39,7 +39,8 @@ patch((d) => {
     { id: 'seed-it1', name: 'Wolf Skull Trophy', emoji: '🐺', qty: 1, ownerId: null, display: { x: 72, y: 0.35 } },
     { id: 'seed-it2', name: 'Potion of Healing', emoji: '🧪', qty: 2, ownerId: 'pc2' },
   ];
-  d.tv = { ...d.tv, sceneId: 'camp', partyLocation: 'Camp near Bryn Shander', slotView: 'realm' };
+  // Wave 6: first open lands on the tiled winter camp — the composed world
+  d.tv = { ...d.tv, sceneId: 'camp_winter', partyLocation: 'Camp near Bryn Shander', slotView: 'realm' };
   d.quests = [
     { id: 'sq1', name: 'The Cold-Hearted Killer', status: 'escalating', town: 'Bryn Shander', chapter: 1, mainHook: true, trigger: '', development: '', notes: '', custom: false },
     { id: 'sq2', name: 'Foaming Mugs', status: 'active', town: 'Bryn Shander', chapter: 1, mainHook: false, trigger: '', development: '', notes: '', custom: false },

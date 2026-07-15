@@ -23,6 +23,26 @@ function SessionForm({ open, onClose, existing }: { open: boolean; onClose: () =
     setF((prev) => ({ ...prev, [k]: v }));
   };
 
+  // QA #3 — Ben writes a lot. The boxes start tall, resize vertically, and the
+  // dragged height sticks per session per field (saved with the session).
+  const noteHeight = (k: string) => (e: Event) => {
+    const h = Math.round((e.currentTarget as HTMLTextAreaElement).offsetHeight);
+    setF((prev) => (prev.uiHeights?.[k] === h ? prev
+      : { ...prev, uiHeights: { ...prev.uiHeights, [k]: h } }));
+  };
+  // plain function (not a component) so the textarea never remounts mid-typing
+  const noteArea = (k: 'hook' | 'plannedEncounters' | 'secrets' | 'debrief', rows: number, placeholder: string) => (
+    <textarea
+      class="input session-note"
+      rows={rows}
+      placeholder={placeholder}
+      value={f[k]}
+      style={f.uiHeights?.[k] ? { height: `${f.uiHeights[k]}px` } : undefined}
+      onInput={txt(k)}
+      onPointerUp={noteHeight(k)}
+    />
+  );
+
   return (
     <Sheet open={open} center title={existing ? 'Edit session' : 'New session'} onClose={onClose}>
       <Field label="Title"><input class="input" placeholder="S4 — The road to Easthaven" value={f.title} onInput={txt('title')} /></Field>
@@ -37,13 +57,15 @@ function SessionForm({ open, onClose, existing }: { open: boolean; onClose: () =
       </div>
 
       <div class="field-label" style={{ color: 'var(--frost)' }}>— Prep —</div>
-      <Field label="Hook / opening"><textarea class="input" rows={2} placeholder="The session opens with…" value={f.hook} onInput={txt('hook')} /></Field>
-      <Field label="Planned encounters"><textarea class="input" rows={2} placeholder="Bandit ambush on the road; yeti tracks near the pass…" value={f.plannedEncounters} onInput={txt('plannedEncounters')} /></Field>
+      <Field label="Hook / opening">{noteArea('hook', 4, 'The session opens with…')}</Field>
+      <Field label="Planned encounters">{noteArea('plannedEncounters', 4, 'Bandit ambush on the road; yeti tracks near the pass…')}</Field>
       <NpcLinkPicker linked={f.npcIds} onChange={(ids) => setF((prev) => ({ ...prev, npcIds: ids }))} />
-      <Field label="Secrets & clues"><textarea class="input" rows={3} style={{ marginTop: '12px' }} placeholder="One secret per line — reveal when it lands naturally" value={f.secrets} onInput={txt('secrets')} /></Field>
+      <div style={{ marginTop: '12px' }}>
+        <Field label="Secrets & clues">{noteArea('secrets', 6, 'One secret per line — reveal when it lands naturally')}</Field>
+      </div>
 
       <div class="field-label" style={{ color: 'var(--frost)' }}>— Debrief —</div>
-      <Field label="What happened"><textarea class="input" rows={4} placeholder="Filled in after the session…" value={f.debrief} onInput={txt('debrief')} /></Field>
+      <Field label="What happened">{noteArea('debrief', 8, 'Filled in after the session…')}</Field>
 
       <button class="btn primary wide" disabled={!f.title.trim()} onClick={() => {
         if (existing) patch((d) => { const i = d.sessions.findIndex((x) => x.id === existing.id); if (i >= 0) d.sessions[i] = f; });

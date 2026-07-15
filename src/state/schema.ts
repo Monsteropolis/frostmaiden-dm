@@ -254,6 +254,9 @@ export interface SessionEntry {
   npcIds: string[];
   secrets: string;
   debrief: string;
+  /** Per-field textarea heights (px) the DM dragged them to — purely a UI
+   *  convenience. DM-only: sessions never cross the projection seam. */
+  uiHeights?: Record<string, number>;
 }
 
 export interface Milestone {

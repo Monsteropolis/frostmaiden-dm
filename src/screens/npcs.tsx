@@ -175,6 +175,7 @@ function NpcDetail({ npc, open, onClose, onEdit }: { npc: NpcView; open: boolean
       <div class="field-label">Realm sprite — how they appear in initiative &amp; the Realm</div>
       <SpritePicker
         value={npcSpriteFor(npc.id)}
+        surface="npc"
         onPick={(id) => patch((d) => { d.npcOverrides[npc.id] = { ...d.npcOverrides[npc.id], sprite: id }; })}
       />
 
@@ -224,7 +225,7 @@ export function NpcForm({ open, onClose, existing }: { open: boolean; onClose: (
       </div>
       <Field label="Appearance"><input class="input" value={f.appearance} onInput={set('appearance')} /></Field>
       <div class="field-label">Realm sprite — how they appear in initiative &amp; the Realm</div>
-      <SpritePicker value={f.sprite} onPick={(id) => setF((prev) => ({ ...prev, sprite: id }))} />
+      <SpritePicker value={f.sprite} surface="npc" onPick={(id) => setF((prev) => ({ ...prev, sprite: id }))} />
       <div class="field-row">
         <Field label="AC (optional)"><NumInput value={f.ac ?? 0} onInput={(n) => setF((prev) => ({ ...prev, ac: n || undefined }))} /></Field>
         <Field label="HP (optional)"><NumInput value={f.hp ?? 0} onInput={(n) => setF((prev) => ({ ...prev, hp: n || undefined }))} /></Field>

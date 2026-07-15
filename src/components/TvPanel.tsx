@@ -7,7 +7,7 @@
 
 import { useState } from 'preact/hooks';
 import { state, patch } from '../state/store';
-import { Sheet } from './ui';
+import { Sheet, IconInset, IconFullscreen } from './ui';
 import { startBroadcast, stopBroadcast, unmuteTv, tvStatus, tvStatusDetail } from '../tv/broadcaster';
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
@@ -116,13 +116,13 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
       <div class="field">
         <label>Layout</label>
         <div class="chip-row tight">
-          {([['▭ Inset', false], ['⛶ Fullscreen', true]] as const).map(([lbl, full]) => (
+          {([['Inset', false], ['Fullscreen', true]] as const).map(([lbl, full]) => (
             <button
               key={lbl}
               class={`cond-chip${state.value.tv.idleFull === full ? ' on' : ''}`}
               disabled={state.value.tv.slotView !== 'realm'}
               onClick={() => patch((d) => { d.tv.idleFull = full; })}
-            >{lbl}</button>
+            >{full ? <IconFullscreen /> : <IconInset />} {lbl}</button>
           ))}
         </div>
         <p class="stat-fine">The Realm: your party mills about the scene, reacting to HP, weather, and the fight. Fullscreen takes over the whole exploration view.</p>

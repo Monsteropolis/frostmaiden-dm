@@ -23,6 +23,11 @@ import glacial from '../assets/scenes-realm/glacial_mountains.png';
 import glacialLight from '../assets/scenes-realm/glacial_mountains_light.png';
 import camp from '../assets/scenes/camp.png';
 import peak from '../assets/scenes/peak.png';
+// tiled scenes (Wave 6) — the stage draws these live from tile data
+// (src/tv/tiles.ts); the url here is a pre-rendered thumbnail for the picker.
+import thumbCampWinter from '../assets/tiles/thumbs/camp_winter.png';
+import thumbTownTentowns from '../assets/tiles/thumbs/town_tentowns.png';
+import thumbCaveDark from '../assets/tiles/thumbs/cave_dark.png';
 
 // --- module artwork: locations ---
 import locTheCaer from '../assets/art/loc-the-caer.png';
@@ -94,6 +99,11 @@ export const SCENES: TvScene[] = [
   { id: 'blizzard', name: 'Blizzard', url: blizzard, cat: 'pixel' },
   { id: 'glacial', name: 'Glacial peaks', url: glacial, cat: 'pixel' },
   { id: 'glacial-light', name: 'Glacial dawn', url: glacialLight, cat: 'pixel' },
+  // tiled worlds (Wave 6) — same ids the tile data carries; just scene ids to
+  // the picker, the Auto resolver, and the projection
+  { id: 'camp_winter', name: 'Winter camp', url: thumbCampWinter, cat: 'pixel' },
+  { id: 'town_tentowns', name: 'Ten-Towns street', url: thumbTownTentowns, cat: 'pixel' },
+  { id: 'cave_dark', name: 'Dark cave', url: thumbCaveDark, cat: 'pixel' },
 
   // locations — mood-setting module art
   { id: 'loc-the-caer', name: 'The Caer', url: locTheCaer, cat: 'location' },

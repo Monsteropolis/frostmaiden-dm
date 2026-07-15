@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { Combatant, PresetCombatant, Difficulty, EncounterPreset } from '../state/schema';
-import { Sheet, ConfirmBtn, Field, NumInput, CondEditor } from '../components/ui';
+import { Sheet, ConfirmBtn, Field, NumInput, CondEditor, IconEye, IconEyeOff } from '../components/ui';
 import { d, rollCount, rollD20, rollDamage, showRoll } from '../lib/dice';
 import { CREATURES, ENCOUNTERS, ENC_TABLES, SeedCreature } from '../data';
 import { ApiMonsterPanel, getApiMonster } from '../lib/api';
@@ -222,7 +222,7 @@ function CombatRow({ c, active }: { c: Combatant; active: boolean }) {
                     const i = list.indexOf(c.id);
                     if (i >= 0) list.splice(i, 1); else list.push(c.id);
                   })}>
-                  {hidden ? '👁 Reveal on TV' : '🖵 Hide on TV'}
+                  {hidden ? <><IconEye /> Reveal on TV</> : <><IconEyeOff /> Hide on TV</>}
                 </button>
               );
             })()}
