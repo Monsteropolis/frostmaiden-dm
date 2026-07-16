@@ -5,7 +5,7 @@
 // but keep the broken payload under a backup key for rescue.
 // ============================================================
 
-import { AppState, SCHEMA_VERSION, defaultState } from './schema';
+import { AppState, SCHEMA_VERSION, defaultState, defaultPlaces } from './schema';
 
 type Migration = (s: Record<string, unknown>) => Record<string, unknown>;
 
@@ -110,6 +110,13 @@ const migrations: Record<number, Migration> = {
     ...s,
     monsterOverrides: s.monsterOverrides && typeof s.monsterOverrides === 'object' ? s.monsterOverrides : {},
     version: 10,
+  }),
+  // v10 → v11: the Places domain — non-town landmarks as first-class entries,
+  // seeded from the MAP_PLACES landmarks. DM-only, never projected.
+  10: (s) => ({
+    ...s,
+    places: Array.isArray(s.places) ? s.places : defaultPlaces(),
+    version: 11,
   }),
 };
 

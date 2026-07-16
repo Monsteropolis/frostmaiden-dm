@@ -44,6 +44,9 @@ import slimeAttack from '../assets/actors/slime/Monster_Slime_Attack1-Sheet.png'
 // Retro RPG Wildlife (grid sheets, 4 columns; wolf 16×16, bear 24×24)
 import wolfSheet from '../assets/actors/wolf/Wolf.png';
 import bearSheet from '../assets/actors/bear/Bear.png';
+// Wave 8 — finishing the Retro Wildlife pack: beetle + snake, same 16×16 4-col grid.
+import beetleSheet from '../assets/actors/beetle/beetle.png';
+import snakeSheet from '../assets/actors/snake/snake.png';
 // Wave 6 bosses: Frost Guardian (192×128 frames, one sheet, 5 anim rows) and
 // Bringer of Death (140×93 frames; the pack's composite sheet wraps anims
 // across rows, so per-anim strips were assembled 1:1 from its frames)
@@ -87,6 +90,15 @@ import ogreWalk from '../assets/actors/ogre/walk.png';
 // globbed so the descriptor table below stays the source of measured truth.
 const LIVELY_SHEETS = import.meta.glob<string>(
   '../assets/actors/lively/*/*.png',
+  { eager: true, import: 'default' },
+);
+
+// Wave 8 — the 0x72 16-bit dungeon character pack (More Sprites.zip). Frames ship
+// as individual PNGs; they were composited 1:1 into idle/walk(/hurt) strips under
+// dungeon/<name>/ (the same 1:1 assembly the Wave 7 goblin/skeleton got), then
+// globbed so the table below stays the one source of measured truth.
+const DUNGEON_SHEETS = import.meta.glob<string>(
+  '../assets/actors/dungeon/*/*.png',
   { eager: true, import: 'default' },
 );
 
@@ -187,6 +199,64 @@ function livelySprites(): ActorSprite[] {
   return out;
 }
 
+// --- 0x72 dungeon pack (Wave 8): one measured row per character ------------------
+// [name, label, category, frameW, frameH, contentH, footPad, hasWalk, hasHurt, matches?]
+// All frames are the pack's native size (16×16 / 16×23 / 16×28 / 32×36); idle+run
+// are 4 frames, the optional hit is a single frame. footPad is 0 across the pack —
+// the feet sit on the frame's bottom edge. goblin/skeleton/ogre already shipped in
+// Wave 7 (same pack); ogre here measures identically, so it's not re-registered.
+type DungeonRow = [string, string, ActorCategory, number, number, number, number, boolean, boolean, ((RegExp | string)[])?];
+const DUNGEON: DungeonRow[] = [
+  ['angel',        'Angel',        'npc',     16, 16, 12, 0, true,  false, [/angel|celestial|deva|couatl/i]],
+  ['big_demon',    'Big Demon',    'monster', 32, 36, 30, 0, true,  false, [/balor|greater demon|demon lord|glabrezu/i]],
+  ['big_zombie',   'Big Zombie',   'monster', 32, 36, 27, 0, true,  false, [/ogre zombie|zombie hulk|big zombie|zombie brute/i]],
+  ['chort',        'Chort',        'monster', 16, 23, 18, 0, true,  false, [/chort/i]],
+  ['doc',          'Plague Doctor','npc',     16, 23, 17, 0, true,  false, [/plague ?doctor|physician|apothecary|chirurgeon/i]],
+  ['dwarf_f',      'Dwarf (F)',    'npc',     16, 28, 21, 0, true,  true],
+  ['dwarf_m',      'Dwarf (M)',    'npc',     16, 28, 21, 0, true,  true,  [/dwarf|dwarven|duergar/i]],
+  ['elf_f',        'Elf (F)',      'npc',     16, 28, 16, 0, true,  true],
+  ['elf_m',        'Elf (M)',      'npc',     16, 28, 19, 0, true,  true,  [/\belf\b|elven/i]],
+  ['imp',          'Imp',          'monster', 16, 16, 12, 0, true,  false],
+  ['knight_f',     'Knight (F)',   'npc',     16, 28, 20, 0, true,  true],
+  ['knight_m',     'Knight (M)',   'npc',     16, 28, 20, 0, true,  true,  [/knight|paladin|guard ?captain|man-at-arms/i]],
+  ['lizard_f',     'Lizardfolk (F)','monster',16, 28, 19, 0, true,  true],
+  ['lizard_m',     'Lizardfolk (M)','monster',16, 28, 19, 0, true,  true,  [/lizard ?folk|lizardman|troglodyte|kobold/i]],
+  ['masked_orc',   'Masked Orc',   'monster', 16, 23, 16, 0, true,  false, [/masked orc/i]],
+  ['orc_shaman',   'Orc Shaman',   'monster', 16, 23, 15, 0, true,  false, [/orc shaman|orc caster|goblin shaman/i]],
+  ['orc_warrior',  'Orc Warrior',  'monster', 16, 23, 16, 0, true,  false, [/orc warrior|orc brute|orc raider/i]],
+  ['pumpkin_dude', 'Pumpkin Dude', 'monster', 16, 23, 21, 0, true,  false, [/pumpkin|scarecrow|jack.?o|gourd/i]],
+  ['tiny_zombie',  'Tiny Zombie',  'monster', 16, 16, 10, 0, true,  false, [/tiny zombie|zombie crawler|zombie rat/i]],
+  ['wizzard_f',    'Wizard (F)',   'npc',     16, 28, 20, 0, true,  true],
+  ['wizzard_m',    'Wizard (M)',   'npc',     16, 28, 19, 0, true,  true,  [/wizard|mage|sorcerer|warlock|magister/i]],
+  ['wogol',        'Wogol',        'monster', 16, 23, 16, 0, true,  false, [/wogol/i]],
+  // idle-only (single-anim in the pack)
+  ['necromancer',  'Necromancer',  'npc',     16, 23, 15, 0, false, false, [/necromancer|lich|bone ?wizard/i]],
+  ['zombie',       'Zombie',       'monster', 16, 16, 15, 0, false, false, [/rotting|risen dead|shambler/i]],
+  ['slug',         'Slug',         'monster', 16, 23, 17, 0, false, false, [/\bslug\b/i]],
+  ['muddy',        'Mud Slime',    'monster', 16, 16, 13, 0, false, false, [/mud ?(slime|ooze|monster)|mudling/i]],
+  ['swampy',       'Swamp Slime',  'monster', 16, 16, 13, 0, false, false, [/swamp ?(slime|ooze|thing)|bog ?(ooze|beast)/i]],
+  ['tiny_slug',    'Tiny Slug',    'monster', 16, 16, 13, 0, false, false, [/tiny slug|slugling/i]],
+];
+
+function dungeonSprites(): ActorSprite[] {
+  const out: ActorSprite[] = [];
+  for (const [name, lbl, cat, fw, fh, contentH, footPad, hasWalk, hasHurt, matches] of DUNGEON) {
+    const idle = DUNGEON_SHEETS[`../assets/actors/dungeon/${name}/idle.png`];
+    if (!idle) continue;   // strip missing from the build — never a broken tile
+    const anims: ActorSprite['anims'] = { idle: { file: idle, frames: 4, fps: 4, layout: 'h' } };
+    if (hasWalk) {
+      const w = DUNGEON_SHEETS[`../assets/actors/dungeon/${name}/walk.png`];
+      if (w) anims.walk = { file: w, frames: 4, fps: 8, layout: 'h' };
+    }
+    if (hasHurt) {
+      const h = DUNGEON_SHEETS[`../assets/actors/dungeon/${name}/hurt.png`];
+      if (h) anims.hurt = { file: h, frames: 1, fps: 10, layout: 'h' };
+    }
+    out.push({ id: name, label: lbl, category: cat, frameW: fw, frameH: fh, contentH, footPad, scale: 1, matches, anims });
+  }
+  return out;
+}
+
 export const ACTOR_SPRITES: ActorSprite[] = [
   {
     id: 'soldier', label: 'Soldier', category: 'hero', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 1,
@@ -249,6 +319,24 @@ export const ACTOR_SPRITES: ActorSprite[] = [
       death: { file: bearSheet, frames: 4, fps: 6, layout: 'h', row: 13, once: true },
     },
   },
+  {
+    // Wave 8: the last two Retro Wildlife critters (bear's packmates). 16×16
+    // 4-column grid; row 0 is the crawl. contentH/footPad measured off row 0.
+    id: 'beetle', label: 'Beetle', category: 'beast', frameW: 16, frameH: 16, contentH: 9, footPad: 3, scale: 1,
+    matches: [/beetle|scarab|\bbug\b|insect|chwinga/i],
+    anims: {
+      idle: { file: beetleSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
+      walk: { file: beetleSheet, frames: 4, fps: 8, layout: 'h', row: 0 },
+    },
+  },
+  {
+    id: 'snake', label: 'Snake', category: 'beast', frameW: 16, frameH: 16, contentH: 11, footPad: 2, scale: 1,
+    matches: [/snake|serpent|viper|adder|constrictor/i],
+    anims: {
+      idle: { file: snakeSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
+      walk: { file: snakeSheet, frames: 4, fps: 8, layout: 'h', row: 0 },
+    },
+  },
   // --- Wave 6 bosses -------------------------------------------------------------
   {
     // one 3072×640 sheet, 192×128 frames; anim rows measured: idle 6 / walk 10 /
@@ -283,16 +371,20 @@ export const ACTOR_SPRITES: ActorSprite[] = [
   },
   // --- Wave 7 additions: the rest of the usable art ------------------------------
   {
-    // Chillitita's cat (Ben asked twice). 64px frames; content 28px tall centered
-    // with 16px of foot padding. 'run' rides the walk fallback; 'hurt' → down.
+    // Chillitita's cat (Ben asked twice). Wave 8 re-measure (QA #1): the frames
+    // are 80px WIDE (not 64) — the old 64 sliced across cell boundaries, which
+    // is why it "displayed wrong". True counts: idle 8 / walk 12 / run 8 / hurt 4
+    // (640/80, 960/80, 640/80, 320/80). Content 28px tall, 16px foot pad, dead-
+    // centered (frame center 40 = content center). scale 0.5 halves it (Ben wanted
+    // it half size); every box halves to a clean integer (80→40, 64→32, 28→14, 16→8).
     id: 'cat', label: 'Cat', category: 'beast',
-    frameW: 64, frameH: 64, contentH: 28, footPad: 16, scale: 1,
+    frameW: 80, frameH: 64, contentH: 28, footPad: 16, scale: 0.5,
     matches: [/\bcat\b/i, /feline/i, /kitt(en|y)/i, /familiar/i],
     anims: {
-      idle: { file: catIdle, frames: 10, fps: 5,  layout: 'h' },
-      walk: { file: catWalk, frames: 15, fps: 8,  layout: 'h' },
-      run:  { file: catRun,  frames: 10, fps: 10, layout: 'h' },
-      hurt: { file: catHurt, frames: 5,  fps: 10, layout: 'h' },
+      idle: { file: catIdle, frames: 8,  fps: 5,  layout: 'h' },
+      walk: { file: catWalk, frames: 12, fps: 8,  layout: 'h' },
+      run:  { file: catRun,  frames: 8,  fps: 10, layout: 'h' },
+      hurt: { file: catHurt, frames: 4,  fps: 10, layout: 'h' },
     },
   },
   {
@@ -303,8 +395,9 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     anims: { idle: { file: iceZombieIdle, frames: 4, fps: 4, layout: 'h' } },
   },
   {
+    // Wave 8 (QA #2): Ben wanted it looming — draw at 2×.
     id: 'demon', label: 'Demon', category: 'monster',
-    frameW: 100, frameH: 100, contentH: 21, footPad: 41, scale: 1,
+    frameW: 100, frameH: 100, contentH: 21, footPad: 41, scale: 2,
     matches: [/demon/i, /devil/i, /fiend/i, /quasit/i, /imp\b/i],
     anims: {
       idle:  { file: demonIdle,  frames: 6, fps: 8,  layout: 'h' },
@@ -353,6 +446,8 @@ export const ACTOR_SPRITES: ActorSprite[] = [
   },
   // --- Lively NPCs (Wave 6): 50 idle-strip townsfolk, elementals, steampunk ------
   ...livelySprites(),
+  // --- 0x72 dungeon pack (Wave 8): 28 characters, idle+run(+hit) assembled strips -
+  ...dungeonSprites(),
 ];
 
 const BY_ID = new Map(ACTOR_SPRITES.map((a) => [a.id, a]));

@@ -215,6 +215,7 @@ interface ActorRender {
 interface FoeRender {
   key: string; x: number; y: number; emoji: string; name: string; hpState: HpState;
   down: boolean; active: boolean; next: boolean; bubble: string | null;
+  pose: Pose;                // Wave 8: foes drift + walk, not just idle (QA #8/#9)
   sprite?: ActorSprite;      // matched descriptor; undefined = emoji token
 }
 
@@ -497,14 +498,21 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       && (pokeActive.kind === 'taunt' || pokeActive.kind === 'cheer')) {
       bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
     }
+    // Foes don't just stand there (QA #8/#9): a downed foe lies, the active foe
+    // steps toward the viewer, and otherwise each seeded-drifts — walking its
+    // walk anim while it does. A boss (frost guardian / bringer) now actually
+    // paces, instead of only ever getting 'idle'. Same idiom as the party walkers.
+    const foeWalking = !down && !c.active && seeded(hashStr(c.id) + behaviorTick * 131) < 0.45;
+    const drift = foeWalking ? ((behaviorTick + i) % 2 ? 6 : -6) : 0;
+    const pose: Pose = down ? 'down' : c.active ? 'walk' : foeWalking ? 'walk' : 'idle';
     const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
-    const st = steerAround(pos.x, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
+    const st = steerAround(pos.x + drift, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
     return {
       key: c.id,
       x: st.x,
       y: st.y,
       emoji: c.emoji, name: c.name, hpState: c.hpState, down,
-      active: c.active, next: c.next, bubble,
+      active: c.active, next: c.next, bubble, pose,
       // Wave 5 resolution order: the appearance token (a descriptor id the DM
       // assigned, riding the emoji path) → descriptor `matches` on the projected
       // name → emoji token. A DM-masked "???" foe carries '❓' and can never
@@ -646,7 +654,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
         {foes.map((f) => f.sprite ? (
           <SpriteActor
             key={f.key}
-            sprite={f.sprite} pose={f.down ? 'down' : 'idle'} name={f.name}
+            sprite={f.sprite} pose={f.pose} name={f.name}
             hpState={f.hpState}
             bubble={f.bubble} flinch={false} active={f.active} next={f.next}
             x={f.x} y={f.y} pokeSeq={pokeSeq} band={band}

@@ -4,7 +4,9 @@
 // the shape changes. Never mutate old saves silently.
 // ============================================================
 
-export const SCHEMA_VERSION = 10;
+import { MAP_PLACES } from '../data/map';
+
+export const SCHEMA_VERSION = 11;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -205,6 +207,27 @@ export function defaultTownStatus(): TownStatus {
   return { visited: false, standing: 'unknown', activeQuest: '', sidekickRecruited: false, notes: '' };
 }
 
+// --- Places (Wave 8): non-town landmarks as first-class entries ----------------
+// The Dale's named features (Kelvin's Cairn, the Sea of Moving Ice, the Spine of
+// the World…) the way towns are, minus the town-only fields (population, speaker,
+// key locations). DM-authored and Canonical — NOT projected to the Realm this
+// wave (no seam path). Seeded from the MAP_PLACES landmarks; edited in place.
+export interface Place {
+  id: string;
+  name: string;
+  notes: string;
+  standing: TownStanding;
+  npcIds: string[];
+  questIds: string[];
+  visited: boolean;
+}
+
+export function defaultPlaces(): Place[] {
+  return MAP_PLACES
+    .filter((p) => p.kind === 'landmark')
+    .map((p) => ({ id: p.id, name: p.name, notes: '', standing: 'unknown' as TownStanding, npcIds: [], questIds: [], visited: false }));
+}
+
 // --- Custom monsters (user-built stat blocks) ----------------------------------
 
 export interface CustomMonster {
@@ -363,6 +386,9 @@ export interface AppState {
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
   travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number; gold: number };
   towns: Record<string, TownStatus>;
+  /** Non-town landmarks as first-class entries (Wave 8). Seeded from MAP_PLACES
+   *  landmarks; DM-authored, Canonical, not projected. */
+  places: Place[];
   /** The DM's own map pins (kind 'custom'). Seeded places live in data/map.ts.
    *  DM-only — never projected. */
   mapPins: MapPin[];
@@ -398,6 +424,7 @@ export function defaultState(): AppState {
     combat: { active: false, round: 0, turn: 0, combatants: [] },
     travel: { activeJourney: null, log: [], rations: 10, partySize: 4, gold: 0 },
     towns: {},
+    places: defaultPlaces(),
     mapPins: [],
     inventory: [],
     npcOverrides: {},

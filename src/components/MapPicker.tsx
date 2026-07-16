@@ -12,7 +12,8 @@ import { state, patch } from '../state/store';
 import { Sheet } from './ui';
 import {
   MAP_URL, MAP_CAL, MAP_PLACES, MapPlace, Terrain, TERRAIN_LABEL,
-  pxDistanceMiles, legDays,
+  pxDistanceMiles, legDays, legHoursRaw, roundHours, travelTimeLabel,
+  HOURS_PER_TRAVEL_DAY,
 } from '../data/map';
 import { TOWN_DISTANCES } from '../data';
 import { Pace } from '../state/schema';
@@ -40,6 +41,9 @@ export function tableDays(a: string, b: string): number | null {
 
 export interface LegEstimate {
   days: number;
+  /** travel time in hours (Wave 8): a full day is 8h. Table legs report whole
+   *  days × 8; overland legs report the finer measured figure. */
+  hours: number;
   source: 'table' | 'overland';
   miles: number | null;
 }
@@ -51,15 +55,22 @@ export function estimateLeg(
 ): LegEstimate | null {
   const t = tableDays(aName, bName);
   if (t !== null) {
+    const days = Math.max(1, Math.ceil(t * paceMult));
     return {
-      days: Math.max(1, Math.ceil(t * paceMult)),
+      days,
+      hours: days * HOURS_PER_TRAVEL_DAY,
       source: 'table',
       miles: a && b ? +pxDistanceMiles(a, b).toFixed(1) : null,
     };
   }
   if (!a || !b) return null;
   const miles = pxDistanceMiles(a, b);
-  return { days: legDays(miles, terrain, paceMult), source: 'overland', miles: +miles.toFixed(1) };
+  return {
+    days: legDays(miles, terrain, paceMult),
+    hours: roundHours(legHoursRaw(miles, terrain, paceMult)),
+    source: 'overland',
+    miles: +miles.toFixed(1),
+  };
 }
 
 const KIND_CLASS: Record<string, string> = {
@@ -171,7 +182,7 @@ export function MapPicker({ initialA, initialB, terrain, paceMult, onUse, onClos
       {est && (
         <div class="mp-estimate">
           <div class="mp-est-days">
-            <strong>{est.days} day{est.days > 1 ? 's' : ''}</strong>
+            <strong>{travelTimeLabel(est.hours)}</strong>
             {est.miles !== null && <span class="mp-est-miles"> · {est.miles} mi straight-line</span>}
             <span class={`mp-est-src ${est.source}`}>{est.source === 'table' ? 'module road time' : 'overland estimate'}</span>
           </div>
