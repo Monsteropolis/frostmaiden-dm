@@ -926,6 +926,9 @@ textarea.input { resize: vertical; font-family: var(--font-read); }
 }
 .npc-block.secret .field-label { color: var(--thread); }
 .thread-link { font-size: 13.5px; margin: 5px 0; display: flex; align-items: baseline; gap: 7px; }
+/* Wave 8 (QA #5): a resolved quest crosses off in its town's list. */
+.thread-link.resolved { opacity: 0.6; }
+.thread-link.resolved .thread-link-name { text-decoration: line-through; color: var(--ink-faint); }
 .arc-dot {
   width: 8px; height: 8px;
   flex-shrink: 0;

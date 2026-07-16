@@ -21,13 +21,18 @@ export function spriteThumbStyle(a: ActorSprite, size = 44): Record<string, stri
   // one anim's strip — index their grid correctly instead of squishing. sheetW
   // defaults to a single strip's width. footOffsetX re-centers off-center art.
   const sheetW = (idle.sheetW ?? idle.frames * a.frameW) * z;
+  // Wave 8 (QA #9): the offset must be ADDED, not subtracted. A descriptor's
+  // content sits at native x = frameW/2 − footOffsetX (footOffsetX is the LEFT-
+  // ward correction the stage applies via translateX). Centering that content in
+  // the thumb needs `+ off`; the old `− off` pushed the bringer's right-of-centre
+  // figure a further ~20px right — clean off the 44px tile, so the icon read blank.
   const off = (a.footOffsetX ?? 0) * z;
   return {
     width: `${size}px`, height: `${size}px`,
     backgroundImage: `url(${idle.file})`,
     backgroundRepeat: 'no-repeat',
     backgroundSize: `${sheetW}px auto`,
-    backgroundPosition: `${size / 2 - (a.frameW * z) / 2 - off}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
+    backgroundPosition: `${size / 2 - (a.frameW * z) / 2 + off}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
     imageRendering: 'pixelated',
   };
 }

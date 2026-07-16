@@ -76,3 +76,30 @@ export function pxDistanceMiles(a: { x: number; y: number }, b: { x: number; y: 
 export function legDays(miles: number, terrain: Terrain, paceMult: number): number {
   return Math.max(1, Math.ceil((miles / MILES_PER_DAY_NORMAL) * TERRAIN_MULT[terrain] * paceMult));
 }
+
+// --- Travel in hours (Wave 8, QA #7) -------------------------------------------
+// The party rarely walks a full day, so the DM wants the raw hours, not just the
+// whole-day count. A travel "day" is 8 hours on the trail; `journeyDays` (the
+// rations/weather tick) still drives the clock — this is a display accessor.
+export const HOURS_PER_TRAVEL_DAY = 8;
+
+/** Raw overland time in hours (unrounded): miles / MPD × terrain × pace × 8. */
+export function legHoursRaw(miles: number, terrain: Terrain, paceMult: number): number {
+  return (miles / MILES_PER_DAY_NORMAL) * TERRAIN_MULT[terrain] * paceMult * HOURS_PER_TRAVEL_DAY;
+}
+
+/** Rounded to the nearest half hour, for display. */
+export function roundHours(h: number): number {
+  return Math.round(h * 2) / 2;
+}
+
+/** Plain-language travel time: hours, spelled out as days once it passes a full
+ *  8-hour day. "~5 hours on the trail" · "~14 hours · about 2 days of travel". */
+export function travelTimeLabel(hours: number): string {
+  const h = roundHours(hours);
+  const hStr = Number.isInteger(h) ? String(h) : h.toFixed(1);
+  const hUnit = h === 1 ? 'hour' : 'hours';
+  if (h <= HOURS_PER_TRAVEL_DAY) return `~${hStr} ${hUnit} on the trail`;
+  const days = Math.max(1, Math.round(h / HOURS_PER_TRAVEL_DAY));
+  return `~${hStr} ${hUnit} · about ${days} day${days > 1 ? 's' : ''} of travel`;
+}

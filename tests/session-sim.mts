@@ -1103,12 +1103,18 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
   const { patch } = await import('../src/state/store.ts');
   const { migrate } = await import('../src/state/migrations.ts');
 
-  // -- migration v9 → v10: the monster override map arrives empty
+  // -- migration v9 → v10: the monster override map arrives empty (migrate always
+  //    walks to the latest schema — v11 as of Wave 8 — so assert that terminus)
   const v9 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
   v9.version = 9;
   delete v9.monsterOverrides;
+  delete v9.places;
   const m10 = migrate(v9);
-  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 10);
+  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 11);
+  // -- migration v10 → v11: the Places domain seeds from the map's landmarks
+  check('v10→v11 seeds places from landmarks', Array.isArray(m10.places) && m10.places.length === 10
+    && m10.places.every((p) => p.standing === 'unknown' && !p.visited)
+    && m10.places.some((p) => p.name === "Kelvin's Cairn"));
 
   // -- the ground band: depth ↔ screen mapping
   check('ground band: y=0 draws at the treeline', groundBottomPct(0) === GROUND_TOP);
@@ -1164,6 +1170,56 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
     d.combat = { active: false, round: 0, turn: 0, combatants: [] };
     d.tv.hiddenCombatantIds = []; d.tv.slotView = 'scene';
   });
+}
+
+console.log('\n═══ SCENE 27: Wave 8 — Places tab + travel in hours + quest cross-off ═══');
+{
+  const { travelTimeLabel, roundHours } = await import('../src/data/map.ts');
+
+  // -- travel time in hours (QA #7): hours under a day, days once past 8h
+  check('hours under a day: just hours', travelTimeLabel(5) === '~5 hours on the trail');
+  check('hours rounds to the half hour', roundHours(5.25) === 5.5 && travelTimeLabel(5.25) === '~5.5 hours on the trail');
+  check('past 8h also spelled in days', travelTimeLabel(14) === '~14 hours · about 2 days of travel');
+  check('exactly a day is still hours', travelTimeLabel(8) === '~8 hours on the trail');
+
+  // -- Places tab: lists the landmarks, edits persist (QA #6)
+  click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
+  check('Places sub-tab sits right of Towns', (() => {
+    const tabs = $$('.sub-tab').map((t) => (t.textContent ?? '').trim());
+    const ti = tabs.findIndex((t) => t.startsWith('Towns'));
+    const pi = tabs.findIndex((t) => t.startsWith('Places'));
+    return ti >= 0 && pi === ti + 1;
+  })());
+  click(byText('.sub-tab', 'Places'), 'Places sub-tab'); await sleep(20);
+  check('Places lists the landmarks', bodyHas("Kelvin's Cairn") && bodyHas('Sea of Moving Ice') && bodyHas('Spine of the World'));
+  click(byText('.unit-name', "Kelvin's Cairn"), 'expand a Place'); await sleep(20);
+  click(byText('.unit-detail .cond-chip', 'friendly'), 'set place standing'); await sleep(20);
+  click(byText('.unit-detail .cond-chip', 'Mark visited'), 'mark place visited'); await sleep(20);
+  type($('.unit-detail textarea.input'), 'The dwarves keep a watchpost near the summit.', 'place notes'); await sleep(20);
+  const kc = () => state.value.places.find((p) => p.id === 'kelvins_cairn');
+  check('Place standing persists', kc()?.standing === 'friendly');
+  check('Place visited persists', kc()?.visited === true);
+  check('Place notes persist', (kc()?.notes ?? '').includes('watchpost'));
+  // link a quest to the place from the dropdown
+  {
+    const sel = $$('.unit-detail select.input').find((s) => (s.textContent ?? '').includes('Link a quest')) as HTMLSelectElement | undefined;
+    if (sel && sel.options.length > 1) {
+      sel.value = sel.options[1].value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(20);
+    }
+    check('Place quest link persists', (kc()?.questIds.length ?? 0) === 1);
+  }
+
+  // -- resolved quest crosses off in its town (QA #5)
+  patch((d) => {
+    const q = d.quests.find((x) => x.town === 'Bryn Shander');
+    if (q) q.status = 'resolved';
+  });
+  await sleep(20);
+  click(byText('.sub-tab', 'Towns'), 'Towns sub-tab'); await sleep(20);
+  click(byText('.unit-name', 'Bryn Shander'), 'expand town'); await sleep(20);
+  check('resolved quest is struck through in its town', $$('.thread-link.resolved').length >= 1);
 }
 
 console.log(`\n════════ RESULT: ${pass} passed, ${fail} failed ════════`);

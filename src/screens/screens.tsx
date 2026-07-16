@@ -214,6 +214,17 @@ function ProgressPanel() {
                       {linked && <span class="ms-link"> 🔗 {q?.name ?? 'quest'}</span>}
                       {m.notes ? <span class="ms-has-notes"> ✎</span> : null}
                     </button>
+                    {/* Wave 8 (QA #4): a linked beat's quest is now actionable right
+                        here — tap the badge to advance it (dormant→active→…→resolved),
+                        the same control the chapter-quest checklist carries. The label
+                        button still opens the beat editor. */}
+                    {linked && q && (
+                      <button class={`standing q-${q.status}`}
+                        style={{ background: 'none', cursor: 'pointer', minHeight: '34px', flexShrink: 0 }}
+                        aria-label={`Quest ${q.name} — advance status`}
+                        onClick={(e) => { e.stopPropagation(); patch((d) => { const x = d.quests.find((y) => y.id === q.id); if (x) x.status = NEXT_QUEST_STATUS[x.status]; }); }}
+                      >{q.status}</button>
+                    )}
                   </div>
                 );
               })}

@@ -3,18 +3,18 @@ import { signal } from '@preact/signals';
 import { state, patch } from '../state/store';
 import {
   WEATHER, WEATHER_POOL, WeatherId, Arc, ArcStatus, TownStanding, defaultTownStatus,
-  Quest, QuestStatus, Pace, Journey,
+  Quest, QuestStatus, Pace, Journey, Place,
 } from '../state/schema';
 import { TOWNS } from '../data';
 import { Sheet, ConfirmBtn, Field, NumInput, Stepper } from '../components/ui';
 import { allNpcs, openNpc } from './npcs';
 import { EncountersPanel } from './encounters';
 import { MapPicker, PickedPlace, placeByName, estimateLeg } from '../components/MapPicker';
-import { MAP_PLACES, Terrain, TERRAIN_LABEL } from '../data/map';
+import { MAP_PLACES, Terrain, TERRAIN_LABEL, travelTimeLabel } from '../data/map';
 
 // Which World sub-tab is showing — a signal so other screens (the header
 // weather sheet) can deep-link straight to Weather.
-export type WorldSub = 'towns' | 'quests' | 'arcs' | 'travel' | 'weather' | 'encounters';
+export type WorldSub = 'towns' | 'places' | 'quests' | 'arcs' | 'travel' | 'weather' | 'encounters';
 export const worldSub = signal<WorldSub>('towns');
 
 // ---------------------------------------------------------------- weather
@@ -167,7 +167,11 @@ function TownCard({ town }: { town: (typeof TOWNS)[number] }) {
             <div class="npc-block">
               <div class="field-label">Quests ({quests.length})</div>
               {quests.map((q) => (
-                <p class="thread-link"><span class={`arc-dot ${q.status === 'dormant' ? 'hook' : q.status}`} /> {q.name.replace(`${town.name}: `, '')}</p>
+                // Wave 8 (QA #5): a resolved quest crosses off in its town.
+                <p class={`thread-link${q.status === 'resolved' ? ' resolved' : ''}`}>
+                  <span class={`arc-dot ${q.status === 'dormant' ? 'hook' : q.status}`} />
+                  <span class="thread-link-name">{q.name.replace(`${town.name}: `, '')}</span>
+                </p>
               ))}
             </div>
           )}
@@ -191,6 +195,97 @@ function TownCard({ town }: { town: (typeof TOWNS)[number] }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- places
+
+// Places are the non-town landmarks (Kelvin's Cairn, the Sea of Moving Ice, the
+// Spine of the World…) as first-class entries — the same standing / NPC-linking /
+// quest controls a town gets, minus the town-only fields. DM-only this wave.
+function PlaceCard({ place }: { place: Place }) {
+  const [open, setOpen] = useState(false);
+  const upd = (fn: (p: Place) => void) =>
+    patch((d) => { const x = d.places.find((y) => y.id === place.id); if (x) fn(x); });
+  const quests = state.value.quests;
+  const linkedQuests = place.questIds
+    .map((id) => quests.find((q) => q.id === id))
+    .filter((q): q is Quest => !!q);
+  const unlinkedQuests = quests.filter((q) => !place.questIds.includes(q.id));
+  const nCount = place.npcIds.length;
+
+  return (
+    <div class={`card town ${place.visited ? 'visited' : ''}`}>
+      <div class="unit-top" onClick={() => setOpen(!open)}>
+        <div class="unit-id">
+          <div class="unit-name">{place.name}</div>
+          <div class="unit-meta">
+            Landmark{nCount > 0 ? <> <span class="sep">·</span> {nCount} NPC{nCount > 1 ? 's' : ''}</> : null}
+          </div>
+        </div>
+        <span class={`standing ${place.standing === 'unknown' ? '' : place.standing}`}
+          style={!place.visited ? { opacity: 0.55 } : {}}>
+          {place.visited ? place.standing : 'unvisited'}
+        </span>
+      </div>
+
+      {open && (
+        <div class="unit-detail">
+          <div class="chip-row" style={{ margin: '12px 0' }}>
+            <button class={`cond-chip${place.visited ? ' on' : ''}`} onClick={() => upd((p) => { p.visited = !p.visited; })}>
+              {place.visited ? '✦ Visited' : 'Mark visited'}
+            </button>
+          </div>
+
+          <div class="field-label">Party standing</div>
+          <div class="chip-row" style={{ marginBottom: '12px' }}>
+            {TOWN_STANDINGS.map((s) => (
+              <button class={`cond-chip${place.standing === s ? ' on' : ''}`} onClick={() => upd((p) => { p.standing = s; })}>{s}</button>
+            ))}
+          </div>
+
+          <div class="npc-block">
+            <NpcLinkPicker linked={place.npcIds} onChange={(ids) => upd((p) => { p.npcIds = ids; })} />
+          </div>
+
+          <div class="npc-block">
+            <div class="field-label">Related quests</div>
+            {linkedQuests.map((q) => (
+              // resolved quests cross off here too (QA #5)
+              <p class={`thread-link${q.status === 'resolved' ? ' resolved' : ''}`}>
+                <span class={`arc-dot ${q.status === 'dormant' ? 'hook' : q.status}`} />
+                <span class="thread-link-name">{q.name}</span>
+                <button class="npc-chip-x" aria-label={`Unlink ${q.name}`}
+                  onClick={() => upd((p) => { p.questIds = p.questIds.filter((x) => x !== q.id); })}>✕</button>
+              </p>
+            ))}
+            <select class="input" value=""
+              onChange={(e) => {
+                const id = (e.target as HTMLSelectElement).value;
+                if (id) upd((p) => { p.questIds = [...p.questIds, id]; });
+                (e.target as HTMLSelectElement).value = '';
+              }}>
+              <option value="">+ Link a quest…</option>
+              {unlinkedQuests.map((q) => <option value={q.id}>{q.name}{q.town ? ` — ${q.town}` : ''}</option>)}
+            </select>
+          </div>
+
+          <Field label="Notes">
+            <textarea class="input" rows={3} value={place.notes} onChange={(e) => upd((p) => { p.notes = (e.target as HTMLTextAreaElement).value; })} />
+          </Field>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlacesPanel() {
+  const places = state.value.places;
+  return (
+    <>
+      <div class="card"><p class="read">The Dale's landmarks — the wild places between the towns. Track the party's standing, who they've met there, and which threads run through.</p></div>
+      {places.map((p) => <PlaceCard key={p.id} place={p} />)}
+    </>
   );
 }
 
@@ -535,6 +630,7 @@ function TravelPanel() {
           <p class="read" style={{ marginBottom: '10px' }}>
             {est
               ? <>Estimated <strong>{est.days} day{est.days > 1 ? 's' : ''}</strong>
+                  {' · '}{travelTimeLabel(est.hours)}
                   {est.miles !== null ? ` (${est.miles} mi straight-line)` : ''} —{' '}
                   <span class={`mp-est-src ${est.source}`}>{est.source === 'table' ? 'module road time' : 'overland estimate'}</span>.</>
               : 'No coordinates for one of these places — pick it on the map.'}
@@ -637,6 +733,7 @@ export function WorldScreen() {
 
       <div class="sub-tabs scroll">
         <button class={`sub-tab${sub === 'towns' ? ' active' : ''}`} onClick={() => setSub('towns')}>Towns ({visited}/{TOWNS.length})</button>
+        <button class={`sub-tab${sub === 'places' ? ' active' : ''}`} onClick={() => setSub('places')}>Places ({state.value.places.length})</button>
         <button class={`sub-tab${sub === 'quests' ? ' active' : ''}`} onClick={() => setSub('quests')}>Quests ({activeQuests})</button>
         <button class={`sub-tab${sub === 'arcs' ? ' active' : ''}`} onClick={() => setSub('arcs')}>Arcs ({state.value.arcs.length})</button>
         <button class={`sub-tab${sub === 'travel' ? ' active' : ''}`} onClick={() => setSub('travel')}>Travel</button>
@@ -646,6 +743,7 @@ export function WorldScreen() {
 
       {sub === 'weather' && <WeatherPanel />}
       {sub === 'towns' && TOWNS.map((t) => <TownCard key={t.name} town={t} />)}
+      {sub === 'places' && <PlacesPanel />}
       {sub === 'quests' && <QuestsPanel />}
       {sub === 'arcs' && <ArcsPanel />}
       {sub === 'travel' && <TravelPanel />}
