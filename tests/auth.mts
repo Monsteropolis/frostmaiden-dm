@@ -178,10 +178,14 @@ const dm = clientFor(dmToken);
     { id: 'pc2', campaign_id: CAMPAIGN, name: 'Wick' },
   ], { onConflict: 'campaign_id,id' }));
   check('DM token upserts the roster', !roster.error, roster.error?.message);
-  const gate = seen(await dm.from('characters').upsert(
-    { id: 'pc1', campaign_id: CAMPAIGN, name: 'Brienne', password_hash: await hashPassword('WinterRose') },
-    { onConflict: 'campaign_id,id' }));
-  check('DM token writes a password hash (write-only column)', !gate.error, gate.error?.message);
+  // Plain UPDATE, matching setRealmPassword in src/backend/realm-client.ts —
+  // an upsert here would reference excluded.password_hash, which Postgres
+  // counts as a READ of the deliberately unreadable column and denies (42501).
+  const gate = seen(await dm.from('characters')
+    .update({ password_hash: await hashPassword('WinterRose') })
+    .eq('campaign_id', CAMPAIGN).eq('id', 'pc1').select('id'));
+  check('DM token writes a password hash (write-only column, via plain update)',
+    !gate.error && gate.data?.length === 1, gate.error?.message);
   const rosterAgain = seen(await dm.from('characters').upsert([
     { id: 'pc1', campaign_id: CAMPAIGN, name: 'Brienne' },
     { id: 'pc2', campaign_id: CAMPAIGN, name: 'Wick' },

@@ -39,7 +39,11 @@ Notes for Brief 2:
 - `characters.id` is only unique **within** a campaign (it is the local
   party-member id, e.g. `pc3`); the primary key is `(campaign_id, id)`.
 - `password_hash` is API-invisible by column privilege. Never `select('*')`
-  on `characters` — always name columns (`select('id, name')`).
+  on `characters` — always name columns (`select('id, name')`). And never
+  **upsert** a row that includes `password_hash`: the `excluded.password_hash`
+  reference counts as a read of the unreadable column and Postgres denies the
+  whole write (42501). Write the hash with a plain `update()` (see
+  `setRealmPassword` in `src/backend/realm-client.ts`).
 - The client entry points are `getSupabase()` / `getSupabaseWithToken()` in
   `src/backend/supabase.ts`. Never a `service_role` key anywhere in the repo.
 

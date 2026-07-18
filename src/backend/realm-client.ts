@@ -126,7 +126,14 @@ export async function pushRealmRoster(
 
 /** Set (or clear, with password '') a character's Realm password. The hash is
  *  computed here on the DM's device; the plaintext is never sent or stored.
- *  Returns the gated-state for the 🔒/🔓 marker. */
+ *  Returns the gated-state for the 🔒/🔓 marker.
+ *
+ *  A plain UPDATE, never an upsert: an upsert's `SET password_hash =
+ *  excluded.password_hash` counts as a READ of that column to Postgres, and
+ *  Brief 1 makes the hash unreadable to everyone, DM included — the write
+ *  would bounce with "permission denied" (caught by tests/auth.mts). UPDATE
+ *  writes the column without reading it. The row exists because callers sync
+ *  the roster first; if it doesn't, say so instead of silently doing nothing. */
 export async function setRealmPassword(
   realm: { campaignId: string; dmSecret: string }, campaignName: string,
   pc: { id: string; name: string }, password: string,
@@ -134,10 +141,11 @@ export async function setRealmPassword(
   const token = await ensureDmToken(realm, campaignName);
   const sb = await getSupabaseWithToken(token);
   const password_hash = password ? await hashPassword(password) : '';
-  const { error } = await sb.from('characters').upsert(
-    { id: pc.id, campaign_id: realm.campaignId, name: pc.name, password_hash },
-    { onConflict: 'campaign_id,id' },
-  );
+  const { data, error } = await sb.from('characters')
+    .update({ password_hash })
+    .eq('campaign_id', realm.campaignId).eq('id', pc.id)
+    .select('id');
   if (error) throw new Error(`Could not save the password: ${error.message}`);
+  if (!data?.length) throw new Error(`${pc.name} isn't synced to the Realm yet — sync the party and try again.`);
   return !!password;
 }
