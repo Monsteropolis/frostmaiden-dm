@@ -54,7 +54,14 @@ function clientFor(token: string) {
 }
 
 function claimsOf(token: string): Record<string, unknown> {
-  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+  // Tolerate a missing/garbled token: a failed mint should make the claim
+  // assertions FAIL cleanly (empty claims never match), not crash the run
+  // before the summary prints.
+  try {
+    const seg = String(token).split('.')[1];
+    if (!seg) return {};
+    return JSON.parse(Buffer.from(seg, 'base64url').toString());
+  } catch { return {}; }
 }
 
 console.log('\n-- Pure pieces: code derivation & password hashing (no DB needed) --');
@@ -89,6 +96,26 @@ try {
 // The service client — stands in for the Edge Function's runtime, which is
 // the only place such a client legitimately exists.
 const db = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+
+// ---- service-role preflight ------------------------------------------------
+// The token minter reads password_hash / dm_token_hash, which ONLY a
+// service-role client may do. Every DB assertion below assumes `db` really is
+// that client. If SUPABASE_TEST_SERVICE_KEY is missing or wrong, dm-login
+// would fail with a generic swallowed "Could not set up the campaign" — so
+// prove the client works here and print the UNDERLYING error if it doesn't,
+// distinguishing a harness-wiring problem from a genuine permission failure.
+{
+  const probeId = randomUUID();
+  const ins = await db.from('campaigns').insert({ id: probeId, name: 'preflight probe', dm_token_hash: 'x' });
+  if (ins.error) {
+    console.error('\n✗ Service-role client cannot write the database — the auth test harness is misconfigured.');
+    console.error(`  Underlying error: ${ins.error.message} (code ${ins.error.code ?? '?'}, http ${ins.status ?? '?'})`);
+    console.error('  Almost always: SUPABASE_TEST_SERVICE_KEY is empty or not the local stack\'s SERVICE_ROLE_KEY.');
+    console.error(`  Using service key of length ${SERVICE.length}, starts "${SERVICE.slice(0, 6)}…".`);
+    process.exit(1);
+  }
+  await db.from('campaigns').delete().eq('id', probeId);
+}
 
 // ---- fixtures via the REAL provisioning path ------------------------------
 console.log('\n-- DM provisioning (dm-login): first call claims, wrong secret bounces --');
