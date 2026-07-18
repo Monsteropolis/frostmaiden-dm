@@ -11,7 +11,8 @@
     "seed:snapshot": "vite-node scripts/seed-snapshot.mts",
     "test:sim": "vite-node tests/session-sim.mts",
     "test:seam": "vite-node tests/seam.mts",
-    "test:boundary": "vite-node tests/boundary.mts"
+    "test:boundary": "vite-node tests/boundary.mts",
+    "test:auth": "vite-node tests/auth.mts"
   },
   "dependencies": {
     "@fontsource/pixelify-sans": "^5.2.7",

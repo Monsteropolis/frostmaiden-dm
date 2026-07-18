@@ -11,6 +11,7 @@ import { state } from '../state/store';
 import { projectPlayerView } from './projection';
 import { TvTransport, TransportStatus } from './transport';
 import { PeerTransport } from './peer-transport';
+import { deriveRealmCode } from '../backend/realm-client';
 
 export const tvStatus = signal<TransportStatus>('idle');
 export const tvStatusDetail = signal<string>('');
@@ -32,7 +33,12 @@ export function startBroadcast(roomCode: string) {
   transport.onStatus((s, d) => {
     tvStatus.value = s;
     tvStatusDetail.value = d ?? '';
-    if (s === 'open') pushView(); // full frame on (re)connect
+    if (s === 'open') {
+      // The stable Realm code rides beside the view (never inside the
+      // projection — the seam's allow-list stays untouched).
+      transport?.send({ t: 'realm', code: deriveRealmCode(state.value.realm.campaignId) });
+      pushView(); // full frame on (re)connect
+    }
   });
   transport.join(roomCode);
 

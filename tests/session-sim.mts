@@ -1104,13 +1104,19 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
   const { migrate } = await import('../src/state/migrations.ts');
 
   // -- migration v9 → v10: the monster override map arrives empty (migrate always
-  //    walks to the latest schema — v11 as of Wave 8 — so assert that terminus)
+  //    walks to the latest schema — v12 as of Backend Brief 2 — so assert that terminus)
   const v9 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
   v9.version = 9;
   delete v9.monsterOverrides;
   delete v9.places;
   const m10 = migrate(v9);
-  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 11);
+  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 12);
+  // -- migration v11 → v12: a Realm identity appears, and SURVIVES re-migration
+  //    (a reload must never mint a second campaign id)
+  check('v11→v12 generates a stable Realm identity',
+    typeof m10.realm?.campaignId === 'string' && m10.realm.campaignId.length === 36
+    && typeof m10.realm?.dmSecret === 'string' && m10.realm.dmSecret.length >= 32
+    && migrate(JSON.parse(JSON.stringify(m10))).realm.campaignId === m10.realm.campaignId);
   // -- migration v10 → v11: the Places domain seeds from the map's landmarks
   check('v10→v11 seeds places from landmarks', Array.isArray(m10.places) && m10.places.length === 10
     && m10.places.every((p) => p.standing === 'unknown' && !p.visited)
@@ -1175,6 +1181,9 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
 console.log('\n═══ SCENE 27: Wave 8 — Places tab + travel in hours + quest cross-off ═══');
 {
   const { travelTimeLabel, roundHours } = await import('../src/data/map.ts');
+  // patch is block-scoped per scene; Wave 8 forgot this one (crashed at the
+  // quest cross-off step below — pre-existing, spotted during Brief 2).
+  const { patch } = await import('../src/state/store.ts');
 
   // -- travel time in hours (QA #7): hours under a day, days once past 8h
   check('hours under a day: just hours', travelTimeLabel(5) === '~5 hours on the trail');

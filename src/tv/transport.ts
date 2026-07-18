@@ -10,7 +10,11 @@ import { PlayerView } from './projection';
 export type TvMessage =
   | { t: 'view'; view: PlayerView }
   | { t: 'hello'; from: 'dm' | 'tv' }
-  | { t: 'unmute' };   // DM → TV: enable ambience sound (TV is passive, can't be tapped)
+  | { t: 'unmute' }    // DM → TV: enable ambience sound (TV is passive, can't be tapped)
+  // DM → TV: the stable per-campaign Realm code, shown as a small line so a
+  // player at the table can read it off the screen (Brief 2). Additive —
+  // an older TV build simply ignores the unknown message type.
+  | { t: 'realm'; code: string };
 
 export type TransportStatus =
   | 'idle'          // not started

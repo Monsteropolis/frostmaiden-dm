@@ -1532,3 +1532,19 @@ details.loc summary::marker { color: var(--frost-deep); }
 }
 .place-item { text-shadow: 0 0 8px var(--frost-glow); }
 .place-ghost { opacity: 0.45; }
+
+/* === BACKEND BRIEF 2: Realm login (DM side) === */
+/* The stable Realm code chip — echoes .tv-code-input styling so it reads
+   as a sibling of the room code, not a different species. */
+.realm-code-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.realm-code-chip {
+  font-size: 22px; letter-spacing: 0.25em; font-weight: 700;
+  color: var(--frost);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 8px 14px 8px calc(14px + 0.25em);
+  background: var(--panel);
+}
+/* password row on the Edit-character sheet */
+.realm-pass-row { display: flex; gap: 8px; align-items: center; }
+.realm-pass-row .input { flex: 1; min-width: 0; }
+.realm-gate-state { font-size: 13px; color: var(--ink-dim); }

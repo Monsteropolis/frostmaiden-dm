@@ -37,6 +37,9 @@ const statusDetail = signal<string>('');
 const view = signal<PlayerView | null>(null);
 // Bumped when the DM taps "Enable sound" on their phone — the TV is passive.
 const unmuteSignal = signal<number>(0);
+// The stable per-campaign Realm code (Brief 2) — arrives once per connection,
+// distinct from the ephemeral room code above. '' until the DM's app sends it.
+const realmCode = signal<string>('');
 
 let transport: PeerTransport | null = null;
 
@@ -51,6 +54,7 @@ function boot() {
   transport.onMessage((m) => {
     if (m.t === 'view') view.value = m.view;
     else if (m.t === 'unmute') unmuteSignal.value++;
+    else if (m.t === 'realm') realmCode.value = m.code;
   });
   transport.host(code);
 }
@@ -137,6 +141,7 @@ function TopStrip({ v }: { v: PlayerView }) {
         {v.weather.icon} {v.weather.name}
         {v.weather.conSave && <span class="tv-consave">✦ CON SAVE</span>}
         <span class="tv-strip-day">Day {v.day}</span>
+        {realmCode.value && <span class="tv-strip-realm">REALM {realmCode.value}</span>}
       </span>
       <StatusPip />
     </div>

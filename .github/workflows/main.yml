@@ -41,6 +41,15 @@ jobs:
           if [ -n "${ANON_KEY:-}" ]; then export SUPABASE_TEST_ANON_KEY="$ANON_KEY"; fi
           if [ -n "${JWT_SECRET:-}" ]; then export SUPABASE_TEST_JWT_SECRET="$JWT_SECRET"; fi
           npm run test:boundary
+      - name: Auth tests (the token minter — Brief 2)
+        run: |
+          STATUS="$(npx supabase status -o env)"
+          eval "$(echo "$STATUS" | grep -E '^(API_URL|ANON_KEY|JWT_SECRET|SERVICE_ROLE_KEY)=')"
+          if [ -n "${API_URL:-}" ]; then export SUPABASE_TEST_URL="$API_URL"; fi
+          if [ -n "${ANON_KEY:-}" ]; then export SUPABASE_TEST_ANON_KEY="$ANON_KEY"; fi
+          if [ -n "${JWT_SECRET:-}" ]; then export SUPABASE_TEST_JWT_SECRET="$JWT_SECRET"; fi
+          if [ -n "${SERVICE_ROLE_KEY:-}" ]; then export SUPABASE_TEST_SERVICE_KEY="$SERVICE_ROLE_KEY"; fi
+          npm run test:auth
 
   deploy:
     if: github.ref == 'refs/heads/main'

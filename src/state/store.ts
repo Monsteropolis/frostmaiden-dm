@@ -67,6 +67,16 @@ export const state = signal<AppState>(normalize(seedQuests(load())));
 
 let saveTimer: number | undefined;
 
+// Brief 2: migrations can GENERATE identity (realm.campaignId / dmSecret).
+// Persist right away, or every reload before the first edit would mint a
+// fresh campaign id and orphan the backend rows keyed to the old one.
+try {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored || (JSON.parse(stored) as { version?: number }).version !== state.value.version) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.value));
+  }
+} catch { /* storage unavailable — in-memory session only */ }
+
 function saveNow() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.value));
