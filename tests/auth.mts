@@ -16,7 +16,7 @@
 // Wired into CI beside the boundary test; needs Docker +
 // `npx supabase start` locally, like boundary.mts.
 // ============================================================
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { deriveRealmCode, normalizeRealmCode } from '../supabase/functions/_shared/realm-code.ts';
 import { hashPassword, verifyPassword } from '../supabase/functions/_shared/password.ts';
@@ -30,10 +30,26 @@ const URL = process.env.SUPABASE_TEST_URL ?? 'http://127.0.0.1:54321';
 // the HOSTED project's secret key appears nowhere in this repo.
 const ANON = process.env.SUPABASE_TEST_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
-const SERVICE = process.env.SUPABASE_TEST_SERVICE_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 const SECRET = process.env.SUPABASE_TEST_JWT_SECRET ??
   'super-secret-jwt-token-with-at-least-32-characters-long';
+
+// The Edge Function's runtime hands realm-auth a SERVICE-ROLE client (the only
+// thing allowed to read password_hash / dm_token_hash). We stand in for it by
+// MINTING a service_role JWT with the same project secret boundary.mts signs
+// with (proven to validate) — rather than depending on the CLI exporting the
+// service key under some particular env-var name. The gateway apikey is the
+// known-good anon key; PostgREST resolves the role from the Bearer token and
+// service_role bypasses RLS, exactly as the deployed function's key does.
+function mintServiceToken(secret: string): string {
+  const now = Math.floor(Date.now() / 1000);
+  const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const head = enc({ alg: 'HS256', typ: 'JWT' });
+  const body = enc({ role: 'service_role', iss: 'supabase-demo', iat: now, exp: now + 3600 });
+  const sig = createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+// An explicit SUPABASE_TEST_SERVICE_KEY still wins if someone sets one.
+const SERVICE_BEARER = process.env.SUPABASE_TEST_SERVICE_KEY || mintServiceToken(SECRET);
 
 let pass = 0, fail = 0;
 function check(label: string, ok: boolean, extra = '') {
@@ -94,8 +110,13 @@ try {
 }
 
 // The service client — stands in for the Edge Function's runtime, which is
-// the only place such a client legitimately exists.
-const db = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+// the only place such a client legitimately exists. Same pattern as
+// boundary.mts: real anon key as apikey, the (minted) service_role token as
+// the Bearer PostgREST resolves the role from.
+const db = createClient(URL, ANON, {
+  global: { headers: { Authorization: `Bearer ${SERVICE_BEARER}` } },
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 // ---- service-role preflight ------------------------------------------------
 // The token minter reads password_hash / dm_token_hash, which ONLY a
@@ -110,8 +131,8 @@ const db = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefre
   if (ins.error) {
     console.error('\n✗ Service-role client cannot write the database — the auth test harness is misconfigured.');
     console.error(`  Underlying error: ${ins.error.message} (code ${ins.error.code ?? '?'}, http ${ins.status ?? '?'})`);
-    console.error('  Almost always: SUPABASE_TEST_SERVICE_KEY is empty or not the local stack\'s SERVICE_ROLE_KEY.');
-    console.error(`  Using service key of length ${SERVICE.length}, starts "${SERVICE.slice(0, 6)}…".`);
+    console.error('  The service_role Bearer is minted from SUPABASE_TEST_JWT_SECRET; if this fails, that');
+    console.error('  secret does not match the running stack (the same secret boundary.mts signs with).');
     process.exit(1);
   }
   await db.from('campaigns').delete().eq('id', probeId);
