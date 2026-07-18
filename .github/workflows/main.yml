@@ -1,8 +1,8 @@
-name: Deploy to GitHub Pages
+name: Checks & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -11,11 +11,40 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Every push, every branch: the app must build (which runs the seam
+  # tests) AND the backend boundary tests must pass against a real
+  # Postgres running the committed migrations. A rule change that opens
+  # a hole fails here, and main cannot deploy without this job.
+  checks:
+    name: Seam & boundary tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (typecheck + seam tests)
+        run: npm run build
+      - name: Start local Supabase (applies committed migrations)
+        run: npx supabase start
+      - name: Boundary tests (RLS is the player/DM boundary)
+        run: |
+          STATUS="$(npx supabase status -o env)"
+          eval "$(echo "$STATUS" | grep -E '^(API_URL|ANON_KEY|JWT_SECRET)=')"
+          if [ -n "${API_URL:-}" ]; then export SUPABASE_TEST_URL="$API_URL"; fi
+          if [ -n "${ANON_KEY:-}" ]; then export SUPABASE_TEST_ANON_KEY="$ANON_KEY"; fi
+          if [ -n "${JWT_SECRET:-}" ]; then export SUPABASE_TEST_JWT_SECRET="$JWT_SECRET"; fi
+          npm run test:boundary
+
   deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: checks
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
