@@ -5,7 +5,7 @@
 // but keep the broken payload under a backup key for rescue.
 // ============================================================
 
-import { AppState, SCHEMA_VERSION, defaultState, defaultPlaces } from './schema';
+import { AppState, SCHEMA_VERSION, defaultState, defaultPlaces, newRealmIdentity } from './schema';
 
 type Migration = (s: Record<string, unknown>) => Record<string, unknown>;
 
@@ -118,6 +118,15 @@ const migrations: Record<number, Migration> = {
     places: Array.isArray(s.places) ? s.places : defaultPlaces(),
     version: 11,
   }),
+  // v11 → v12: the Realm backend identity (Brief 2). Generated once and MUST
+  // then stay stable — the store persists immediately after a migration so a
+  // reload can't mint a second campaign id. PC.realmGated is optional-undefined.
+  11: (s) => {
+    const r = s.realm as Record<string, unknown> | undefined;
+    const valid = r && typeof r.campaignId === 'string' && r.campaignId.length > 0
+      && typeof r.dmSecret === 'string' && r.dmSecret.length > 0;
+    return { ...s, realm: valid ? r : newRealmIdentity(), version: 12 };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

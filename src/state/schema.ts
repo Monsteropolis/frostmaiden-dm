@@ -6,7 +6,7 @@
 
 import { MAP_PLACES } from '../data/map';
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -84,6 +84,10 @@ export interface PC {
   notes: string;      // DM-only scratch — NEVER projected to players (see seam tests)
   /** Actor sprite descriptor id (data/actor-sprites.ts); undefined = classic atlas. */
   sprite?: string;
+  /** Realm login is password-gated for this character (Brief 2). Only the
+   *  🔒/🔓 marker lives here — the hash goes straight to the backend and the
+   *  plaintext exists nowhere. Never projected (allow-list seam). */
+  realmGated?: boolean;
 }
 
 export interface AllyAttack { name: string; bonus: number; damage: string; }
@@ -405,7 +409,29 @@ export interface AppState {
 
   tv: TvSettings;
 
+  /** This campaign's Realm backend identity (Brief 2) — generated once,
+   *  then stable for the campaign's whole life. */
+  realm: RealmIdentity;
+
   seq: number; // monotonic id counter for user-created entities
+}
+
+/** Realm backend identity. `campaignId` is the campaigns row uuid (the Realm
+ *  code is derived from it — supabase/functions/_shared/realm-code.ts).
+ *  `dmSecret` is this device's proof of DM-ship: sent only to the realm-login
+ *  Edge Function, which stores a HASH of it (campaigns.dm_token_hash) and
+ *  mints DM tokens against it. It lives in the DM's own saved state like any
+ *  other campaign data — it is the DM's key, not a player secret. */
+export interface RealmIdentity {
+  campaignId: string;
+  dmSecret: string;
+}
+
+export function newRealmIdentity(): RealmIdentity {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  let secret = '';
+  for (const b of bytes) secret += b.toString(16).padStart(2, '0');
+  return { campaignId: crypto.randomUUID(), dmSecret: secret };
 }
 
 export function defaultState(): AppState {
@@ -432,6 +458,7 @@ export function defaultState(): AppState {
     customMonsters: [],
     monsterOverrides: {},
     tv: { lastRoomCode: '', hiddenCombatantIds: [], partyLocation: '', sceneId: 'auto', youtubeId: '', mediaVisible: false, slotView: 'scene', idleFull: false, poke: { seq: 0, target: 'party', kind: 'wave' } },
+    realm: newRealmIdentity(),
     seq: 1,
   };
 }

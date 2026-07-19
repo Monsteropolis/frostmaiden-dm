@@ -9,6 +9,7 @@ import { allNpcs, openNpc, npcSpriteFor } from './npcs';
 import { Sheet, ConfirmBtn, Field, NumInput, CondEditor, Stepper } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
 import { SpritePicker } from '../components/SpritePicker';
+import { pushRealmRoster, setRealmPassword, REALM_CAMPAIGN_NAME } from '../backend/realm-client';
 
 // ---------------------------------------------------------------- helpers
 
@@ -228,7 +229,7 @@ function PcCard({ pc }: { pc: PC }) {
               onClick={(e) => { e.stopPropagation(); patch((s) => { s.tv.poke = { seq: (s.tv.poke?.seq ?? 0) + 1, target: pc.id, kind: 'wave' }; }); }}
             >👋</button>
           </div>
-          <div class="unit-meta">{pc.race} {pc.cls} {pc.level} <span class="sep">·</span> AC {pc.ac} <span class="sep">·</span> PP {pc.pp}</div>
+          <div class="unit-meta">{pc.race} {pc.cls} {pc.level} <span class="sep">·</span> AC {pc.ac} <span class="sep">·</span> PP {pc.pp} <span class="sep">·</span> <span title={pc.realmGated ? 'Realm login: password-gated' : 'Realm login: open — anyone with the Realm code'}>{pc.realmGated ? '🔒' : '🔓'}</span></div>
           <CondSummary conditions={pc.conditions} />
         </div>
         <div class="hp-ctl" onClick={(e) => e.stopPropagation()}>
@@ -336,7 +337,76 @@ function PcForm({ open, onClose, existing }: { open: boolean; onClose: () => voi
         }
         onClose();
       }}>{existing ? 'Save changes' : 'Add to party'}</button>
+      {/* Realm password lives BELOW the save button and only in edit mode:
+          it talks to the backend on its own schedule (Set/Clear buttons),
+          and keeping it last preserves the sheet's input order for
+          everything above (see tests/session-sim.mts index probes). */}
+      {existing && <RealmPasswordField pc={existing} />}
     </Sheet>
+  );
+}
+
+/** Brief 2 — the DM decides, per character, whether Realm login needs a
+ *  password. Anything goes, blank means ungated. The password is HASHED ON
+ *  THIS DEVICE before it leaves; only the hash travels, into a column the
+ *  API can never read back (Brief 1's column privilege). */
+function RealmPasswordField({ pc }: { pc: PC }) {
+  const [pw, setPw] = useState('');
+  const [st, setSt] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+
+  const apply = async (password: string) => {
+    setSt('busy'); setMsg('');
+    try {
+      const s = state.value;
+      // Roster first, so every party member exists in the login picker even
+      // if the DM never touches their password.
+      await pushRealmRoster(s.realm, REALM_CAMPAIGN_NAME,
+        s.party.map((p) => ({ id: p.id, name: p.name })));
+      const gated = await setRealmPassword(s.realm, REALM_CAMPAIGN_NAME,
+        { id: pc.id, name: pc.name }, password);
+      patch((d) => { const p = d.party.find((x) => x.id === pc.id); if (p) p.realmGated = gated; });
+      setPw('');
+      setSt('done');
+      setMsg(gated
+        ? '🔒 Password set — this character now needs it to log in.'
+        : '🔓 Password cleared — anyone with the Realm code can pick them.');
+    } catch (e) {
+      setSt('error');
+      setMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const gated = !!state.value.party.find((x) => x.id === pc.id)?.realmGated;
+  return (
+    <div class="field" style={{ marginTop: '14px' }}>
+      <span class="field-label">
+        Realm password {gated ? '🔒 gated' : '🔓 open'}
+      </span>
+      <div class="realm-pass-row">
+        <input
+          class="input"
+          type="text"
+          placeholder={gated ? 'New password (replaces the old one)' : 'A word or phrase — anything goes'}
+          value={pw}
+          onInput={(e) => setPw((e.target as HTMLInputElement).value)}
+        />
+        <button class="btn" disabled={st === 'busy' || !pw} onClick={() => apply(pw)}>
+          {st === 'busy' ? '…' : 'Set'}
+        </button>
+        {gated && (
+          <button class="btn ghost" disabled={st === 'busy'} onClick={() => apply('')}>Clear</button>
+        )}
+      </div>
+      {msg && (
+        <p class="stat-fine" style={st === 'error' ? { color: 'var(--thread)' } : undefined}>{msg}</p>
+      )}
+      <p class="stat-fine">
+        Blank = open: anyone with the Realm code can play {pc.name}. With a password,
+        they must type it to log in. It's scrambled on this phone before it's sent —
+        nobody, including you, can ever read it back.
+      </p>
+    </div>
   );
 }
 

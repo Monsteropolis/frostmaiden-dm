@@ -12,6 +12,7 @@ import { startBroadcast, stopBroadcast, unmuteTv, tvStatus, tvStatusDetail } fro
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 import { projectPlayerView, type PokeKind } from '../tv/projection';
+import { deriveRealmCode, ensureDmToken, pushRealmRoster, REALM_CAMPAIGN_NAME } from '../backend/realm-client';
 
 /** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
 export function parseYouTubeId(input: string): string | null {
@@ -239,6 +240,59 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
           <p class="stat-fine">Copies the same player-safe view the TV receives — dormant quests, monster stats and DM prep stay on this phone. Paste it into <code>public/snapshot.json</code> and commit to publish.</p>
         )}
       </div>
+
+      {/* 8 — Realm login (Brief 2): the permanent home of the Realm code */}
+      <RealmLoginSection />
     </Sheet>
+  );
+}
+
+/** The stable Realm code + party sync. This is the "Realm settings" spot: the
+ *  code players type to log in on their own phones — NOT the room code above
+ *  (that one pairs this phone with a TV and changes; this one never does). */
+function RealmLoginSection() {
+  const [sync, setSync] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [syncMsg, setSyncMsg] = useState('');
+  const realmCode = deriveRealmCode(state.value.realm.campaignId);
+  const gatedCount = state.value.party.filter((p) => p.realmGated).length;
+
+  const syncNow = async () => {
+    setSync('busy'); setSyncMsg('');
+    try {
+      const s = state.value;
+      await ensureDmToken(s.realm, REALM_CAMPAIGN_NAME);
+      await pushRealmRoster(s.realm, REALM_CAMPAIGN_NAME,
+        s.party.map((p) => ({ id: p.id, name: p.name })));
+      setSync('done');
+    } catch (e) {
+      setSync('error');
+      setSyncMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <div class="field">
+      <label>Realm login — players sign in on their own time</label>
+      <div class="realm-code-row">
+        <span class="realm-code-chip">{realmCode}</span>
+        <button class="btn" disabled={sync === 'busy'} onClick={syncNow}>
+          {sync === 'busy' ? 'Syncing…' : '🔄 Sync party to Realm'}
+        </button>
+      </div>
+      {sync === 'done' && (
+        <p class="stat-fine" style={{ color: 'var(--frost)' }}>
+          Party synced — players can now enter the code and pick their character.
+        </p>
+      )}
+      {sync === 'error' && <p class="stat-fine" style={{ color: 'var(--thread)' }}>{syncMsg}</p>}
+      <p class="stat-fine">
+        This is the <strong>Realm code</strong> — stable, yours forever, and different from
+        the room code up top (that one only pairs this phone with a TV for tonight).
+        It also shows on the TV while you're connected. Players open the Realm page,
+        type it, and pick their character. {gatedCount > 0
+          ? `${gatedCount} character${gatedCount > 1 ? 's' : ''} 🔒 password-gated — set passwords on each character's Edit page.`
+          : 'No passwords set — anyone with the code can pick any character. Add one on a character’s Edit page.'}
+      </p>
+    </div>
   );
 }

@@ -120,3 +120,74 @@
 }
 
 .realm-strip button:active { background: var(--surface); }
+
+/* === BACKEND BRIEF 2: player login === */
+.realm-login-chip {
+  margin-left: 8px;
+  background: var(--panel);
+  color: var(--frost);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit; font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.realm-login-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  display: grid; place-items: center;
+  padding: 18px;
+}
+.realm-login {
+  position: relative;
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius, 12px);
+  padding: 22px 20px calc(16px + env(safe-area-inset-bottom));
+  color: var(--ink);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.realm-login h2 { margin: 0; font-size: 19px; }
+.realm-login p { margin: 0; color: var(--ink-dim); font-size: 13.5px; line-height: 1.5; }
+.realm-login-close {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: none; color: var(--ink-faint);
+  font-size: 16px; cursor: pointer; padding: 8px;
+}
+.realm-login-code {
+  width: 100%;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font: inherit; font-size: 20px; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase; text-align: center;
+}
+.realm-login-code.pw { letter-spacing: 0.08em; text-transform: none; font-size: 17px; }
+.realm-login-go {
+  background: var(--frost); color: var(--bg);
+  border: none; border-radius: var(--radius-sm);
+  padding: 12px; font: inherit; font-size: 15px; font-weight: 700;
+  cursor: pointer;
+}
+.realm-login-go:disabled { opacity: 0.45; cursor: default; }
+.realm-login-chars { display: flex; flex-direction: column; gap: 8px; }
+.realm-login-chars button {
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 12px 14px; font: inherit; font-size: 15px; text-align: left;
+  cursor: pointer;
+}
+.realm-login-back {
+  background: none; border: none; color: var(--ink-faint);
+  font: inherit; font-size: 13px; cursor: pointer; text-align: left; padding: 2px 0;
+}
+.realm-login-error {
+  background: color-mix(in srgb, var(--thread) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--thread) 50%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 9px 12px; font-size: 13px;
+}
+.realm-login-fine { color: var(--ink-faint); font-size: 11.5px; }

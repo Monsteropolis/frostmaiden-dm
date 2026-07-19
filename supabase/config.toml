@@ -385,6 +385,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The auth token minter (Brief 2). Players call it with no token yet —
+# authentication happens INSIDE the function (that is its whole job) —
+# so the gateway must not demand a JWT first.
+[functions.realm-login]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
