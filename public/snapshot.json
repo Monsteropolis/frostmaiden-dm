@@ -8,7 +8,7 @@
     "icon": "☁",
     "conSave": false
   },
-  "location": "Black Cabin",
+  "location": "Ten Towns, Bryn Shander",
   "travel": null,
   "resources": {
     "gold": 125,
@@ -16,10 +16,10 @@
     "partySize": 3
   },
   "sceneId": "glacial",
-  "youtubeId": "sLCh68VXxIg",
+  "youtubeId": "",
   "mediaVisible": false,
-  "slotView": "realm",
-  "idleFull": false,
+  "slotView": "scene",
+  "idleFull": true,
   "poke": {
     "seq": 24,
     "target": "party",
@@ -37,7 +37,7 @@
       "deathS": 0,
       "deathF": 0,
       "down": false,
-      "sprite": "soldier"
+      "sprite": "lively_adventurer_05"
     },
     {
       "id": "pc41",
@@ -50,7 +50,7 @@
       "deathS": 0,
       "deathF": 0,
       "down": false,
-      "sprite": "orc"
+      "sprite": "lively_shady_guy"
     },
     {
       "id": "pc46",
@@ -63,7 +63,7 @@
       "deathS": 0,
       "deathF": 0,
       "down": false,
-      "sprite": "knight"
+      "sprite": "demon_vomaat"
     }
   ],
   "allies": [
@@ -89,7 +89,7 @@
       "down": false,
       "deathS": 0,
       "deathF": 0,
-      "sprite": "wolf"
+      "sprite": "cat"
     }
   ],
   "combat": null,
@@ -102,6 +102,21 @@
       "mainHook": false
     }
   ],
-  "inventory": [],
-  "sentAt": 1784578719643
+  "inventory": [
+    {
+      "id": "it50",
+      "name": "Amulet of Health",
+      "emoji": "💖",
+      "qty": 1,
+      "ownerId": "pc40"
+    },
+    {
+      "id": "it51",
+      "name": "Red Dragon Egg",
+      "emoji": "🥚",
+      "qty": 1,
+      "ownerId": "pc46"
+    }
+  ],
+  "sentAt": 1784590923791
 }
