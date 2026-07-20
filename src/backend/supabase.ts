@@ -16,8 +16,14 @@
 // ============================================================
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL = 'https://lzzrwoduheivmvnnfpaj.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_1ARBfLgqEz7KEEereACCCA_gMBs2wUt';
+// Tests (vite-node, in Node) point this SAME client code at the local
+// throwaway stack via SUPABASE_TEST_* — so tests/journal.mts exercises the
+// real data helpers, not re-implementations. A browser has no `process`,
+// so shipped builds always use the hosted values.
+const testEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+
+export const SUPABASE_URL = testEnv?.SUPABASE_TEST_URL ?? 'https://lzzrwoduheivmvnnfpaj.supabase.co';
+export const SUPABASE_ANON_KEY = testEnv?.SUPABASE_TEST_ANON_KEY ?? 'sb_publishable_1ARBfLgqEz7KEEereACCCA_gMBs2wUt';
 
 let client: SupabaseClient | null = null;
 

@@ -28,6 +28,11 @@ export const REALM_CAMPAIGN_NAME = 'Rime of the Frostmaiden';
 
 export interface RealmCharacter { id: string; name: string; gated: boolean }
 
+/** The Realm server couldn't be REACHED — different from it answering "no".
+ *  Every UI that talks to the backend keys setup guidance off this class
+ *  (Part A of Brief 3: a failed sync must not look like a quiet nothing). */
+export class RealmUnreachableError extends Error {}
+
 async function call(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   let r: Response;
   try {
@@ -37,13 +42,35 @@ async function call(body: Record<string, unknown>): Promise<Record<string, unkno
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error('Could not reach the Realm server — check your connection.');
+    // A browser can't see WHY a cross-origin fetch died: an undeployed
+    // function fails its CORS preflight (the gateway 404s it), which looks
+    // exactly like a dead connection. One probe to an always-on endpoint of
+    // the same project tells the two apart — this distinction is the whole
+    // lesson of Brief 3 Part A.
+    let backendUp = false;
+    try {
+      backendUp = (await fetch(`${SUPABASE_URL}/auth/v1/health`,
+        { headers: { apikey: SUPABASE_ANON_KEY } })).ok;
+    } catch { /* genuinely offline */ }
+    throw new RealmUnreachableError(backendUp
+      ? 'The Realm backend is up, but its realm-login function did not answer — most likely it is not deployed yet (or its "Verify JWT" setting is on).'
+      : 'Could not reach the Realm server — check your connection.');
   }
   let data: Record<string, unknown>;
   try { data = await r.json(); } catch { data = {}; }
   if (!r.ok) {
-    throw new Error(typeof data.error === 'string' ? data.error
-      : `Realm server error (${r.status}).`);
+    // Our function always answers {error: string}. A bare gateway body means
+    // the call never reached it — say which setup step is missing, in words.
+    if (typeof data.error === 'string') throw new Error(data.error);
+    if (r.status === 404) {
+      throw new RealmUnreachableError(
+        'The Realm server is not deployed yet — the realm-login function was not found on the backend.');
+    }
+    if (r.status === 401) {
+      throw new RealmUnreachableError(
+        'The Realm server turned the call away at the gate — the realm-login function\'s "Verify JWT" setting must be OFF.');
+    }
+    throw new RealmUnreachableError(`Realm server error (${r.status}).`);
   }
   return data;
 }
@@ -148,4 +175,132 @@ export async function setRealmPassword(
   if (error) throw new Error(`Could not save the password: ${error.message}`);
   if (!data?.length) throw new Error(`${pc.name} isn't synced to the Realm yet — sync the party and try again.`);
   return !!password;
+}
+
+// ---- journal (Brief 3) ------------------------------------------------------
+// Every function below takes the caller's own session token — player or DM —
+// and NOTHING else. There is no privileged path: row-level security decides
+// what each token may see, and tests/journal.mts drives these exact functions
+// to prove it.
+
+export interface JournalEntry {
+  id: string;
+  authorId: string;
+  title: string;
+  body: string;
+  isShared: boolean;
+  /** ISO timestamp from Postgres — set on insert, touched on update. */
+  updatedAt: string;
+}
+
+const JOURNAL_COLS = 'id, author_id, title, body, is_shared, updated_at';
+
+function rowToEntry(r: Record<string, unknown>): JournalEntry {
+  return {
+    id: String(r.id), authorId: String(r.author_id),
+    title: String(r.title ?? ''), body: String(r.body ?? ''),
+    isShared: !!r.is_shared, updatedAt: String(r.updated_at ?? ''),
+  };
+}
+
+/** Fold setup-shaped failures (offline, tables missing) into
+ *  RealmUnreachableError so every screen reuses the one guidance pattern
+ *  Part A established; anything else keeps its real message. */
+function throwDataError(what: string, error: { code?: string; message: string }): never {
+  if (error.code === 'PGRST205') {
+    throw new RealmUnreachableError(`${what} — the Realm tables are missing (the database migrations haven't run).`);
+  }
+  if (/fetch/i.test(error.message)) {
+    throw new RealmUnreachableError('Could not reach the Realm server — check your connection.');
+  }
+  throw new Error(`${what}: ${error.message}`);
+}
+
+/** Everything the caller has written — private and shared both. */
+export async function listMyJournal(token: string): Promise<JournalEntry[]> {
+  const me = decodeClaims(token)?.character_id ?? '';
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries')
+    .select(JOURNAL_COLS).eq('author_id', me)
+    .order('updated_at', { ascending: false });
+  if (error) throwDataError('Could not load your journal', error);
+  return (data ?? []).map(rowToEntry);
+}
+
+/** Every shared entry in the campaign, newest first. RLS scopes the campaign
+ *  and hides private rows; the query just asks for the shared ones. */
+export async function listSharedJournal(token: string): Promise<JournalEntry[]> {
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries')
+    .select(JOURNAL_COLS).eq('is_shared', true)
+    .order('updated_at', { ascending: false });
+  if (error) throwDataError('Could not load the shared journal', error);
+  return (data ?? []).map(rowToEntry);
+}
+
+/** New entry, private unless isShared is set (sharing is a flag flip later —
+ *  never a second copy). Author and campaign come from the token's claims. */
+export async function writeJournalEntry(
+  token: string, entry: { title: string; body: string; isShared?: boolean },
+): Promise<JournalEntry> {
+  const claims = decodeClaims(token);
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries')
+    .insert({
+      campaign_id: claims?.campaign_id, author_id: claims?.character_id,
+      title: entry.title, body: entry.body, is_shared: !!entry.isShared,
+    })
+    .select(JOURNAL_COLS).single();
+  if (error) throwDataError('Could not save the entry', error);
+  return rowToEntry(data as Record<string, unknown>);
+}
+
+/** Edit an entry's words. RLS restricts this to the author — updating someone
+ *  else's entry comes back as zero rows, which we surface honestly. */
+export async function updateJournalEntry(
+  token: string, id: string, patch: { title?: string; body?: string },
+): Promise<JournalEntry> {
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries')
+    .update({
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.body !== undefined ? { body: patch.body } : {}),
+    })
+    .eq('id', id).select(JOURNAL_COLS);
+  if (error) throwDataError('Could not save the edit', error);
+  if (!data?.length) throw new Error('That entry could not be edited — only its author can.');
+  return rowToEntry(data[0] as Record<string, unknown>);
+}
+
+/** The promote/demote toggle: flag an entry onto (or off) the shared page.
+ *  One row changes one bit — there is deliberately no copy-to-shared path. */
+export async function setShared(token: string, id: string, isShared: boolean): Promise<JournalEntry> {
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries')
+    .update({ is_shared: isShared }).eq('id', id).select(JOURNAL_COLS);
+  if (error) throwDataError('Could not change sharing', error);
+  if (!data?.length) throw new Error('That entry could not be changed — only its author can.');
+  return rowToEntry(data[0] as Record<string, unknown>);
+}
+
+/** DM only: every entry in the campaign, private included (Ben's decision —
+ *  the DM sees everything; RLS grants this to is_dm tokens alone). */
+export async function listAllJournal(dmToken: string): Promise<JournalEntry[]> {
+  const sb = await getSupabaseWithToken(dmToken);
+  const { data, error } = await sb.from('journal_entries')
+    .select(JOURNAL_COLS)
+    .order('author_id').order('updated_at', { ascending: false });
+  if (error) throwDataError('Could not load the party journals', error);
+  return (data ?? []).map(rowToEntry);
+}
+
+/** id → display name for labelling entries with their author. Uses the same
+ *  session token — characters' id/name are member-readable by design. */
+export async function fetchCharacterNames(token: string): Promise<Record<string, string>> {
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('characters').select('id, name');
+  if (error) throwDataError('Could not load the party roster', error);
+  const names: Record<string, string> = {};
+  for (const r of data ?? []) names[String(r.id)] = String(r.name);
+  return names;
 }
