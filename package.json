@@ -12,7 +12,9 @@
     "test:sim": "vite-node tests/session-sim.mts",
     "test:seam": "vite-node tests/seam.mts",
     "test:boundary": "vite-node tests/boundary.mts",
-    "test:auth": "vite-node tests/auth.mts"
+    "test:auth": "vite-node tests/auth.mts",
+    "test:journal": "vite-node tests/journal.mts",
+    "bundle:fn": "vite-node scripts/bundle-realm-login.mts"
   },
   "dependencies": {
     "@fontsource/pixelify-sans": "^5.2.7",
