@@ -3,127 +3,105 @@
   "mode": "exploration",
   "day": 5,
   "weather": {
-    "id": "clear",
-    "name": "Clear skies",
-    "icon": "✦",
+    "id": "overcast",
+    "name": "Overcast",
+    "icon": "☁",
     "conSave": false
   },
-  "location": "Camp near Bryn Shander",
+  "location": "Black Cabin",
   "travel": null,
   "resources": {
-    "gold": 620,
-    "rations": 8,
-    "partySize": 4
+    "gold": 125,
+    "rations": 21,
+    "partySize": 3
   },
-  "sceneId": "camp_winter",
-  "youtubeId": "",
+  "sceneId": "glacial",
+  "youtubeId": "sLCh68VXxIg",
   "mediaVisible": false,
   "slotView": "realm",
   "idleFull": false,
   "poke": {
-    "seq": 0,
+    "seq": 24,
     "target": "party",
-    "kind": "wave"
+    "kind": "cheer"
   },
   "party": [
     {
-      "id": "pc1",
-      "name": "Brienne",
-      "cls": "Paladin",
-      "hp": 40,
-      "maxHp": 44,
+      "id": "pc40",
+      "name": "Gerd",
+      "cls": "Wizard",
+      "hp": 18,
+      "maxHp": 18,
       "conditions": [],
-      "inspiration": true,
+      "inspiration": false,
       "deathS": 0,
       "deathF": 0,
-      "down": false
+      "down": false,
+      "sprite": "soldier"
     },
     {
-      "id": "pc2",
-      "name": "Wick",
+      "id": "pc41",
+      "name": "Knif",
       "cls": "Rogue",
-      "hp": 21,
-      "maxHp": 31,
+      "hp": 15,
+      "maxHp": 15,
       "conditions": [],
       "inspiration": false,
       "deathS": 0,
       "deathF": 0,
-      "down": false
+      "down": false,
+      "sprite": "orc"
     },
     {
-      "id": "pc3",
-      "name": "Zora",
-      "cls": "Druid",
-      "hp": 38,
-      "maxHp": 38,
-      "conditions": [],
-      "inspiration": false,
-      "deathS": 0,
-      "deathF": 0,
-      "down": false
-    },
-    {
-      "id": "pc4",
-      "name": "Doran",
+      "id": "pc46",
+      "name": "Vomaat",
       "cls": "Fighter",
-      "hp": 33,
-      "maxHp": 46,
+      "hp": 20,
+      "maxHp": 20,
       "conditions": [],
       "inspiration": false,
       "deathS": 0,
       "deathF": 0,
-      "down": false
+      "down": false,
+      "sprite": "knight"
     }
   ],
   "allies": [
     {
-      "id": "al1",
-      "name": "Sprig",
-      "emoji": "🦊",
+      "id": "sk42",
+      "name": "Tostito",
+      "emoji": "🐺",
       "hpState": "healthy",
       "conditions": [],
-      "linkedPcId": "pc3",
+      "linkedPcId": "pc40",
       "down": false,
       "deathS": 0,
-      "deathF": 0
+      "deathF": 0,
+      "sprite": "bear"
+    },
+    {
+      "id": "sk47",
+      "name": "Chillitita",
+      "emoji": "🐺",
+      "hpState": "healthy",
+      "conditions": [],
+      "linkedPcId": "pc41",
+      "down": false,
+      "deathS": 0,
+      "deathF": 0,
+      "sprite": "wolf"
     }
   ],
   "combat": null,
   "quests": [
     {
-      "id": "sq1",
-      "name": "The Cold-Hearted Killer",
-      "town": "Bryn Shander",
-      "status": "escalating",
-      "mainHook": true
-    },
-    {
-      "id": "sq2",
-      "name": "Foaming Mugs",
-      "town": "Bryn Shander",
+      "id": "q12",
+      "name": "Cold-Hearted Killer",
+      "town": "Ten-Towns",
       "status": "active",
       "mainHook": false
     }
   ],
-  "inventory": [
-    {
-      "id": "seed-it1",
-      "name": "Wolf Skull Trophy",
-      "emoji": "🐺",
-      "qty": 1,
-      "ownerId": null,
-      "display": {
-        "x": 72,
-        "y": 0.35
-      }
-    },
-    {
-      "id": "seed-it2",
-      "name": "Potion of Healing",
-      "emoji": "🧪",
-      "qty": 2,
-      "ownerId": "pc2"
-    }
-  ],
-  "sentAt": 1784160666268
+  "inventory": [],
+  "sentAt": 1784578719643
 }
