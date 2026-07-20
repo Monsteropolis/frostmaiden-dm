@@ -12,7 +12,7 @@ import { startBroadcast, stopBroadcast, unmuteTv, tvStatus, tvStatusDetail } fro
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 import { projectPlayerView, type PokeKind } from '../tv/projection';
-import { deriveRealmCode, ensureDmToken, pushRealmRoster, REALM_CAMPAIGN_NAME, RealmUnreachableError } from '../backend/realm-client';
+import { checkRealmSetup, deriveRealmCode, ensureDmToken, pushRealmRoster, REALM_CAMPAIGN_NAME, RealmUnreachableError, SetupCheckItem } from '../backend/realm-client';
 
 /** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
 export function parseYouTubeId(input: string): string | null {
@@ -257,6 +257,8 @@ function RealmLoginSection() {
   // run), not a bad password. It gets louder treatment plus a pointer at
   // what to check — this exact confusion is why Brief 3 Part A exists.
   const [unreachable, setUnreachable] = useState(false);
+  // The one-screen setup check (Wave 9 A3): null = never run, 'busy' = running.
+  const [setupChecks, setSetupChecks] = useState<SetupCheckItem[] | 'busy' | null>(null);
   const realmCode = deriveRealmCode(state.value.realm.campaignId);
   const gatedCount = state.value.party.filter((p) => p.realmGated).length;
 
@@ -275,6 +277,11 @@ function RealmLoginSection() {
     }
   };
 
+  const runSetupCheck = async () => {
+    setSetupChecks('busy');
+    setSetupChecks(await checkRealmSetup());
+  };
+
   return (
     <div class="field">
       <label>Realm login — players sign in on their own time</label>
@@ -283,7 +290,22 @@ function RealmLoginSection() {
         <button class="btn" disabled={sync === 'busy'} onClick={syncNow}>
           {sync === 'busy' ? 'Syncing…' : '🔄 Sync party to Realm'}
         </button>
+        <button class="btn ghost" disabled={setupChecks === 'busy'} onClick={runSetupCheck}>
+          {setupChecks === 'busy' ? 'Checking…' : '🩺 Check Realm setup'}
+        </button>
       </div>
+      {Array.isArray(setupChecks) && (
+        <div class="realm-setup-checks">
+          {setupChecks.map((c) => (
+            <p key={c.id} class="stat-fine realm-setup-check">
+              <span style={{ color: c.ok === true ? 'var(--frost)' : c.ok === 'unknown' ? undefined : 'var(--thread)' }}>
+                {c.ok === true ? '✓' : c.ok === 'unknown' ? '·' : '✗'} {c.label}
+              </span>
+              {c.fix && <> — {c.fix}</>}
+            </p>
+          ))}
+        </div>
+      )}
       {sync === 'idle' && (
         <p class="stat-fine">○ Not synced yet this session — tap Sync so the login server has the current roster.</p>
       )}
@@ -297,10 +319,10 @@ function RealmLoginSection() {
           <strong>⚠ Sync failed{unreachable ? ' — Realm server unreachable' : ''}.</strong> {syncMsg}
         </p>
       )}
-      {sync === 'error' && unreachable && (
+      {sync === 'error' && (
         <p class="stat-fine">
-          Is the login server set up? Deploying the <code>realm-login</code> function and running the
-          migrations are one-time dashboard steps — <strong>REALM_SETUP.md</strong> in the repo walks through them.
+          Tap <strong>🩺 Check Realm setup</strong> above — it tests each setup step and names
+          the one that needs fixing. <strong>REALM_SETUP.md</strong> in the repo has the click-by-click steps.
         </p>
       )}
       <p class="stat-fine">
@@ -310,6 +332,13 @@ function RealmLoginSection() {
         type it, and pick their character. {gatedCount > 0
           ? `${gatedCount} character${gatedCount > 1 ? 's' : ''} 🔒 password-gated — set passwords on each character's Edit page.`
           : 'No passwords set — anyone with the code can pick any character. Add one on a character’s Edit page.'}
+      </p>
+      {/* Wave 9 A5: the campaign's identity, inspectable instead of invisible.
+          One campaign per SAVE FILE today — realm.campaignId lives in AppState. */}
+      <p class="stat-fine">
+        Campaign: <strong>{REALM_CAMPAIGN_NAME}</strong> · id <code>{state.value.realm.campaignId}</code>.
+        This save file holds this one campaign — a different save file is a different
+        campaign with its own Realm code.
       </p>
     </div>
   );

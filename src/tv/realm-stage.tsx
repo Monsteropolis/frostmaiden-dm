@@ -219,11 +219,16 @@ interface FoeRender {
   sprite?: ActorSprite;      // matched descriptor; undefined = emoji token
 }
 
-// --- the stage canvas: fixed 384×224 logical px, integer-scaled to fit -----------
-// 224 = 14 rows of 16px tiles (216 fit no tile grid). Flat 384×216 art anchors
-// to the bottom; the 8px surplus reads as sky above the scene.
+// --- the stage canvas: fixed 448×224 logical px, integer-scaled to fit -----------
+// 224 = 14 rows of 16px tiles (216 fit no tile grid). Wave 9 C2 widened 384→448:
+// 28 cols of 16px (448 is also 14 cols of 32px — both tile grids stay exact).
+// A 16:9 screen was starving the width, and players need room to roam. 448 won
+// over 512 because the common display is a 1080p TV: 448 lands 4× (1792×896)
+// inside it, while 512 at 4× (2048) would overflow and drop the stage to a
+// SMALLER 3×. Flat art keeps its 384×216 bottom-anchored center — its ground
+// pixel line unmoved — with mirrored copies extending into the 32px gutters.
 
-export const STAGE_W = 384;
+export const STAGE_W = 448;
 export const STAGE_H = 224;
 
 /** The backdrop the stage will actually draw: the chosen scene if it's pixel
@@ -350,6 +355,9 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
         left: `${x}%`,
         width: `${sprite.frameW * s}px`,
         ...groundStyle(y, band),
+        // per-sprite zoom (the vomaat demon's 1.5×) multiplies into the SAME
+        // wrapper scale depthScale uses — one GPU transform, no resampling
+        ...(sprite.zoom ? { scale: String(depthScale(y) * sprite.zoom) } : {}),
         bottom: `calc(${groundBottomPct(y, band)}% - ${sprite.footPad * s}px)`,
       }}
     >
@@ -466,13 +474,30 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       const joy = joyFor(p.id);
       if (joy) { pose = 'cheer'; joyBubble = joy; }           // item-get: cheer + the loot
     }
-    const frames = POSE_FRAMES[pose];
-    const drift = pose === 'walk' ? ((behaviorTick + i) % 2 ? 7 : -7) : 0;
-    const pos = inCombat ? combatPos(p.id, i, v.party.length, 8, 42) : homePos(p.id, i, v.party.length);
     const active = inCombat && !!activePcName && p.name === activePcName;
-    // the active combatant steps toward the viewer instead of hopping a rank
-    const rawY = active ? Math.min(1, pos.y + 0.15) : pos.y;
-    const st = steerAround(pos.x + drift, rawY, obstacles);
+    // Wave 9 B1 (QA #1): the seeded roll decides where an actor DRIFTS; whether
+    // the walk cycle PLAYS is decided by actual movement — the same model the
+    // allies below already use (moving ? walk : idle). Position is a pure
+    // function of the tick, so "am I moving?" is posAt(tick) vs posAt(tick−2):
+    // two ticks because the CSS left transition runs 1.4s (2 × 700ms), so the
+    // sprite is still gliding one tick after its target moved.
+    const posAt = (t: number): Pos => {
+      const bt = Math.floor(t / 6);
+      const drift = pickPose(p, i, bt, ctx) === 'walk' ? ((bt + i) % 2 ? 7 : -7) : 0;
+      const pos = inCombat ? combatPos(p.id, i, v.party.length, 8, 42) : homePos(p.id, i, v.party.length);
+      // the active combatant steps toward the viewer instead of hopping a rank
+      const rawY = active ? Math.min(1, pos.y + 0.15) : pos.y;
+      return steerAround(pos.x + drift, rawY, obstacles);
+    };
+    const st = posAt(tick);
+    const prev = posAt(tick - 2);
+    const moving = Math.abs(st.x - prev.x) > 0.5 || Math.abs(st.y - prev.y) > 0.02;
+    if (moving) {
+      if (pose === 'idle' || pose === 'walk' || pose === 'sit') pose = 'walk';
+    } else if (pose === 'walk') {
+      pose = 'idle';   // a standing character stands still
+    }
+    const frames = POSE_FRAMES[pose];
     return {
       key: p.id,
       x: st.x,
@@ -499,14 +524,21 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
     }
     // Foes don't just stand there (QA #8/#9): a downed foe lies, the active foe
-    // steps toward the viewer, and otherwise each seeded-drifts — walking its
-    // walk anim while it does. A boss (frost guardian / bringer) now actually
-    // paces, instead of only ever getting 'idle'. Same idiom as the party walkers.
-    const foeWalking = !down && !c.active && seeded(hashStr(c.id) + behaviorTick * 131) < 0.45;
-    const drift = foeWalking ? ((behaviorTick + i) % 2 ? 6 : -6) : 0;
-    const pose: Pose = down ? 'down' : c.active ? 'walk' : foeWalking ? 'walk' : 'idle';
-    const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
-    const st = steerAround(pos.x + drift, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
+    // steps toward the viewer, and otherwise each seeded-drifts. Wave 9 B1: the
+    // walk anim plays only while the position is actually changing (the old
+    // `c.active ? 'walk'` forced a walk cycle on a foe standing its ground) —
+    // same posAt(tick) vs posAt(tick−2) model as the party above.
+    const posAt = (t: number): Pos => {
+      const bt = Math.floor(t / 6);
+      const drifting = !down && !c.active && seeded(hashStr(c.id) + bt * 131) < 0.45;
+      const drift = drifting ? ((bt + i) % 2 ? 6 : -6) : 0;
+      const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
+      return steerAround(pos.x + drift, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
+    };
+    const st = posAt(tick);
+    const prev = posAt(tick - 2);
+    const moving = Math.abs(st.x - prev.x) > 0.5 || Math.abs(st.y - prev.y) > 0.02;
+    const pose: Pose = down ? 'down' : moving ? 'walk' : 'idle';
     return {
       key: c.id,
       x: st.x,
@@ -574,7 +606,16 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       <div class="tv-realm-canvas" style={{ width: `${STAGE_W}px`, height: `${STAGE_H}px`, transform: `scale(${k})` }}>
         {tiled
           ? <TiledBackdrop scene={tiled} band={band} />
-          : <img src={scene.url} alt="" class="tv-idle-bg" />}
+          : (
+            // flat art (128×72 at 3× or 384×216 native) stays a 384-wide
+            // bottom-anchored center — never stretched — and mirrored copies
+            // extend the scenery seamlessly into the wider canvas' gutters
+            <div class="tv-idle-bg-wrap">
+              <img src={scene.url} alt="" class="tv-idle-bg-side left" />
+              <img src={scene.url} alt="" class="tv-idle-bg" />
+              <img src={scene.url} alt="" class="tv-idle-bg-side right" />
+            </div>
+          )}
         {cameoOn && (
           <span
             class="tv-idle-cameo"

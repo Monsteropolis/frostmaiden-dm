@@ -19,10 +19,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
     var(--bg);
 }
 
-/* 5% overscan-safe margin on all sides */
+/* overscan-safe margin. Wave 9 C1 trimmed 5vh/5vw → 3vh/2.5vw: modern panels
+   barely overscan, and on a 1080p TV the old margins burned 96px a side that
+   the Realm stage needs to reach its next integer scale. */
 .tv-safe {
   flex: 1;
-  margin: 5vh 5vw;
+  margin: 3vh 2.5vw;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -165,7 +167,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 /* --- Panels ------------------------------------------------------------------ */
 /* Wave 4: initiative narrows to a rail (~360–400px); the Realm gets the width —
    the diorama is the emotional payload, not the list. */
-.tv-combat { display: grid; grid-template-columns: minmax(340px, 400px) 1fr; gap: 40px; flex: 1; min-height: 0; }
+.tv-combat { display: grid; grid-template-columns: minmax(340px, 380px) 1fr; gap: 28px; flex: 1; min-height: 0; }
 .tv-explore { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; flex: 1; min-height: 0; }
 .tv-combat section, .tv-explore section {
   background: var(--surface);
@@ -531,7 +533,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 }
 
 /* exploration: compact roster, one line per soul */
-.tv-explore { grid-template-columns: minmax(360px, 31%) 1fr !important; }
+/* Wave 9 C1: the roster rail narrows (31% → 24%) — the stage's next integer
+   scale step (3× of the 448 canvas = 1344px) needs the width more than the
+   one-line-per-soul roster does. */
+.tv-explore { grid-template-columns: minmax(340px, 24%) 1fr !important; gap: 24px !important; }
 .tv-roster { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
 .tv-roster-pc { padding: 8px 0 6px; border-bottom: 1px solid var(--border); }
 .tv-roster-pc.down .tv-roster-name { color: var(--thread); text-decoration: line-through; text-decoration-thickness: 2px; }
@@ -664,13 +669,21 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 /* === IDLE STAGE — the tamagotchi diorama === */
 .tv-scene.idle-slot { padding: 0 !important; position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .tv-scene.idle-slot.full { flex: 1; border-radius: 0; }
+/* Wave 9 C1 — fullscreen on the TV: the scene is the point, everything else
+   yields. The slot sheds its frame and pulls back most of the overscan margin
+   (net ≈1vh/1vw remains). Scoped under .tv-safe so the Realm page's own
+   .idle-slot.full (which has no overscan margins) is untouched. */
+.tv-safe .tv-scene.idle-slot.full {
+  border: none;
+  margin: -6px calc(-1.5vw) calc(-2vh);
+}
 
 .tv-idle-stage { position: absolute; inset: 0; }
 
-/* --- the stage canvas: 384×224 logical px (24×14 tiles), integer-scaled to
+/* --- the stage canvas: 448×224 logical px (28×14 tiles), integer-scaled to
        its container. Flat 16:9 art anchors to the bottom (128×72 at 3×,
-       384×216 at 1×) with an 8px sky band above. Everything inside positions
-       in canvas pixels. --- */
+       384×216 at 1×) with an 8px sky band above and mirrored gutter fills at
+       the sides. Everything inside positions in canvas pixels. --- */
 .tv-realm-viewport { display: grid; place-items: center; overflow: hidden; background: var(--bg); }
 .tv-realm-canvas {
   position: relative; flex: none;
@@ -679,14 +692,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   overflow: hidden;
 }
 
-/* flat scenes on the 224-tall canvas (Wave 6): the art is 16:9 (128×72 or
-   384×216) and anchors to the BOTTOM — the ground band keeps its exact pixel
-   line, and the 8px surplus above reads as sky. */
-.tv-idle-bg {
-  position: absolute; left: 0; right: 0; bottom: 0; top: auto;
-  width: 100%; height: 216px;
-  object-fit: cover; image-rendering: pixelated;
+/* flat scenes on the 448×224 canvas: the art is 16:9 (128×72 at 3× or 384×216
+   native) and anchors BOTTOM at its true 384×216 size — the ground band keeps
+   its exact pixel line, and the 8px surplus above reads as sky. Wave 9 C2:
+   the canvas is wider than the art, so a mirrored copy extends the scenery
+   into each 32px gutter — seamless at the seam, zero distortion, and no
+   resampling (a 7/6 stretch would smear the pixels). The px constants pair
+   with STAGE_W 448: center left = (448−384)/2. */
+.tv-idle-bg-wrap { position: absolute; inset: 0; overflow: hidden; }
+.tv-idle-bg, .tv-idle-bg-side {
+  position: absolute; bottom: 0; top: auto;
+  width: 384px; height: 216px;
+  image-rendering: pixelated;
 }
+.tv-idle-bg { left: 32px; }
+.tv-idle-bg-side { transform: scaleX(-1); }
+.tv-idle-bg-side.left { left: -352px; }    /* 32 − 384: right edge meets the art's left */
+.tv-idle-bg-side.right { left: 416px; }    /* 32 + 384 */
 
 /* === WAVE 6: tiled worlds === */
 .tv-tile-ground { position: absolute; inset: 0; z-index: 0; }

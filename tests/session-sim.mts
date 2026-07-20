@@ -1016,7 +1016,7 @@ console.log('\n═══ SCENE 27: World ▸ Encounters — tables & prebuilt �
   patch((d) => { d.combat = { active: false, round: 0, turn: 0, combatants: [] }; });
 }
 
-console.log('\n═══ SCENE 28: Wave 3 — the 384×216 stage, sprite actors, matched foes ═══');
+console.log('\n═══ SCENE 28: Wave 3 — the Realm stage, sprite actors, matched foes ═══');
 {
   const { render: rts } = await import('preact-render-to-string');
   const { RealmStage } = await import('../src/tv/realm-stage.tsx');
@@ -1042,7 +1042,7 @@ console.log('\n═══ SCENE 28: Wave 3 — the 384×216 stage, sprite actors,
   const pv = projectPlayerView(state.value);
   check('projection carries PC sprite id', pv.party[0].sprite === 'soldier' && pv.party[1].sprite === undefined);
   const html = rts(h(RealmStage, { v: pv }));
-  check('stage canvas present (384×224, Wave 6)', html.includes('tv-realm-canvas') && /width:\s*384px/.test(html) && /height:\s*224px/.test(html));
+  check('stage canvas present (448×224, Wave 9)', html.includes('tv-realm-canvas') && /width:\s*448px/.test(html) && /height:\s*224px/.test(html));
   check('descriptor PC renders as sprite actor', html.includes('realm-sprite-actor') && html.includes('Sprity'));
   check('atlas PC still renders the classic way', html.includes('tv-idle-actor') && html.includes('Atlas'));
   check('matched foe renders as sprite (wolf)', (html.match(/realm-sprite-actor/g) ?? []).length >= 2 && html.includes('Winter Wolf'));

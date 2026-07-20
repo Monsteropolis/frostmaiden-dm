@@ -1,5 +1,5 @@
 // ============================================================
-// TILE-SCENE THUMBNAILS — renders each TileScene to a 384×224 PNG
+// TILE-SCENE THUMBNAILS — renders each TileScene to a 448×224 PNG
 // for the DM scene picker, reusing the exact tile data in tiles.ts
 // (so a thumbnail can never drift from what the stage draws). Run
 // with `npm run thumbs` after editing a scene.
@@ -27,7 +27,7 @@ const TS_FILE: Record<string, string> = {
   caves_deco: 'src/assets/tiles/caves/decorative.png',
 };
 
-const STAGE_W = 384, STAGE_H = 224, TILE = 16;
+const STAGE_W = 448, STAGE_H = 224, TILE = 16;   // Wave 9 C2: 448-wide canvas
 
 interface Raw { data: Buffer; w: number; h: number }
 

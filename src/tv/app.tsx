@@ -27,7 +27,7 @@ import { TvBackdrop } from './vfx';
 import { sceneById, SCENES } from './scenes';
 import { RealmStage } from './realm-stage';
 import { ActorSprite, actorSpriteById, actorSpriteForFoe } from '../data/actor-sprites';
-import { spriteThumbStyle } from '../components/SpritePicker';
+import { SpriteThumb } from '../components/SpritePicker';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -191,7 +191,7 @@ function InitRow({ c, v, flash }: { c: PvCombatant; v: PlayerView; flash: boolea
       <span class="tv-init-marker">{c.active ? '▶' : c.next ? '›' : ''}</span>
       <span class="tv-init-thumb">
         {sprite
-          ? <span class="tv-init-thumb-sprite" style={spriteThumbStyle(sprite, 40)} />
+          ? <SpriteThumb a={sprite} size={40} class="tv-init-thumb-sprite" />
           : <span class="tv-init-thumb-emoji">{c.emoji}</span>}
       </span>
       <span class="tv-init-main">

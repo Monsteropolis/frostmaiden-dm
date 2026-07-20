@@ -1,7 +1,9 @@
 // ============================================================
 // TILED SCENES (Wave 6) — the stage becomes a composed place.
-// A TileScene is pure data: a 24×14 grid of 16px tiles over the
-// 384×224 canvas. Ground layers draw behind everything; object
+// A TileScene is pure data: a 28×14 grid of 16px tiles over the
+// 448×224 canvas (Wave 9 C2 widened it from 24×14 / 384 — every
+// scene re-composed to fill the extra four columns).
+// Ground layers draw behind everything; object
 // layers y-sort with the actors through the same depthZ() the
 // ground plane already uses (realm-stage owns that math — this
 // module only describes grids).
@@ -12,8 +14,9 @@
 //   Tiny Swords ………………………… 64px — wrong scale for this stage;
 //     only a 16×16 campfire flame rides along (tiles/tiny/fire.png,
 //     an exact-pixel crop of the app's own camp.png fire).
-// No sheet used here has a dimension divisible by 28 (the
-// corruption tripwire) — all clean.
+// No sheet used here has BOTH dimensions divisible by 28 (the
+// corruption tripwire, as corrected in Wave 9 — the ×0.875 rescale
+// family has both, one alone is a legitimate native size) — clean.
 //
 // One deliberate extension over the Wave 6 brief's sketch:
 // TileLayer.tileset can override the scene default, because a
@@ -68,7 +71,7 @@ export function tilesetById(id: string): Tileset | undefined {
 
 // --- authoring helpers -------------------------------------------------------
 
-const W = 24, H = 14;                       // 384×224 at 16px
+const W = 28, H = 14;                       // 448×224 at 16px (Wave 9: was 24)
 const blank = (): (number | null)[] => new Array<number | null>(W * H).fill(null);
 
 /** tileset (col,row) → flat index */
@@ -119,19 +122,19 @@ function buildCampWinter(): TileScene {
     w(0, 1), w(0, 1), w(0, 2), w(0, 3), w(0, 4), w(0, 5),
   ], 11);
   // trampled ground around the fire (the winter set's dark-earth blob)
-  stamp(ground, 16, 1, 0, 3, 3, 11, 8);
+  stamp(ground, 16, 1, 0, 3, 3, 12, 8);
   // scattered twigs/debris on the snow
   const decal = blank();
-  decal[9 * W + 4] = w(0, 6); decal[7 * W + 19] = w(1, 6); decal[12 * W + 9] = w(2, 7);
-  decal[11 * W + 16] = w(0, 7); decal[8 * W + 2] = w(0, 8); decal[12 * W + 20] = w(1, 9);
-  decal[7 * W + 22] = w(4, 7);              // snowball pair at the right edge
+  decal[9 * W + 4] = w(0, 6); decal[7 * W + 22] = w(1, 6); decal[12 * W + 9] = w(2, 7);
+  decal[11 * W + 18] = w(0, 7); decal[8 * W + 2] = w(0, 8); decal[12 * W + 24] = w(1, 9);
+  decal[7 * W + 26] = w(4, 7);              // snowball pair at the right edge
 
   // objects — every column-run anchors at its base row and y-sorts with actors
   const trees = blank();
   stamp(trees, 16, 11, 0, 5, 7, -1, 0);     // treeline left (edge-clipped)
-  stamp(trees, 16, 11, 0, 5, 7, 5, -1);     // tall center-back tree
-  stamp(trees, 16, 11, 0, 5, 7, 15, 0);     // right tree
-  stamp(trees, 16, 11, 0, 5, 7, 20, -2);    // far-right tree, mostly canopy
+  stamp(trees, 16, 11, 0, 5, 7, 6, -1);     // tall center-back tree
+  stamp(trees, 16, 11, 0, 5, 7, 17, 0);     // right tree
+  stamp(trees, 16, 11, 0, 5, 7, 24, -2);    // far-right tree, mostly canopy
 
   const camp = blank();
   stamp(camp, 16, 3, 14, 2, 2, 4, 7);       // snow-shelter mound, mid-left
@@ -139,14 +142,14 @@ function buildCampWinter(): TileScene {
   stamp(camp, 16, 4, 8, 1, 2, 2, 10);       // snow boulder front-left
 
   const fire = blank();
-  fire[9 * W + 12] = 0;                     // the campfire (tiny_fire, single tile)
+  fire[9 * W + 13] = 0;                     // the campfire (tiny_fire, single tile)
 
   const cozy = at(15);                      // mana_cozy props
   const props = blank();
-  stamp(props, 15, 1, 3, 2, 2, 18, 8);      // barrel pile
-  stamp(props, 15, 3, 3, 2, 2, 20, 9);      // grain sack
-  props[9 * W + 17] = cozy(0, 3);           // jug by the barrels
-  props[12 * W + 16] = cozy(0, 4);          // second jug, nearer
+  stamp(props, 15, 1, 3, 2, 2, 21, 8);      // barrel pile
+  stamp(props, 15, 3, 3, 2, 2, 23, 9);      // grain sack
+  props[9 * W + 20] = cozy(0, 3);           // jug by the barrels
+  props[12 * W + 19] = cozy(0, 4);          // second jug, nearer
 
   return {
     id: 'camp_winter', label: 'Winter camp', tileset: 'mana_winter',
@@ -181,10 +184,10 @@ function buildTownTentowns(): TileScene {
   const trod = [w(0, 6), w(1, 6), w(2, 6), w(3, 6), w(0, 7), w(2, 7)];
   const street = blank();
   for (let y = 6; y < H; y += 1) {
-    const x = 10 + Math.floor(seeded(500 + y * 13) * 2);
+    const x = 12 + Math.floor(seeded(500 + y * 13) * 2);
     if (seeded(y * 71) < 0.75) street[y * W + x] = trod[Math.floor(seeded(600 + y * 17) * trod.length)];
   }
-  for (let x = 13; x <= 18; x += 2) street[8 * W + x] = trod[Math.floor(seeded(700 + x * 23) * trod.length)];
+  for (let x = 15; x <= 22; x += 2) street[8 * W + x] = trod[Math.floor(seeded(700 + x * 23) * trod.length)];
 
   const timber = at(16);
   const buildings = blank();
@@ -196,22 +199,22 @@ function buildTownTentowns(): TileScene {
   // A stays deep (base row 5), B nearer (base row 7) — the street still runs
   // BEHIND B, which is the depth-sort proof on screen.
   stamp(buildings, 16, 4, 2, 4, 6, 2, 0);    // building A (left, deep)
-  stamp(buildings, 16, 4, 2, 4, 6, 16, 2);   // building B (right, nearer)
+  stamp(buildings, 16, 4, 2, 4, 6, 20, 2);   // building B (right, nearer)
 
   const fences = blank();
   stamp(fences, 16, 12, 0, 4, 1, 4, 9);     // fence run left of the path, near
-  stamp(fences, 16, 12, 0, 3, 1, 13, 6);    // short fence by the branch path
+  stamp(fences, 16, 12, 0, 3, 1, 15, 6);    // short fence by the branch path
   fences[10 * W + 3] = timber(15, 2);       // post
 
   const winter = blank();
-  stamp(winter, 16, 11, 0, 5, 7, 9, -3);    // one snowy tree towering mid-back
+  stamp(winter, 16, 11, 0, 5, 7, 11, -3);   // one snowy tree towering mid-back
   winter[6 * W + 1] = w(1, 8);              // bush against building A
-  stamp(winter, 16, 4, 8, 1, 2, 21, 11);    // snow boulder near the front
+  stamp(winter, 16, 4, 8, 1, 2, 25, 11);    // snow boulder near the front
 
   const cozy = at(15);
   const goods = blank();
-  stamp(goods, 15, 1, 3, 2, 2, 13, 10);     // barrels where the carts unload
-  goods[11 * W + 20] = cozy(0, 3);          // jug by building B's door
+  stamp(goods, 15, 1, 3, 2, 2, 15, 10);     // barrels where the carts unload
+  goods[11 * W + 24] = cozy(0, 3);          // jug by building B's door
   stamp(goods, 15, 3, 3, 2, 2, 5, 11);      // sacks by the near fence
 
   return {
@@ -245,9 +248,10 @@ function buildCaveDark(): TileScene {
   // grass tufts — stopping at row 21 keeps the rim, loses the grass.)
   stamp(ground, 102, 0, 18, 12, 4, 0, 0);
   stamp(ground, 102, 1, 18, 11, 4, 12, 0);
-  stamp(ground, 102, 11, 18, 1, 4, 23, 0);
+  stamp(ground, 102, 1, 18, 4, 4, 23, 0);    // Wave 9: four more interior columns
+  stamp(ground, 102, 11, 18, 1, 4, 27, 0);
   // the way out: an arched doorway punched through the wall, right of center
-  stamp(ground, 102, 14, 19, 6, 5, 15, -1);
+  stamp(ground, 102, 14, 19, 6, 5, 17, -1);
 
   const d = at(26);                          // caves_deco
   const rocks = blank();
@@ -255,20 +259,20 @@ function buildCaveDark(): TileScene {
   // rows land on the wall's darkness — columns against the ceiling shadow
   stamp(rocks, 26, 14, 16, 6, 8, -2, -4);    // huge black spire looming at left
   stamp(rocks, 26, 8, 18, 4, 6, 8, -2);      // twin spire against the back wall
-  stamp(rocks, 26, 4, 21, 2, 3, 21, 1);      // small spire right of the door
+  stamp(rocks, 26, 4, 21, 2, 3, 24, 1);      // small spire right of the door
 
   const glitter = blank();
-  stamp(glitter, 26, 2, 38, 2, 2, 12, 7);    // blue crystal cluster
+  stamp(glitter, 26, 2, 38, 2, 2, 13, 7);    // blue crystal cluster
   glitter[10 * W + 6] = d(1, 37);            // lone blue shard
-  stamp(glitter, 26, 12, 38, 2, 2, 18, 9);   // green crystal cluster
-  glitter[12 * W + 10] = d(11, 41);          // green shard near the front
+  stamp(glitter, 26, 12, 38, 2, 2, 21, 9);   // green crystal cluster
+  glitter[12 * W + 11] = d(11, 41);          // green shard near the front
   glitter[6 * W + 3] = d(1, 37);             // shard glinting under the spire
 
   const rubble = blank();                    // ground decals — no sorting needed
   stamp(rubble, 26, 0, 46, 3, 2, 5, 6);
-  stamp(rubble, 26, 10, 46, 3, 2, 16, 11);
-  stamp(rubble, 26, 0, 46, 3, 2, 9, 10);
-  rubble[8 * W + 2] = d(1, 50); rubble[11 * W + 14] = d(4, 51); rubble[6 * W + 12] = d(1, 50);
+  stamp(rubble, 26, 10, 46, 3, 2, 19, 11);
+  stamp(rubble, 26, 0, 46, 3, 2, 10, 10);
+  rubble[8 * W + 2] = d(1, 50); rubble[11 * W + 16] = d(4, 51); rubble[6 * W + 13] = d(1, 50);
 
   return {
     id: 'cave_dark', label: 'Dark cave', tileset: 'caves_main',
@@ -297,7 +301,7 @@ function buildTownMarket(): TileScene {
   const trod = [w(0, 6), w(1, 6), w(2, 6), w(3, 6), w(0, 7), w(2, 7)];
   const lane = blank();
   for (let y = 5; y < H; y++) {
-    for (let x = 9; x <= 14; x++) {
+    for (let x = 11; x <= 16; x++) {
       if (seeded(300 + x * 7 + y * 13) < 0.5) lane[y * W + x] = trod[Math.floor(seeded(x * 3 + y * 5) * trod.length)];
     }
   }
@@ -308,24 +312,24 @@ function buildTownMarket(): TileScene {
   // stall awnings — a horizontal roof strip on the timber kit, two depths
   const stalls = blank();
   stamp(stalls, 16, 7, 4, 3, 1, 6, 6);        // awning A (deeper)
-  stamp(stalls, 16, 7, 4, 3, 1, 16, 8);       // awning B (nearer)
+  stamp(stalls, 16, 7, 4, 3, 1, 19, 8);       // awning B (nearer)
 
   const winter = blank();
-  stamp(winter, 16, 11, 0, 5, 7, 18, -2);     // snowy tree towering back-right
+  stamp(winter, 16, 11, 0, 5, 7, 22, -2);     // snowy tree towering back-right
   stamp(winter, 16, 4, 8, 1, 2, 3, 11);       // snow boulder front-left
 
   // the well — a low snow-capped stone ring (winter stone-wall tiles)
   const well = blank();
-  stamp(well, 16, 2, 10, 2, 1, 11, 6);        // capped top
-  stamp(well, 16, 2, 11, 2, 1, 11, 7);        // stone body
+  stamp(well, 16, 2, 10, 2, 1, 13, 6);        // capped top
+  stamp(well, 16, 2, 11, 2, 1, 13, 7);        // stone body
 
   const cozy = at(15);
   const goods = blank();
   stamp(goods, 15, 2, 0, 3, 2, 5, 7);         // market table under awning A
-  stamp(goods, 15, 1, 3, 2, 2, 16, 9);        // barrels under awning B
+  stamp(goods, 15, 1, 3, 2, 2, 19, 9);        // barrels under awning B
   stamp(goods, 15, 3, 3, 2, 2, 6, 11);        // sacks near the front
-  goods[9 * W + 20] = cozy(6, 2); goods[9 * W + 21] = cozy(7, 2);   // crate/chest, right
-  goods[12 * W + 15] = cozy(0, 3);            // a jug spilled on the lane
+  goods[9 * W + 24] = cozy(6, 2); goods[9 * W + 25] = cozy(7, 2);   // crate/chest, right
+  goods[12 * W + 17] = cozy(0, 3);            // a jug spilled on the lane
 
   return {
     id: 'town_market', label: 'Market square', tileset: 'mana_winter',
@@ -358,20 +362,20 @@ function buildFrozenLake(): TileScene {
 
   // cracked-ice decals scattered mid-lake
   const cracks = blank();
-  cracks[7 * W + 6] = w(12, 13); cracks[9 * W + 15] = w(13, 13);
-  cracks[8 * W + 19] = w(12, 14); cracks[11 * W + 10] = w(13, 14);
-  cracks[10 * W + 3] = w(12, 13);
+  cracks[7 * W + 6] = w(12, 13); cracks[9 * W + 17] = w(13, 13);
+  cracks[8 * W + 22] = w(12, 14); cracks[11 * W + 12] = w(13, 14);
+  cracks[10 * W + 3] = w(12, 13); cracks[10 * W + 25] = w(12, 14);
 
   // shore life — a dead tree back-left and reeds along the waterline
   const shore = blank();
   stamp(shore, 16, 11, 0, 5, 7, 1, -2);       // snowy dead tree
   shore[3 * W + 8] = w(0, 8); shore[3 * W + 9] = w(0, 9);
-  shore[3 * W + 16] = w(0, 9); shore[3 * W + 17] = w(0, 8);
-  shore[3 * W + 21] = w(0, 8);
+  shore[3 * W + 18] = w(0, 9); shore[3 * W + 19] = w(0, 8);
+  shore[3 * W + 25] = w(0, 8);
 
   const rocks = blank();
   stamp(rocks, 16, 4, 8, 1, 2, 6, 10);        // snow boulder on the ice
-  stamp(rocks, 16, 1, 12, 2, 3, 20, 9);       // ice-rock cairn, near-right
+  stamp(rocks, 16, 1, 12, 2, 3, 24, 9);       // ice-rock cairn, near-right
 
   return {
     id: 'frozen_lake', label: 'Frozen lake', tileset: 'mana_winter',
@@ -398,28 +402,29 @@ function buildCaveDeep(): TileScene {
   // the north wall (same black mass with a lit rim as cave_dark)
   stamp(ground, 102, 0, 18, 12, 4, 0, 0);
   stamp(ground, 102, 1, 18, 11, 4, 12, 0);
-  stamp(ground, 102, 11, 18, 1, 4, 23, 0);
+  stamp(ground, 102, 1, 18, 4, 4, 23, 0);     // Wave 9: four more interior columns
+  stamp(ground, 102, 11, 18, 1, 4, 27, 0);
   // the chasm: a band of floor simply removed — the dark canvas beneath reads as
   // a drop. Kept to the mid-depth so actors mill on the near lip.
-  for (let x = 5; x <= 19; x++) { ground[8 * W + x] = null; ground[9 * W + x] = null; }
+  for (let x = 5; x <= 22; x++) { ground[8 * W + x] = null; ground[9 * W + x] = null; }
 
   const d = at(26);                           // caves_deco
   const pillars = blank();
   // a colonnade — spires standing where their bases land on solid floor
   stamp(pillars, 26, 8, 18, 4, 6, 3, 0);      // back-left column
-  stamp(pillars, 26, 8, 18, 4, 6, 17, 0);     // back-right column
-  stamp(pillars, 26, 4, 21, 2, 3, 8, 5);      // near-left short pillar (lip of chasm)
-  stamp(pillars, 26, 4, 21, 2, 3, 15, 5);     // near-right short pillar
+  stamp(pillars, 26, 8, 18, 4, 6, 21, 0);     // back-right column
+  stamp(pillars, 26, 4, 21, 2, 3, 9, 5);      // near-left short pillar (lip of chasm)
+  stamp(pillars, 26, 4, 21, 2, 3, 18, 5);     // near-right short pillar
 
   const glitter = blank();
   stamp(glitter, 26, 2, 38, 2, 2, 2, 11);     // blue crystal cluster, front-left
-  stamp(glitter, 26, 12, 38, 2, 2, 20, 11);   // green crystal cluster, front-right
-  glitter[10 * W + 12] = d(1, 37);            // lone shard on the near lip
+  stamp(glitter, 26, 12, 38, 2, 2, 24, 11);   // green crystal cluster, front-right
+  glitter[10 * W + 14] = d(1, 37);            // lone shard on the near lip
 
   const rubble = blank();                     // ground decals along the chasm lip
   stamp(rubble, 26, 0, 46, 3, 2, 6, 10);
-  stamp(rubble, 26, 10, 46, 3, 2, 15, 10);
-  rubble[11 * W + 4] = d(1, 50); rubble[12 * W + 18] = d(4, 51); rubble[7 * W + 11] = d(1, 50);
+  stamp(rubble, 26, 10, 46, 3, 2, 18, 10);
+  rubble[11 * W + 4] = d(1, 50); rubble[12 * W + 22] = d(4, 51); rubble[7 * W + 13] = d(1, 50);
 
   return {
     id: 'cave_deep', label: 'Deep hall', tileset: 'caves_main',

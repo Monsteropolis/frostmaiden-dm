@@ -62,7 +62,7 @@ function CondSummary({ conditions }: { conditions: string[] }) {
 
 // ---------------------------------------------------------------- items
 
-/** Wave 5 — "we take the dragon head!" The placement sheet: the 384×216 stage
+/** Wave 5 — "we take the dragon head!" The placement sheet: the 448×224 stage
  *  as a picker. Tap a spot, drag to adjust; the emoji previews at the exact
  *  depth-scale it will have in the world, over the exact backdrop the stage
  *  draws right now. DM-authored (Canonical) — players rearranging camp is a

@@ -11,30 +11,45 @@
 import { useMemo, useState } from 'preact/hooks';
 import { ACTOR_SPRITES, ActorSprite, ActorCategory } from '../data/actor-sprites';
 
-/** Idle frame 0, zoomed so the (measured) character fills the thumb box. */
-export function spriteThumbStyle(a: ActorSprite, size = 44): Record<string, string> {
+/** Idle frame 0, zoomed so the (measured) character fills the thumb box.
+ *
+ *  Wave 9 (QA #2): TWO nested boxes, because a background image cannot
+ *  overflow — it paints across its whole element. The old single box was a
+ *  fixed square showing the sheet, so whenever one scaled frame was narrower
+ *  than the square (every 16px-wide dungeon character), the NEIGHBOURING
+ *  frame painted beside it — Ben's "doubled" sprites. Now the inner box is
+ *  exactly one scaled frame (the same one-frame-box rule that fixed
+ *  SpriteActor in Wave 7) and the outer square clips whatever the zoom
+ *  pushes past its edges. footOffsetX re-centers off-center art (added, not
+ *  subtracted — the Wave 8 QA #9 lesson). */
+export function SpriteThumb({ a, size = 44, class: cls }: {
+  a: ActorSprite; size?: number; class?: string;
+}) {
   const idle = a.anims.idle;
-  if (!idle) return {};
+  const box = { width: `${size}px`, height: `${size}px` };
+  if (!idle) return <span class={`sprite-thumb ${cls ?? ''}`} style={box} />;
   const z = (0.72 * size) / a.contentH;
   // Scale the WHOLE native sheet by z (aspect preserved off the width), so
   // multi-column sheets like the frost guardian — whose sheet is far wider than
   // one anim's strip — index their grid correctly instead of squishing. sheetW
-  // defaults to a single strip's width. footOffsetX re-centers off-center art.
+  // defaults to a single strip's width.
   const sheetW = (idle.sheetW ?? idle.frames * a.frameW) * z;
-  // Wave 8 (QA #9): the offset must be ADDED, not subtracted. A descriptor's
-  // content sits at native x = frameW/2 − footOffsetX (footOffsetX is the LEFT-
-  // ward correction the stage applies via translateX). Centering that content in
-  // the thumb needs `+ off`; the old `− off` pushed the bringer's right-of-centre
-  // figure a further ~20px right — clean off the 44px tile, so the icon read blank.
-  const off = (a.footOffsetX ?? 0) * z;
-  return {
-    width: `${size}px`, height: `${size}px`,
-    backgroundImage: `url(${idle.file})`,
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: `${sheetW}px auto`,
-    backgroundPosition: `${size / 2 - (a.frameW * z) / 2 + off}px ${size - (a.frameH - a.footPad) * z - 2 - (idle.row ?? 0) * a.frameH * z}px`,
-    imageRendering: 'pixelated',
-  };
+  return (
+    <span class={`sprite-thumb ${cls ?? ''}`} style={box}>
+      <span
+        class="sprite-thumb-frame"
+        style={{
+          width: `${a.frameW * z}px`,
+          height: `${a.frameH * z}px`,
+          left: `${size / 2 - (a.frameW * z) / 2 + (a.footOffsetX ?? 0) * z}px`,
+          top: `${size - (a.frameH - a.footPad) * z - 2}px`,
+          backgroundImage: `url(${idle.file})`,
+          backgroundSize: `${sheetW}px auto`,
+          backgroundPosition: `0px ${-(idle.row ?? 0) * a.frameH * z}px`,
+        }}
+      />
+    </span>
+  );
 }
 
 const TABS: { id: ActorCategory; label: string }[] = [
@@ -100,7 +115,7 @@ export function SpritePicker({ value, onPick, surface = 'hero' }: {
             onClick={() => onPick(a.id)}
             title={a.label}
           >
-            <span class="sprite-pick-thumb" style={spriteThumbStyle(a)} />
+            <SpriteThumb a={a} class="sprite-pick-thumb" />
             <span class="sprite-pick-name">{a.label}</span>
           </button>
         ))}
