@@ -1,4 +1,4 @@
-import { useState, useRef } from 'preact/hooks';
+import { useState, useRef, useEffect } from 'preact/hooks';
 import { state, patch } from '../state/store';
 import { PC, Ally, OwnedItem, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
 import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod, monsterSpriteFor } from './monsters';
@@ -9,7 +9,10 @@ import { allNpcs, openNpc, npcSpriteFor } from './npcs';
 import { Sheet, ConfirmBtn, Field, NumInput, CondEditor, Stepper } from '../components/ui';
 import { rollD20, rollDamage, showRoll } from '../lib/dice';
 import { SpritePicker } from '../components/SpritePicker';
-import { pushRealmRoster, setRealmPassword, REALM_CAMPAIGN_NAME } from '../backend/realm-client';
+import {
+  pushRealmRoster, setRealmPassword, ensureDmToken, listAllJournal,
+  RealmUnreachableError, REALM_CAMPAIGN_NAME, type JournalEntry,
+} from '../backend/realm-client';
 
 // ---------------------------------------------------------------- helpers
 
@@ -697,8 +700,99 @@ function RecruitAllySheet({ open, onClose }: { open: boolean; onClose: () => voi
 
 // ---------------------------------------------------------------- Screen
 
+// ---------------------------------------------------------------- journals
+
+/** Brief 3 — the DM's journal view: every entry across the party, private
+ *  and shared alike (Ben's decision: the DM sees everything). Read-only on
+ *  purpose — the words belong to the players; RLS wouldn't let a DM token
+ *  edit them anyway. Data comes through the same per-session DM token as
+ *  the roster sync: no privileged path exists in this app. */
+function DmJournals() {
+  const [entries, setEntries] = useState<JournalEntry[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [setup, setSetup] = useState(false);
+
+  const load = async () => {
+    setBusy(true); setErr('');
+    try {
+      const token = await ensureDmToken(state.value.realm, REALM_CAMPAIGN_NAME);
+      setEntries(await listAllJournal(token));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setSetup(e instanceof RealmUnreachableError);
+    } finally { setBusy(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const nameOf = (id: string) => state.value.party.find((p) => p.id === id)?.name ?? id;
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  // listAllJournal orders by author, then newest first — group on that.
+  const groups: { authorId: string; items: JournalEntry[] }[] = [];
+  for (const e of entries ?? []) {
+    const g = groups[groups.length - 1];
+    if (g && g.authorId === e.authorId) g.items.push(e);
+    else groups.push({ authorId: e.authorId, items: [e] });
+  }
+
+  return (
+    <>
+      {err && (
+        <div class="card">
+          <p class="stat-fine" style={{ color: 'var(--thread)', margin: 0 }}>
+            <strong>⚠ Couldn't load the journals{setup ? ' — Realm server unreachable' : ''}.</strong> {err}
+          </p>
+          {setup && (
+            <p class="stat-fine" style={{ margin: '4px 0 0' }}>
+              Same fix as the Sync button on the Session tab: the <code>realm-login</code> function
+              and migrations are one-time dashboard steps — see <strong>REALM_SETUP.md</strong>.
+            </p>
+          )}
+          <button class="btn" style={{ marginTop: '8px' }} disabled={busy} onClick={load}>
+            {busy ? 'Loading…' : 'Try again'}
+          </button>
+        </div>
+      )}
+      {!err && entries === null && (
+        <div class="card"><p class="read">Fetching every journal from the Realm…</p></div>
+      )}
+      {!err && entries?.length === 0 && (
+        <div class="card"><p class="read">No entries yet. Once players sign into the Realm and start writing, everything — private and shared — appears here.</p></div>
+      )}
+      {groups.map((g) => (
+        <div class="card" key={g.authorId}>
+          <h3>📓 {nameOf(g.authorId)} <span class="stat-fine">({g.items.length})</span></h3>
+          {g.items.map((entry) => (
+            <div key={entry.id} style={{ padding: '6px 0', borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', cursor: 'pointer' }}
+                onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
+                <strong style={{ flex: 1 }}>{entry.title || 'Untitled'}</strong>
+                <span class="cond-tag">{entry.isShared ? '✦ shared' : '🔒 private'}</span>
+                <span class="stat-fine">{when(entry.updatedAt)}</span>
+              </div>
+              {openId === entry.id && (
+                <p class="read" style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{entry.body}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      {!err && entries !== null && (
+        <div class="supply-row" style={{ gap: '8px' }}>
+          <button class="btn" disabled={busy} onClick={load}>{busy ? 'Refreshing…' : '↻ Refresh'}</button>
+          <p class="stat-fine" style={{ margin: 0 }}>Read-only — the words belong to the players. 🔒 private entries are visible to you alone.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PartyScreen() {
-  const [sub, setSub] = useState<'pcs' | 'sidekicks' | 'allies'>('pcs');
+  const [sub, setSub] = useState<'pcs' | 'sidekicks' | 'allies' | 'journals'>('pcs');
   const [adding, setAdding] = useState(false);
   const [recruiting, setRecruiting] = useState(false);
   const { party, sidekicks } = state.value;
@@ -730,6 +824,7 @@ export function PartyScreen() {
         <button class={`sub-tab${sub === 'pcs' ? ' active' : ''}`} onClick={() => setSub('pcs')}>Characters ({party.length})</button>
         <button class={`sub-tab${sub === 'sidekicks' ? ' active' : ''}`} onClick={() => setSub('sidekicks')}>Sidekicks ({sk.length})</button>
         <button class={`sub-tab${sub === 'allies' ? ' active' : ''}`} onClick={() => setSub('allies')}>Allies ({allies.length})</button>
+        <button class={`sub-tab${sub === 'journals' ? ' active' : ''}`} onClick={() => setSub('journals')}>Journals</button>
       </div>
 
       {sub === 'pcs' && (
@@ -764,6 +859,8 @@ export function PartyScreen() {
           {recruiting && <RecruitAllySheet open onClose={() => setRecruiting(false)} />}
         </>
       )}
+
+      {sub === 'journals' && <DmJournals />}
     </div>
   );
 }
