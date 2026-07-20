@@ -12,7 +12,7 @@ import { startBroadcast, stopBroadcast, unmuteTv, tvStatus, tvStatusDetail } fro
 import { normalizeRoomCode } from '../tv/transport';
 import { SCENES, SCENE_CATS, SceneCat } from '../tv/scenes';
 import { projectPlayerView, type PokeKind } from '../tv/projection';
-import { deriveRealmCode, ensureDmToken, pushRealmRoster, REALM_CAMPAIGN_NAME } from '../backend/realm-client';
+import { deriveRealmCode, ensureDmToken, pushRealmRoster, REALM_CAMPAIGN_NAME, RealmUnreachableError } from '../backend/realm-client';
 
 /** Accepts full URLs (watch?v=, youtu.be/, shorts/, embed/) or a bare 11-char id. */
 export function parseYouTubeId(input: string): string | null {
@@ -253,11 +253,15 @@ export function TvPanel({ onClose }: { onClose: () => void }) {
 function RealmLoginSection() {
   const [sync, setSync] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
+  // Unreachable = a SETUP problem (function not deployed / migrations not
+  // run), not a bad password. It gets louder treatment plus a pointer at
+  // what to check — this exact confusion is why Brief 3 Part A exists.
+  const [unreachable, setUnreachable] = useState(false);
   const realmCode = deriveRealmCode(state.value.realm.campaignId);
   const gatedCount = state.value.party.filter((p) => p.realmGated).length;
 
   const syncNow = async () => {
-    setSync('busy'); setSyncMsg('');
+    setSync('busy'); setSyncMsg(''); setUnreachable(false);
     try {
       const s = state.value;
       await ensureDmToken(s.realm, REALM_CAMPAIGN_NAME);
@@ -266,6 +270,7 @@ function RealmLoginSection() {
       setSync('done');
     } catch (e) {
       setSync('error');
+      setUnreachable(e instanceof RealmUnreachableError);
       setSyncMsg(e instanceof Error ? e.message : String(e));
     }
   };
@@ -279,12 +284,25 @@ function RealmLoginSection() {
           {sync === 'busy' ? 'Syncing…' : '🔄 Sync party to Realm'}
         </button>
       </div>
+      {sync === 'idle' && (
+        <p class="stat-fine">○ Not synced yet this session — tap Sync so the login server has the current roster.</p>
+      )}
       {sync === 'done' && (
         <p class="stat-fine" style={{ color: 'var(--frost)' }}>
-          Party synced — players can now enter the code and pick their character.
+          ✓ Party synced — players can now enter the code and pick their character.
         </p>
       )}
-      {sync === 'error' && <p class="stat-fine" style={{ color: 'var(--thread)' }}>{syncMsg}</p>}
+      {sync === 'error' && (
+        <p class="stat-fine" style={{ color: 'var(--thread)' }}>
+          <strong>⚠ Sync failed{unreachable ? ' — Realm server unreachable' : ''}.</strong> {syncMsg}
+        </p>
+      )}
+      {sync === 'error' && unreachable && (
+        <p class="stat-fine">
+          Is the login server set up? Deploying the <code>realm-login</code> function and running the
+          migrations are one-time dashboard steps — <strong>REALM_SETUP.md</strong> in the repo walks through them.
+        </p>
+      )}
       <p class="stat-fine">
         This is the <strong>Realm code</strong> — stable, yours forever, and different from
         the room code up top (that one only pairs this phone with a TV for tonight).

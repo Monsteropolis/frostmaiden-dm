@@ -85,7 +85,16 @@ filename order, once each.
 
 ## Deploying the Edge Function (hosted project)
 
-Done from a machine that is logged into Supabase (the repo holds no
+**No-terminal path (the default — this is how Ben deploys):** the dashboard's
+Edge Function editor takes a single file, so `scripts/bundle-realm-login.mts`
+flattens the function + its `_shared` modules into
+`supabase/dashboard/realm-login.ts` for copy-paste. Click-by-click steps live
+in `REALM_SETUP.md` at the repo root. If you touch anything under
+`functions/`, regenerate the bundle (`npm run bundle:fn`) — CI fails when it
+drifts. Remember the dashboard's **Verify JWT** setting must be OFF for
+`realm-login` (the committed `config.toml` handles this only for CLI deploys).
+
+**CLI path** — from a machine that is logged into Supabase (the repo holds no
 credentials). From the repo root:
 
 ```

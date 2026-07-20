@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - name: Build (typecheck + seam tests)
         run: npm run build
+      - name: Dashboard bundle freshness (the pasted Edge Function must match the sources)
+        run: npm run bundle:fn -- --check
       - name: Start local Supabase (applies committed migrations)
         run: npx supabase start
       - name: Boundary tests (RLS is the player/DM boundary)
@@ -51,6 +53,14 @@ jobs:
           if [ -n "${ANON_KEY:-}" ]; then export SUPABASE_TEST_ANON_KEY="$ANON_KEY"; fi
           if [ -n "${JWT_SECRET:-}" ]; then export SUPABASE_TEST_JWT_SECRET="$JWT_SECRET"; fi
           npm run test:auth
+      - name: Journal tests (Brief 3 — the UI's own data helpers against RLS)
+        run: |
+          STATUS="$(npx supabase status -o env)"
+          eval "$(echo "$STATUS" | grep -E '^(API_URL|ANON_KEY|JWT_SECRET)=')"
+          if [ -n "${API_URL:-}" ]; then export SUPABASE_TEST_URL="$API_URL"; fi
+          if [ -n "${ANON_KEY:-}" ]; then export SUPABASE_TEST_ANON_KEY="$ANON_KEY"; fi
+          if [ -n "${JWT_SECRET:-}" ]; then export SUPABASE_TEST_JWT_SECRET="$JWT_SECRET"; fi
+          npm run test:journal
 
   deploy:
     if: github.ref == 'refs/heads/main'

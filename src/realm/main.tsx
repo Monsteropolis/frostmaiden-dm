@@ -24,7 +24,9 @@ import { RealmStage } from '../tv/realm-stage';
 import type { PlayerView } from '../tv/projection';
 import {
   fetchRealmCharacters, realmLogin, normalizeRealmCode,
-  type RealmCharacter, type RealmSession,
+  listMyJournal, listSharedJournal, writeJournalEntry, updateJournalEntry,
+  setShared as setEntryShared, fetchCharacterNames, RealmUnreachableError,
+  type RealmCharacter, type RealmSession, type JournalEntry,
 } from '../backend/realm-client';
 
 const SNAPSHOT_URL = `${import.meta.env.BASE_URL}snapshot.json`;
@@ -100,6 +102,7 @@ function Realm() {
         ? <section class="tv-scene idle-slot full"><RealmStage v={v} full /></section>
         : <section class="realm-blank">{status.kind === 'loading' ? 'Loading the realm…' : 'No snapshot to show.'}</section>}
       {v && <Pack v={v} />}
+      {session && <JournalPanel session={session} />}
       {expired && !session && (
         <div class="realm-strip warn">
           <div><b>Your session ended.</b> Sign in again to keep your seat.</div>
@@ -288,6 +291,163 @@ function Pack({ v }: { v: PlayerView }) {
           </div>
         ) : null;
       })()}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- journal
+
+/** Brief 3 — the party journal, behind login. Two tabs: MINE is everything
+ *  this character wrote (private and shared both, each wearing its flag);
+ *  SHARED is every shared entry in the campaign with its author's name.
+ *  Sharing an entry flips one flag on one row — there is deliberately no
+ *  copy-to-shared path, so nothing is ever written twice. */
+function JournalPanel({ session }: { session: RealmSession }) {
+  const [tab, setTab] = useState<'mine' | 'shared'>('mine');
+  const [entries, setEntries] = useState<JournalEntry[] | null>(null);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [openId, setOpenId] = useState<string | null>(null);
+  // one draft serves both the composer (editingId === 'new') and edits
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dTitle, setDTitle] = useState('');
+  const [dBody, setDBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [errSetup, setErrSetup] = useState(false);
+
+  const fail = (e: unknown) => {
+    setErr(e instanceof Error ? e.message : String(e));
+    setErrSetup(e instanceof RealmUnreachableError);
+  };
+
+  const reload = async (which: 'mine' | 'shared') => {
+    setErr('');
+    try {
+      if (which === 'mine') setEntries(await listMyJournal(session.token));
+      else {
+        const [list, who] = await Promise.all([
+          listSharedJournal(session.token), fetchCharacterNames(session.token),
+        ]);
+        setNames(who);
+        setEntries(list);
+      }
+    } catch (e) { fail(e); }
+  };
+
+  useEffect(() => {
+    setEntries(null); setOpenId(null); setEditingId(null);
+    reload(tab);
+  }, [tab, session.token]);
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      if (editingId === 'new') await writeJournalEntry(session.token, { title: dTitle.trim(), body: dBody });
+      else if (editingId) await updateJournalEntry(session.token, editingId, { title: dTitle.trim(), body: dBody });
+      setEditingId(null);
+      await reload(tab);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const toggleShare = async (entry: JournalEntry) => {
+    setBusy(true); setErr('');
+    try {
+      await setEntryShared(session.token, entry.id, !entry.isShared);
+      await reload(tab);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const startEdit = (entry: JournalEntry | null) => {
+    setEditingId(entry ? entry.id : 'new');
+    setDTitle(entry?.title ?? '');
+    setDBody(entry?.body ?? '');
+    setErr('');
+  };
+
+  const mineTab = tab === 'mine';
+  return (
+    <div class="realm-journal">
+      <div class="realm-journal-head">
+        <span class="realm-journal-title">📓 Journal</span>
+        <div class="realm-journal-tabs" role="tablist">
+          <button class={mineTab ? 'on' : ''} onClick={() => setTab('mine')}>Mine</button>
+          <button class={!mineTab ? 'on' : ''} onClick={() => setTab('shared')}>Shared</button>
+        </div>
+        {mineTab && !editingId && (
+          <button class="realm-journal-new" onClick={() => startEdit(null)}>＋ New entry</button>
+        )}
+      </div>
+
+      {err && (
+        <div class="realm-login-error">
+          <b>{errSetup ? 'Realm server unreachable.' : 'That didn\'t work.'}</b> {err}
+          {errSetup && (
+            <div class="realm-journal-fine">
+              Your words are safe on this screen but not saved yet. If this keeps up, tell your
+              DM — the Realm login server may not be deployed (the DM app's Sync button says the same).
+            </div>
+          )}
+        </div>
+      )}
+
+      {editingId && (
+        <div class="realm-journal-editor">
+          <input
+            value={dTitle}
+            placeholder="Title (optional)"
+            onInput={(e) => setDTitle((e.target as HTMLInputElement).value)}
+          />
+          <textarea
+            value={dBody}
+            placeholder="What happened out there?"
+            onInput={(e) => setDBody((e.target as HTMLTextAreaElement).value)}
+          />
+          <div class="rj-actions">
+            <button class="share" disabled={busy || !dBody.trim()} onClick={save}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button disabled={busy} onClick={() => setEditingId(null)}>Cancel</button>
+            {editingId === 'new' && <span class="realm-journal-fine">Saved private — share it after, if you want.</span>}
+          </div>
+        </div>
+      )}
+
+      {entries === null && !err && <div class="realm-journal-fine">Loading…</div>}
+      {entries?.length === 0 && !editingId && (
+        <div class="realm-journal-fine">
+          {mineTab
+            ? 'Nothing yet — your notes start here. Only you (and the DM) see private entries.'
+            : 'Nothing shared yet. Entries anyone marks Share ▸ appear here for the whole party.'}
+        </div>
+      )}
+
+      {entries?.map((entry) => (
+        <div class="realm-journal-entry" key={entry.id}>
+          <div class="rj-top" onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
+            <span class="rj-title">{entry.title || 'Untitled'}</span>
+            {!mineTab && <span class="rj-author">{names[entry.authorId] ?? entry.authorId}</span>}
+            {mineTab && (
+              <span class={`rj-flag${entry.isShared ? ' shared' : ''}`}>
+                {entry.isShared ? '✦ shared' : 'private'}
+              </span>
+            )}
+            <span class="rj-when">{ago(Date.parse(entry.updatedAt))}</span>
+          </div>
+          {openId === entry.id && editingId !== entry.id && (
+            <>
+              <div class="rj-body">{entry.body}</div>
+              {entry.authorId === session.characterId && (
+                <div class="rj-actions">
+                  <button class="share" disabled={busy} onClick={() => toggleShare(entry)}>
+                    {entry.isShared ? 'Unshare' : 'Share ▸'}
+                  </button>
+                  <button disabled={busy} onClick={() => startEdit(entry)}>Edit</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
