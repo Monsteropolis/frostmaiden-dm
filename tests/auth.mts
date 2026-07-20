@@ -21,7 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { deriveRealmCode, normalizeRealmCode } from '../supabase/functions/_shared/realm-code.ts';
 import { hashPassword, verifyPassword } from '../supabase/functions/_shared/password.ts';
 import { REALM_TOKEN_TTL_SECONDS } from '../supabase/functions/_shared/jwt.ts';
-import { handleRealmRequest } from '../supabase/functions/_shared/realm-auth.ts';
+import { handleRealmRequest, preflightSchema, type RealmDb, type SetupCheck } from '../supabase/functions/_shared/realm-auth.ts';
 
 const URL = process.env.SUPABASE_TEST_URL ?? 'http://127.0.0.1:54321';
 // Well-known local-dev demo credentials (public by definition; the local
@@ -294,6 +294,62 @@ console.log('\n-- Integration: the MINTED token against the Brief-1 boundary --'
     .select('body').eq('campaign_id', CAMPAIGN).eq('author_id', 'pc1').single());
   check('minted DM token reads the player\'s entry (Ben\'s decision)',
     dmRead.data?.body === 'MINTED_TOKEN_BODY', dmRead.error?.message);
+}
+
+console.log('\n-- Wave 9 Part A: the setup preflight names its own repairs --');
+
+{
+  const r = seen(await handleRealmRequest({ action: 'setup-check' }, db, SECRET));
+  const checks = (r.body.checks ?? []) as SetupCheck[];
+  check('setup-check: every check green on a fully-migrated stack',
+    r.status === 200 && checks.length === 4 && checks.every((c) => c.ok),
+    JSON.stringify(checks.filter((c) => !c.ok)));
+}
+
+{
+  // A deliberately broken schema — the EXACT hosted failure behind Ben's QA
+  // #3/#5: campaigns exists but realm_code was never added. The stub answers
+  // any campaigns query that touches realm_code (or writes) with Postgres'
+  // 42703; everything else succeeds. The preflight must name the migration
+  // file, and dm-login must surface that instead of the old swallowed
+  // "Could not set up the campaign."
+  const err42703 = { code: '42703', message: 'column campaigns.realm_code does not exist' };
+  const stubDb = (errorFor: (table: string, op: string, arg?: string) => { code?: string; message: string } | null): RealmDb => ({
+    from(table: string) {
+      let pending: { code?: string; message: string } | null = null;
+      const q: Record<string, unknown> = {};
+      for (const op of ['select', 'insert', 'update', 'delete', 'eq', 'limit', 'order', 'maybeSingle', 'single']) {
+        q[op] = (arg?: unknown) => {
+          const e = errorFor(table, op, typeof arg === 'string' ? arg : undefined);
+          if (e) pending = e;
+          return q;
+        };
+      }
+      q.then = (resolve: (v: unknown) => void) => resolve({ data: null, error: pending });
+      return q;
+    },
+  });
+  const broken = stubDb((table, op, arg) => {
+    if (table !== 'campaigns') return null;
+    if (op === 'select' && arg?.includes('realm_code')) return err42703;
+    if (op === 'insert') return err42703;
+    return null;
+  });
+
+  const pre = await preflightSchema(broken);
+  const col = pre.find((c) => c.id === 'realm-code-column');
+  check('preflight flags the missing realm_code column and names the migration file',
+    col?.ok === false && !!col.fix?.includes('20260719000000_realm_code.sql'), col?.fix);
+  check('…while the intact checks stay green',
+    pre.filter((c) => c.id !== 'realm-code-column').every((c) => c.ok));
+
+  const dmBroken = await handleRealmRequest(
+    { action: 'dm-login', campaignId: randomUUID(), dmSecret: 'broken-schema-0123456789' },
+    broken, SECRET);
+  const msg = String(dmBroken.body.error ?? '');
+  check('dm-login on the broken schema surfaces the real fix, not the generic shrug',
+    dmBroken.status === 500 && msg.includes('20260719000000_realm_code.sql')
+    && msg !== 'Could not set up the campaign.', msg);
 }
 
 { // no credential material in anything any client ever received

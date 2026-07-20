@@ -660,7 +660,18 @@ body { min-height: 100dvh; }
   border-radius: var(--radius-sm); cursor: pointer;
 }
 .sprite-pick.on { border-color: var(--frost); box-shadow: 0 0 8px var(--frost-glow); }
-.sprite-pick-thumb { display: block; background-color: var(--panel); border-radius: 4px; }
+/* Wave 9 (QA #2): every sprite thumb is two boxes — the outer tile clips,
+   the inner is exactly one scaled frame, so neighbours can't bleed in. */
+.sprite-thumb { position: relative; display: block; overflow: hidden; }
+.sprite-thumb-frame {
+  position: absolute;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.sprite-pick-thumb { background-color: var(--panel); border-radius: 4px; }
+/* Wave 9 A3: the Realm setup checklist under 🩺 Check Realm setup */
+.realm-setup-checks { margin: 6px 0 2px; }
+.realm-setup-checks .realm-setup-check { margin: 2px 0; }
 .sprite-pick-default {
   display: grid; place-items: center; width: 44px; height: 44px;
   font-size: 20px; color: var(--frost);
@@ -1505,7 +1516,7 @@ details.loc summary::marker { color: var(--frost-deep); }
 .place-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 384 / 224;   /* the Wave 6 stage canvas */
+  aspect-ratio: 448 / 224;   /* the stage canvas (Wave 9: 448 wide) */
   background-size: cover;
   background-position: center bottom;   /* flat art anchors to the bottom, like the stage */
   image-rendering: pixelated;

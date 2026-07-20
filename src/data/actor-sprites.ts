@@ -60,12 +60,20 @@ import bringerDeath from '../assets/actors/bringer/death.png';
 //  - ice zombie: the 0x72 dungeon pack's 16×16 4-frame idle, assembled 1:1 into
 //    a horizontal strip (the frames ship as individual PNGs).
 //  - demon / blood monster: Tiny RPG Pack 02, 100px per-anim strips, the exact
-//    format of the Wave 3 soldier/orc. (Demon's Attack sheets are 700px = ÷28,
-//    so the corruption tripwire rejects them — and 'attack' is never a rendered
-//    Realm pose anyway, so no loss.)
+//    format of the Wave 3 soldier/orc. (The demon Attack strips were kept out
+//    by the OLD tripwire; under the corrected rule below they're healthy —
+//    but 'attack' is never a rendered Realm pose, so they stay unregistered.)
 //  - goblin / skeleton / ogre: 0x72 dungeon monsters, idle+run assembled from
-//    individual frames. The pack's playable HEROES (knight/elf/dwarf/wizard/
-//    lizard) are all 16×28 → the ÷28 tripwire refuses them, as designed.
+//    individual frames. (The pack's playable heroes are 16×28 — a legitimate
+//    native size; Wave 8 registered them via the DUNGEON table below.)
+//
+// THE CORRUPTION TRIPWIRE — corrected in Wave 9 (QA #2). The poisoned
+// design-review rescale (×0.875 of native) produced sheets with BOTH
+// dimensions divisible by 28 (56×56, 616×112, 308×140, 644×92…). BOTH is
+// the rule: a single ÷28 dimension is a false positive (the 0x72 heroes'
+// 16×28 frames and the demon's 700×100 attack strip are healthy native
+// sizes). tests/sprite-audit.mts enforces the corrected rule on every
+// registered sheet, alongside frame-grid and content-box verification.
 import catIdle from '../assets/actors/cat/idle.png';
 import catWalk from '../assets/actors/cat/walk.png';
 import catRun from '../assets/actors/cat/run.png';
@@ -135,16 +143,25 @@ export interface ActorSprite {
    *  strips can land off-center); +right / −left. Applied to the sprite art so
    *  the character stands centered on its ground position. Default 0. */
   footOffsetX?: number;
-  /** integer draw scale on the stage (Wave 5: 1 — the world is roomy) */
+  /** integer draw scale on the stage (Wave 5: 1 — the world is roomy).
+   *  Resizes the raster via background-size, so it must keep pixels clean
+   *  (integers, or divisors like the cat's 0.5 that land on integers). */
   scale: number;
+  /** extra display zoom, applied as the wrapper's CSS scale (multiplying
+   *  depthScale — the Wave 5 GPU mechanism), NEVER by resampling the source.
+   *  This is how a fractional size like the vomaat demon's 1.5× stays crisp:
+   *  at even stage scales (4×, 6×) 1.5 lands on whole device pixels. */
+  zoom?: number;
   anims: Partial<Record<'idle' | 'walk' | 'hurt' | 'death' | 'attack' | 'run' | 'jump', ActorAnim>>;
   /** monsters: combatant srcId/name matching */
   matches?: (RegExp | string)[];
 }
 
 // --- Lively NPCs: one measured row per sheet ------------------------------------
-// [stem, frames, frame px, contentH, footPad] — all from the Wave 6 intake scan.
-type LivelyRow = [string, number, number, number, number];
+// [stem, frames, frame px, contentH, footPad, footOffsetX?] — from the Wave 6
+// intake scan; the off-center stances got their footOffsetX in the Wave 9 audit
+// (tests/sprite-audit.mts re-measures every value on every run).
+type LivelyRow = [string, number, number, number, number, number?];
 const LIVELY: Record<string, LivelyRow[]> = {
   medieval: [
     ['adventurer_01', 5, 34, 30, 1], ['adventurer_02', 5, 34, 28, 2], ['adventurer_03', 4, 32, 32, 0],
@@ -152,22 +169,22 @@ const LIVELY: Record<string, LivelyRow[]> = {
     ['barmaid', 5, 34, 32, 1], ['beggar', 5, 34, 18, 3], ['blacksmith', 5, 34, 30, 1],
     ['captain', 4, 32, 30, 0], ['dog', 4, 32, 21, 0], ['dwarf', 4, 32, 27, 0],
     ['elder', 4, 32, 24, 0], ['fairy', 4, 32, 19, 5], ['farmer_01', 5, 32, 24, 2],
-    ['farmer_02', 5, 32, 27, 0], ['guard', 4, 32, 31, 0], ['jester', 5, 34, 28, 3],
+    ['farmer_02', 5, 32, 27, 0, 2], ['guard', 4, 32, 31, 0, 2], ['jester', 5, 34, 28, 3, 2],
     ['king', 5, 34, 32, 1], ['merchant', 5, 32, 30, 0], ['mermaid', 4, 32, 24, 3],
-    ['minstrel', 5, 34, 30, 2], ['priestess', 5, 32, 29, 0], ['princess', 4, 32, 25, 0],
-    ['seer', 6, 34, 28, 2], ['shady_guy', 5, 34, 30, 2], ['stranger', 4, 32, 28, 0],
-    ['villager_01', 5, 34, 27, 2], ['villager_02', 5, 34, 29, 2], ['witch', 5, 34, 32, 1],
+    ['minstrel', 5, 34, 30, 2, -2], ['priestess', 5, 32, 29, 0], ['princess', 4, 32, 25, 0, -2],
+    ['seer', 6, 34, 28, 2], ['shady_guy', 5, 34, 30, 2], ['stranger', 4, 32, 28, 0, -2],
+    ['villager_01', 5, 34, 27, 2, 5], ['villager_02', 5, 34, 29, 2], ['witch', 5, 34, 32, 1, -2],
   ],
   elementals: [
-    ['crystal_mauler', 4, 32, 23, 1], ['fire_knight', 4, 32, 29, 1], ['ground_monk', 4, 32, 28, 1],
+    ['crystal_mauler', 4, 32, 23, 1], ['fire_knight', 4, 32, 29, 1, 2], ['ground_monk', 4, 32, 28, 1],
     ['leaf_ranger', 4, 32, 27, 1], ['metal_bladekeeper', 4, 32, 28, 1], ['water_priestess', 4, 32, 29, 1],
     ['wind_hashashin', 4, 32, 28, 1],
   ],
   steampunk: [
     ['aristocrat_01', 4, 32, 31, 1], ['aristocrat_02', 4, 32, 30, 1], ['bartender', 4, 32, 31, 1],
     ['engineer_01', 4, 32, 25, 3], ['engineer_02', 4, 32, 24, 3], ['gunslinger', 5, 32, 31, 1],
-    ['masked_man', 4, 32, 30, 1], ['masked_woman', 4, 32, 30, 1], ['steambot_01', 4, 32, 31, 1],
-    ['steambot_02', 4, 32, 30, 1], ['steambot_03', 5, 32, 29, 1], ['trader', 4, 32, 29, 1],
+    ['masked_man', 4, 32, 30, 1, -2], ['masked_woman', 4, 32, 30, 1], ['steambot_01', 4, 32, 31, 1],
+    ['steambot_02', 4, 32, 30, 1], ['steambot_03', 5, 32, 29, 1], ['trader', 4, 32, 29, 1, 3],
   ],
 };
 // per-sheet exceptions to the folder default category / foe matching
@@ -184,13 +201,13 @@ function livelySprites(): ActorSprite[] {
   const out: ActorSprite[] = [];
   for (const [folder, rows] of Object.entries(LIVELY)) {
     const defaultCat: ActorCategory = folder === 'elementals' ? 'hero' : 'npc';
-    for (const [stem, frames, frame, contentH, footPad] of rows) {
+    for (const [stem, frames, frame, contentH, footPad, footOffsetX] of rows) {
       const file = LIVELY_SHEETS[`../assets/actors/lively/${folder}/${stem}.png`];
       if (!file) continue;   // sheet missing from the build — never a broken tile
       out.push({
         id: `lively_${stem}`, label: label(stem),
         category: LIVELY_CATEGORY[stem] ?? defaultCat,
-        frameW: frame, frameH: frame, contentH, footPad, scale: 1,
+        frameW: frame, frameH: frame, contentH, footPad, footOffsetX, scale: 1,
         matches: LIVELY_MATCHES[stem],
         anims: { idle: { file, frames, fps: 5, layout: 'h' } },
       });
@@ -257,6 +274,14 @@ function dungeonSprites(): ActorSprite[] {
   return out;
 }
 
+// One set of demon art, shared by both size entries below (Wave 9 B3).
+const DEMON_ANIMS: ActorSprite['anims'] = {
+  idle:  { file: demonIdle,  frames: 6, fps: 8,  layout: 'h' },
+  walk:  { file: demonWalk,  frames: 8, fps: 10, layout: 'h' },
+  hurt:  { file: demonHurt,  frames: 4, fps: 10, layout: 'h' },
+  death: { file: demonDeath, frames: 4, fps: 8,  layout: 'h', once: true },
+};
+
 export const ACTOR_SPRITES: ActorSprite[] = [
   {
     id: 'soldier', label: 'Soldier', category: 'hero', frameW: 100, frameH: 100, contentH: 21, footPad: 40, scale: 1,
@@ -269,7 +294,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'orc', label: 'Orc', category: 'monster', frameW: 100, frameH: 100, contentH: 15, footPad: 43, scale: 1,
+    id: 'orc', label: 'Orc', category: 'monster', frameW: 100, frameH: 100, contentH: 15, footPad: 43, footOffsetX: -5, scale: 1,
     matches: [/orc/i],
     anims: {
       idle:   { file: orcIdle,   frames: 6, fps: 8,  layout: 'h' },
@@ -280,7 +305,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    id: 'knight', label: 'Knight', category: 'hero', frameW: 96, frameH: 96, contentH: 19, footPad: 38, scale: 1,
+    id: 'knight', label: 'Knight', category: 'hero', frameW: 96, frameH: 96, contentH: 19, footPad: 38, footOffsetX: 4, scale: 1,
     anims: {
       idle:   { file: knightIdle,   frames: 6,  fps: 8,  layout: 'h' },
       walk:   { file: knightWalk,   frames: 8,  fps: 10, layout: 'h' },
@@ -301,8 +326,9 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     },
   },
   {
-    // footPad re-measured in Wave 6 after the stray shadow-bar row was cleared
-    id: 'wolf', label: 'Wolf', category: 'beast', frameW: 16, frameH: 16, contentH: 10, footPad: 3, scale: 1,
+    // footPad re-measured in Wave 6 after the stray shadow-bar row was cleared;
+    // contentH 10→9 in the Wave 9 audit (frame 0's true alpha box)
+    id: 'wolf', label: 'Wolf', category: 'beast', frameW: 16, frameH: 16, contentH: 9, footPad: 3, scale: 1,
     matches: [/wolf/i],
     anims: {
       idle:  { file: wolfSheet, frames: 4, fps: 4, layout: 'h', row: 0 },
@@ -358,9 +384,10 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     // Wave 7 re-measure (QA #9): the assembled strips carry the figure in the
     // RIGHT third of the 140px frame — content spans x[81:128], center 104.5 vs
     // the frame's 70. footOffsetX shifts the art 35px left so it stands centered.
-    // contentH corrected 54→56 (content spans y[36:92]); footPad 1 was right.
+    // Wave 9 audit: contentH is 54 on idle frame 0 (the audit's measured frame —
+    // Wave 7's 56 spanned taller frames later in the cycle); footPad 1 was right.
     id: 'bringer_of_death', label: 'Bringer of Death', category: 'boss',
-    frameW: 140, frameH: 93, contentH: 56, footPad: 1, footOffsetX: -35, scale: 1,
+    frameW: 140, frameH: 93, contentH: 54, footPad: 1, footOffsetX: -35, scale: 1,
     matches: [/bringer/i, /reaper/i, /wraith/i, /spect(er|re)/i],
     anims: {
       idle:  { file: bringerIdle,  frames: 8,  fps: 8,  layout: 'h' },
@@ -394,21 +421,26 @@ export const ACTOR_SPRITES: ActorSprite[] = [
     matches: [/ice.?zombie/i, /frozen (dead|corpse|undead|zombie)/i, /zombie/i],
     anims: { idle: { file: iceZombieIdle, frames: 4, fps: 4, layout: 'h' } },
   },
+  // Wave 9 B3: the demon at two sizes, ONE set of art (both entries point at
+  // the same PNGs — nothing is copied). Wave 8 drew it at 2× (Ben: looming);
+  // that proved too large, so the enlarged cut is now 1.5× via `zoom` (the
+  // depthScale wrapper transform — never background-size resampling). Only
+  // the original carries `matches`: two auto-matching demons would make foe
+  // sprite resolution ambiguous, so the vomaat cut is picker-only.
   {
-    // Wave 8 (QA #2): Ben wanted it looming — draw at 2×.
-    id: 'demon', label: 'Demon', category: 'monster',
-    frameW: 100, frameH: 100, contentH: 21, footPad: 41, scale: 2,
+    id: 'demon', label: 'Demon (original size)', category: 'monster',
+    frameW: 100, frameH: 100, contentH: 20, footPad: 41, footOffsetX: -3, scale: 1,
     matches: [/demon/i, /devil/i, /fiend/i, /quasit/i, /imp\b/i],
-    anims: {
-      idle:  { file: demonIdle,  frames: 6, fps: 8,  layout: 'h' },
-      walk:  { file: demonWalk,  frames: 8, fps: 10, layout: 'h' },
-      hurt:  { file: demonHurt,  frames: 4, fps: 10, layout: 'h' },
-      death: { file: demonDeath, frames: 4, fps: 8,  layout: 'h', once: true },
-    },
+    anims: DEMON_ANIMS,
+  },
+  {
+    id: 'demon_vomaat', label: 'Demon (vomaat size)', category: 'monster',
+    frameW: 100, frameH: 100, contentH: 20, footPad: 41, footOffsetX: -3, scale: 1, zoom: 1.5,
+    anims: DEMON_ANIMS,
   },
   {
     id: 'blood_monster', label: 'Blood Monster', category: 'monster',
-    frameW: 100, frameH: 100, contentH: 16, footPad: 42, scale: 1,
+    frameW: 100, frameH: 100, contentH: 15, footPad: 43, footOffsetX: -2, scale: 1,
     matches: [/blood (monster|ooze|slime|fiend)/i, /red ooze/i],
     anims: {
       idle:  { file: bloodIdle,  frames: 6, fps: 8,  layout: 'h' },
@@ -419,7 +451,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
   },
   {
     id: 'goblin', label: 'Goblin', category: 'monster',
-    frameW: 16, frameH: 16, contentH: 12, footPad: 0, scale: 1,
+    frameW: 16, frameH: 16, contentH: 10, footPad: 0, scale: 1,
     matches: [/goblin/i],
     anims: {
       idle: { file: goblinIdle, frames: 4, fps: 4, layout: 'h' },
@@ -428,7 +460,7 @@ export const ACTOR_SPRITES: ActorSprite[] = [
   },
   {
     id: 'skeleton', label: 'Skeleton', category: 'monster',
-    frameW: 16, frameH: 16, contentH: 16, footPad: 0, scale: 1,
+    frameW: 16, frameH: 16, contentH: 14, footPad: 0, scale: 1,
     matches: [/skelet(on)?/i],
     anims: {
       idle: { file: skeletonIdle, frames: 4, fps: 4, layout: 'h' },

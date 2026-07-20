@@ -33,6 +33,8 @@ jobs:
         run: npm run build
       - name: Dashboard bundle freshness (the pasted Edge Function must match the sources)
         run: npm run bundle:fn -- --check
+      - name: Sprite audit (every descriptor vs its PNG's actual pixels — Wave 9)
+        run: npm run test:sprites
       - name: Start local Supabase (applies committed migrations)
         run: npx supabase start
       - name: Boundary tests (RLS is the player/DM boundary)

@@ -75,6 +75,77 @@ async function call(body: Record<string, unknown>): Promise<Record<string, unkno
   return data;
 }
 
+// ---- setup check (Wave 9 A3) ------------------------------------------------
+// One button, one checklist: is the login server deployed, are the tables
+// there, is the realm_code column there, can the server write. Prefers the
+// server's own 'setup-check' action (service-role, authoritative); when the
+// deployed function predates that action — or isn't deployed at all — falls
+// back to anon-key REST probes. Those work because Postgres resolves an
+// unknown column/table BEFORE it checks privileges: 42703/PGRST205 mean
+// "missing", 42501 means "present and correctly locked down".
+
+export interface SetupCheckItem {
+  id: string;
+  label: string;
+  ok: boolean | 'unknown';
+  fix?: string;
+}
+
+async function probeRest(query: string): Promise<{ ok: boolean; code?: string }> {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
+    headers: { apikey: SUPABASE_ANON_KEY },
+  });
+  if (r.ok) return { ok: true };
+  let code: string | undefined;
+  try { code = String((await r.json()).code ?? ''); } catch { /* gateway body */ }
+  return { ok: false, code };
+}
+
+const MIGRATION_HINT = (file: string) =>
+  `open supabase/migrations/${file} from the repo and run it in the Supabase dashboard's SQL Editor`;
+
+export async function checkRealmSetup(): Promise<SetupCheckItem[]> {
+  // 1 — the function itself
+  try {
+    const d = await call({ action: 'setup-check' });
+    return [
+      { id: 'function', label: 'Login server (realm-login) deployed', ok: true },
+      ...((d.checks as SetupCheckItem[]) ?? []),
+    ];
+  } catch (e) {
+    const fnCheck: SetupCheckItem = e instanceof RealmUnreachableError
+      ? { id: 'function', label: 'Login server (realm-login) deployed', ok: false, fix: e.message }
+      // It answered — with the old code. Still a real server; the schema
+      // probes below tell the rest of the story without it.
+      : {
+        id: 'function', label: 'Login server (realm-login) deployed', ok: true,
+        fix: 'It answered, but it’s an older version — re-paste supabase/dashboard/realm-login.ts (REALM_SETUP.md, step 3) to get its built-in checks and clearer errors.',
+      };
+    const checks: SetupCheckItem[] = [fnCheck];
+    const table = async (id: string, label: string, query: string, missing: Record<string, string>) => {
+      try {
+        const p = await probeRest(query);
+        if (p.ok || p.code === '42501') checks.push({ id, label, ok: true });
+        else checks.push({ id, label, ok: false, fix: missing[p.code ?? ''] ?? `database error ${p.code ?? '?'}` });
+      } catch {
+        checks.push({ id, label, ok: 'unknown', fix: 'Could not reach the database to check.' });
+      }
+    };
+    const foundationFix = { PGRST205: `the Realm tables are missing — ${MIGRATION_HINT('20260718000000_realm_foundation.sql')}` };
+    await table('campaigns-table', 'Campaigns table', 'campaigns?select=id&limit=1', foundationFix);
+    await table('realm-code-column', 'Realm-code column', 'campaigns?select=realm_code&limit=1', {
+      ...foundationFix,
+      42703: `the database is missing the realm_code column — ${MIGRATION_HINT('20260719000000_realm_code.sql')}`,
+    });
+    await table('characters-table', 'Characters table', 'characters?select=id&limit=1', foundationFix);
+    checks.push({
+      id: 'service-write', label: 'Login server can write', ok: 'unknown',
+      fix: 'Only the updated login server can test this — re-paste the function (REALM_SETUP.md, step 3), then check again.',
+    });
+    return checks;
+  }
+}
+
 // ---- player side ------------------------------------------------------------
 
 /** Realm code → who's in the party (names + 🔒 flags; never hashes). */
@@ -117,13 +188,16 @@ export async function realmLogin(
 
 let dmToken: string | null = null;
 let dmTokenExp = 0;
+let dmTokenCampaign = '';
 
 /** DM token, minted on demand and cached in memory until near expiry.
- *  First-ever call provisions the campaigns row on the backend. */
+ *  First-ever call provisions the campaigns row on the backend. The cache is
+ *  keyed to the campaign (Wave 9 A5): switching save files mid-session must
+ *  mint a fresh token, never reuse the other campaign's. */
 export async function ensureDmToken(
   realm: { campaignId: string; dmSecret: string }, campaignName: string,
 ): Promise<string> {
-  if (dmToken && Date.now() < dmTokenExp - 60_000) return dmToken;
+  if (dmToken && dmTokenCampaign === realm.campaignId && Date.now() < dmTokenExp - 60_000) return dmToken;
   const d = await call({
     action: 'dm-login', campaignId: realm.campaignId, dmSecret: realm.dmSecret, campaignName,
   });
@@ -131,6 +205,7 @@ export async function ensureDmToken(
   if (!claims) throw new Error('Realm server returned an unreadable token.');
   dmToken = String(d.token);
   dmTokenExp = claims.exp * 1000;
+  dmTokenCampaign = realm.campaignId;
   return dmToken;
 }
 
@@ -205,10 +280,19 @@ function rowToEntry(r: Record<string, unknown>): JournalEntry {
 
 /** Fold setup-shaped failures (offline, tables missing) into
  *  RealmUnreachableError so every screen reuses the one guidance pattern
- *  Part A established; anything else keeps its real message. */
+ *  Part A established; anything else keeps its real message. Wave 9 widened
+ *  the vocabulary: tables missing / column missing / permission denied are
+ *  three visibly different situations with three different fixes (the fourth,
+ *  "function not deployed", lives in call() above). */
 function throwDataError(what: string, error: { code?: string; message: string }): never {
-  if (error.code === 'PGRST205') {
-    throw new RealmUnreachableError(`${what} — the Realm tables are missing (the database migrations haven't run).`);
+  if (error.code === 'PGRST205' || error.code === '42P01') {
+    throw new RealmUnreachableError(`${what} — the Realm tables are missing (run the migration files in the Supabase SQL Editor; REALM_SETUP.md walks through it).`);
+  }
+  if (error.code === '42703') {
+    throw new RealmUnreachableError(`${what} — the database is missing a newer column (${error.message}). Run the newest migration file in the Supabase SQL Editor.`);
+  }
+  if (error.code === '42501') {
+    throw new RealmUnreachableError(`${what} — the database refused permission (${error.message}). The security-rule migrations may be out of date.`);
   }
   if (/fetch/i.test(error.message)) {
     throw new RealmUnreachableError('Could not reach the Realm server — check your connection.');

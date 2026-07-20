@@ -1,15 +1,19 @@
 # Realm setup — the one-time dashboard steps (no terminal needed)
 
-The Realm login system is two halves. The **database** half (the tables and
-security rules) is already live — that part is done. The **login server**
-half is a small program called `realm-login` that has to be uploaded to
-Supabase once, and it has never been uploaded. That's why tapping **🔄 Sync
-party to Realm** has never worked: the app was knocking on a door that
-doesn't exist yet.
+The Realm login system is two halves. The **database** half is the tables
+and security rules — its *foundation* is live, but newer updates ship as
+small SQL files that each need one paste into the dashboard (Step 3 below).
+The **login server** half is a small program called `realm-login` that has
+to be uploaded to Supabase once.
+
+> **Already deployed the function, but Sync says it "could not set up the
+> campaign"?** You're only missing Step 3 — the two SQL pastes. Do Step 3,
+> then tap Sync again. The app's **🩺 Check Realm setup** button (next to
+> Sync) will tell you exactly which steps are done and which remain.
 
 Everything below happens in your web browser at
 [supabase.com/dashboard](https://supabase.com/dashboard) — sign in and open
-the **frostmaiden** project. Ten minutes, five steps, once ever.
+the **frostmaiden** project. Ten minutes, six steps, once ever.
 
 ---
 
@@ -37,7 +41,28 @@ hands out are trusted by the database.
 
    **Value**: paste what you copied in Step 1. Save.
 
-## Step 3 — upload the login server
+## Step 3 — update the database (two quick SQL pastes)
+
+The database needs every file in the repo's `supabase/migrations/` folder to
+have been run, in filename order. The foundation one is already live; the
+two newer ones are not, and the Realm sync **cannot work without them**.
+
+For each of these two files, in this order:
+
+1. [supabase/migrations/20260719000000_realm_code.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000000_realm_code.sql)
+2. [supabase/migrations/20260719000001_service_role_grants.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000001_service_role_grants.sql)
+
+do this:
+
+1. Open the file on GitHub (links above), click the **copy icon** to copy
+   its whole contents.
+2. In the Supabase dashboard's left sidebar, click **SQL Editor**.
+3. Paste, then click **Run** (bottom right). A green "Success" (even
+   "Success. No rows returned") means it worked.
+
+Both files are safe to run more than once — re-running them changes nothing.
+
+## Step 4 — upload the login server
 
 1. Still under **Edge Functions**, click **Deploy a new function** →
    **Via Editor**.
@@ -60,7 +85,7 @@ hands out are trusted by the database.
    a token yet, so the gatekeeper can't demand a token first.
 6. Click **Deploy function** and wait for the confirmation.
 
-## Step 4 — check it worked (10 seconds)
+## Step 5 — check it worked (10 seconds)
 
 Open this address in a new browser tab:
 
@@ -68,14 +93,14 @@ Open this address in a new browser tab:
 https://lzzrwoduheivmvnnfpaj.supabase.co/functions/v1/realm-login
 ```
 
-- **`{"error":"POST only."}`** — perfect. The server is up. Go to Step 5.
+- **`{"error":"POST only."}`** — perfect. The server is up. Go to Step 6.
 - **`{"code":"NOT_FOUND", ...}`** — the function name isn't exactly
   `realm-login`. Rename or redeploy with the exact name.
 - **Anything about "Invalid JWT" / "Missing authorization"** — the
-  Verify JWT option from Step 3.5 is still on. Open the function in the
+  Verify JWT option from Step 4.5 is still on. Open the function in the
   dashboard, find that setting, turn it off.
 
-## Step 5 — the real test, from your phone
+## Step 6 — the real test, from your phone
 
 1. Open the DM app → **Session** tab → scroll to **Realm login**.
 2. Tap **🔄 Sync party to Realm**.
