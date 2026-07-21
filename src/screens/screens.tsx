@@ -150,11 +150,15 @@ function MilestoneSheet({ ci, mi, onClose }: { ci: number; mi: number; onClose: 
         <input class="input" value={m.label}
           onChange={(e) => upd((x) => { x.label = (e.target as HTMLInputElement).value; })} />
       </Field>
-      <Field label="Notes — what this means at your table">
-        <textarea class="input" rows={3} placeholder="Session refs, how it resolved, what changed…"
-          value={m.notes ?? ''}
-          onChange={(e) => upd((x) => { x.notes = (e.target as HTMLTextAreaElement).value; })} />
-      </Field>
+      <div class="field-label note-label">Notes — what this means at your table
+        {(m.notes ?? '').trim() && (
+          <ConfirmBtn label="🗑 Clear" confirmLabel="Clear note?" class="mini ghost danger note-clear"
+            onConfirm={() => upd((x) => { x.notes = ''; })} />
+        )}
+      </div>
+      <textarea class="input" rows={3} placeholder="Session refs, how it resolved, what changed…"
+        value={m.notes ?? ''}
+        onChange={(e) => upd((x) => { x.notes = (e.target as HTMLTextAreaElement).value; })} />
       <Field label="Link to quest — auto-completes this beat when the quest resolves">
         <select class="input" value={m.questId ?? ''}
           onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd((x) => { x.questId = v || null; }); }}>

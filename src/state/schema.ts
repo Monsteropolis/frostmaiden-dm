@@ -6,7 +6,7 @@
 
 import { MAP_PLACES } from '../data/map';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 export const STORAGE_KEY = 'fmdm_state_v1';
 
 // --- Weather ---------------------------------------------------------------
@@ -224,12 +224,19 @@ export interface Place {
   npcIds: string[];
   questIds: string[];
   visited: boolean;
+  /** Wave 10 (Part I): the party member who owns this property, or null =
+   *  communal (the default for every place). DM-authored Canonical state —
+   *  NOT projected this wave. The next brief mirrors this to the backend and
+   *  adds per-place access rules; here it is app-only ownership. */
+  ownerId: string | null;
+  /** Optional scene id a property "looks like" (Part I) — undefined = none. */
+  sceneId?: string;
 }
 
 export function defaultPlaces(): Place[] {
   return MAP_PLACES
     .filter((p) => p.kind === 'landmark')
-    .map((p) => ({ id: p.id, name: p.name, notes: '', standing: 'unknown' as TownStanding, npcIds: [], questIds: [], visited: false }));
+    .map((p) => ({ id: p.id, name: p.name, notes: '', standing: 'unknown' as TownStanding, npcIds: [], questIds: [], visited: false, ownerId: null }));
 }
 
 // --- Custom monsters (user-built stat blocks) ----------------------------------
@@ -323,6 +330,30 @@ export interface OwnedItem {
   display?: { x: number; y: number };
 }
 
+/** Party coin purse (Wave 10, Part E). Replaces the flat `gold` number.
+ *  Standard 5e: 1pp = 10gp, 1gp = 10sp, 1sp = 10cp. Subtraction borrows down
+ *  automatically (see lib/currency.ts). */
+export interface Coins { pp: number; gp: number; sp: number; cp: number }
+
+/** Rations split (Wave 10, Part E). Party rations decrement per travel day;
+ *  pet rations are DM-managed only this wave. */
+export interface Rations { party: number; pet: number }
+
+/** A catalog prop placed in the world (Wave 10, Part H). The DM furnishes camp
+ *  from PROP_CATALOG (data/props.ts). This is deliberately a DIFFERENT shape
+ *  from a granted item's OwnedItem.display: a placed thing is either a granted
+ *  ITEM (inventory[].display) or a catalog PROP (here) — the distinction is
+ *  Canonical from the start so the personal-realms brief can build on it. */
+export interface PlacedProp {
+  id: string;
+  /** PROP_CATALOG entry id (data/props.ts). */
+  propId: string;
+  /** x = % across the stage (0–100); y = ground-plane depth (0 far … 1 near) —
+   *  the same coordinate space OwnedItem.display uses. */
+  x: number;
+  y: number;
+}
+
 export type Pace = 'cautious' | 'normal' | 'dogsled';
 
 export interface Journey {
@@ -388,7 +419,7 @@ export interface AppState {
   arcs: Arc[];
   encounterPresets: EncounterPreset[];
   combat: { active: boolean; round: number; turn: number; combatants: Combatant[] };
-  travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: number; partySize: number; gold: number };
+  travel: { activeJourney: Journey | null; log: TravelLogEntry[]; rations: Rations; partySize: number; coins: Coins };
   towns: Record<string, TownStatus>;
   /** Non-town landmarks as first-class entries (Wave 8). Seeded from MAP_PLACES
    *  landmarks; DM-authored, Canonical, not projected. */
@@ -398,6 +429,9 @@ export interface AppState {
   mapPins: MapPin[];
   /** Everything the party carries — stash (ownerId null) + per-PC items. */
   inventory: OwnedItem[];
+  /** Catalog props the DM has placed in camp (Wave 10, Part H). Distinct from
+   *  granted items on display (inventory[].display) at the data level. */
+  placedProps: PlacedProp[];
 
   // NPC system — first-class from the start
   npcOverrides: Record<string, NpcOverride>;
@@ -448,11 +482,12 @@ export function defaultState(): AppState {
     arcs: [],
     encounterPresets: [],
     combat: { active: false, round: 0, turn: 0, combatants: [] },
-    travel: { activeJourney: null, log: [], rations: 10, partySize: 4, gold: 0 },
+    travel: { activeJourney: null, log: [], rations: { party: 10, pet: 0 }, partySize: 4, coins: { pp: 0, gp: 0, sp: 0, cp: 0 } },
     towns: {},
     places: defaultPlaces(),
     mapPins: [],
     inventory: [],
+    placedProps: [],
     npcOverrides: {},
     customNpcs: [],
     customMonsters: [],

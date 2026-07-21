@@ -204,6 +204,61 @@ console.log('\n-- Allowed: what the design promises players --');
     !r.error && r.data?.length === 1 && r.data[0].body === 'BOB_PRIVATE_BODY');
 }
 
+console.log('\n-- Wave 10: character_spells — a player owns their own tags --');
+
+// Bob tags a spell known (his own row) — the fixture the isolation checks read.
+const bobSpell = seen(await bob.from('character_spells')
+  .insert({ campaign_id: CAMP_A, character_id: 'pc2', spell_index: 'fire-bolt', known: true })
+  .select('id').single());
+check('setup — Bob tags a spell known', !bobSpell.error, bobSpell.error?.message);
+
+{ // B3.1 — a player writes their OWN spell tag → allowed
+  const ins = seen(await alice.from('character_spells')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc1', spell_index: 'mage-hand', known: true })
+    .select('id').single());
+  check('B3.1 player tags their own spell → allowed', !ins.error && !!ins.data?.id, ins.error?.message);
+}
+{ // B3.2 — a player writes ANOTHER character's spell row → denied
+  const ins = seen(await alice.from('character_spells')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc2', spell_index: 'forged', known: true }));
+  check('B3.2 player tags a spell for someone else → denied', ins.error !== null);
+  const broad = seen(await alice.from('character_spells').select('character_id, spell_index'));
+  const leaked = (broad.data ?? []).some((r) => r.character_id === 'pc2');
+  check('B3.2 …and cannot read another character\'s spell tags', !broad.error && !leaked);
+}
+{ // B3.3 — the DM reads every character's spell tags → allowed
+  const r = seen(await dmA.from('character_spells').select('character_id, spell_index').eq('character_id', 'pc2'));
+  check('B3.3 DM reads a player\'s spell tags → allowed',
+    !r.error && r.data?.length === 1 && r.data[0].spell_index === 'fire-bolt');
+}
+
+console.log('\n-- Wave 10: item_locations — a player arranges their own gear --');
+
+const bobLoc = seen(await bob.from('item_locations')
+  .insert({ campaign_id: CAMP_A, character_id: 'pc2', item_id: 'it_bob', location: 'home' })
+  .select('id').single());
+check('setup — Bob stows an item at home base', !bobLoc.error, bobLoc.error?.message);
+
+{ // C1.1 — a player writes their OWN item location → allowed
+  const ins = seen(await alice.from('item_locations')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc1', item_id: 'it_alice', location: 'home' })
+    .select('id').single());
+  check('C1.1 player moves their own item to home → allowed', !ins.error && !!ins.data?.id, ins.error?.message);
+}
+{ // C1.2 — a player writes ANOTHER character's item location → denied
+  const ins = seen(await alice.from('item_locations')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc2', item_id: 'it_forged', location: 'home' }));
+  check('C1.2 player moves someone else\'s item → denied', ins.error !== null);
+  const broad = seen(await alice.from('item_locations').select('character_id, item_id'));
+  const leaked = (broad.data ?? []).some((r) => r.character_id === 'pc2');
+  check('C1.2 …and cannot read another character\'s item locations', !broad.error && !leaked);
+}
+{ // C1.3 — the DM reads every character's item locations → allowed
+  const r = seen(await dmA.from('item_locations').select('character_id, location').eq('character_id', 'pc2'));
+  check('C1.3 DM reads a player\'s item locations → allowed',
+    !r.error && r.data?.length === 1 && r.data[0].location === 'home');
+}
+
 console.log('\n-- Standing guarantees beyond the ten --');
 
 { // join picker works; cross-campaign isolation holds

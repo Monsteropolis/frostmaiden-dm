@@ -267,3 +267,151 @@
 .realm-journal-editor textarea { min-height: 84px; resize: vertical; }
 .realm-journal-fine { color: var(--ink-faint); font-size: 11.5px; padding: 2px 0 6px; }
 .realm-login-error .realm-journal-fine { padding-top: 6px; }
+.rj-actions .danger { color: var(--thread); border-color: color-mix(in srgb, var(--thread) 45%, var(--border-strong)); }
+
+/* ============================================================
+   WAVE 10 — the logged-in player app: tabbed navigation, the
+   emote bar, the spellbook, and On person / Home base.
+   Signed-out visitors never see any of this (no tabs, no login).
+   ============================================================ */
+
+/* Part G — the tabbed shell. The main area fills; the tab bar and
+   status strip pin to the bottom. Panels scroll inside main. */
+.realm-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.realm-main > .realm-journal,
+.realm-main > .realm-abilities,
+.realm-main > .realm-inventory {
+  flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto;
+}
+
+/* The bottom tab bar (Part G) — phone-first, built to take a new tab. */
+.realm-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--surface);
+  border-top: 2px solid color-mix(in srgb, #7a4a24 60%, var(--border));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.realm-tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 4px;
+  background: none; border: none; border-top: 2px solid transparent; margin-top: -2px;
+  color: var(--ink-dim); font: inherit; font-size: 11px; cursor: pointer;
+}
+.realm-tab.on { color: var(--frost); border-top-color: var(--frost); }
+.realm-tab-icon { font-size: 19px; line-height: 1; }
+.realm-tab-label { letter-spacing: 0.02em; }
+
+/* Part F — the wooden frame from mediavel.png, applied to the emote bar so a
+   player's actions sit on a little hanging sign. Integer-ish border-image with
+   pixelated rendering; the plank edges tile (round) instead of smearing. */
+.realm-ui-frame {
+  border-style: solid;
+  border-width: 12px;
+  border-image-source: url(../assets/ui/panel-frame.png);
+  border-image-slice: 18 18 18 18;
+  border-image-repeat: round;
+  image-rendering: pixelated;
+}
+
+/* Part D — the emote bar. Sits above the tab bar on the world view. */
+.realm-emote-bar {
+  flex: 0 0 auto;
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.realm-emote {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 58px; padding: 6px 10px;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  font: inherit; font-size: 10px; cursor: pointer;
+}
+.realm-emote:active { background: var(--surface); transform: translateY(1px); }
+.realm-emote-icon { font-size: 21px; line-height: 1; }
+.realm-emote-label { color: var(--ink-dim); }
+
+/* Part B — the spellbook. */
+.realm-abilities { padding: 10px 14px; background: var(--surface); font-size: 13px; }
+.realm-ability-head { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 8px; }
+.realm-ability-who { font-size: 12px; color: var(--ink-dim); }
+.realm-ability-views {
+  display: inline-flex; margin-left: auto;
+  border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden;
+}
+.realm-ability-views button {
+  background: var(--panel); color: var(--ink-dim);
+  border: none; padding: 5px 11px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.realm-ability-views button.on { background: var(--frost); color: var(--bg); font-weight: 700; }
+.realm-ability-search {
+  width: 100%;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 9px 11px; font: inherit; font-size: 14px; margin-bottom: 8px;
+}
+.realm-ability-empty { color: var(--ink-dim); font-size: 13px; line-height: 1.55; padding: 14px 2px; }
+.realm-ability-empty p { margin: 0 0 8px; }
+.realm-spell-group { margin-bottom: 6px; }
+.realm-spell-level {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--ink-faint); margin: 10px 0 4px;
+}
+.realm-spell { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); margin: 4px 0; }
+.realm-spell.known { border-color: color-mix(in srgb, var(--frost) 40%, var(--border)); }
+.realm-spell-top { display: flex; align-items: center; gap: 4px; padding: 6px 8px; }
+.realm-spell-name {
+  flex: 1; text-align: left; background: none; border: none;
+  color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 0;
+}
+.realm-spell-tag {
+  background: none; border: none; font-size: 17px; line-height: 1;
+  color: var(--ink-faint); cursor: pointer; padding: 2px 5px;
+}
+.realm-spell-tag.on { color: var(--frost); }
+.realm-spell-tag.prep.on { color: var(--gold, #d9b25b); }
+.realm-spell-tag:disabled { opacity: 0.3; cursor: default; }
+.realm-spell-detail { padding: 2px 10px 10px; border-top: 1px solid var(--border); }
+.realm-spell-detail .npc-statline { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.realm-spell-detail .npc-statline span {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px 8px; font-size: 11px; color: var(--ink-dim);
+}
+.realm-spell-detail .read { margin: 8px 0; line-height: 1.5; color: var(--ink); font-size: 13px; }
+.realm-spell-detail .stat-fine { font-size: 11.5px; color: var(--ink-faint); }
+
+/* Part C — On person / Home base. */
+.realm-inventory { padding: 10px 14px; background: var(--surface); font-size: 13px; }
+.realm-inv-cols { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 560px) { .realm-inv-cols { grid-template-columns: 1fr 1fr; } }
+.realm-inv-panel {
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--panel); padding: 8px; min-height: 84px;
+}
+.realm-inv-panel.droppable {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--frost) 55%, var(--border-strong));
+}
+.realm-inv-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--ink-dim); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+}
+.realm-inv-count { background: var(--surface); border-radius: 999px; padding: 0 8px; font-size: 11px; color: var(--ink-faint); }
+.realm-inv-items { display: flex; flex-direction: column; gap: 5px; }
+.realm-inv-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: grab;
+}
+.realm-inv-item.readonly { opacity: 0.68; cursor: default; }
+.realm-inv-emoji { font-size: 16px; line-height: 1; }
+.realm-inv-name { flex: 1; font-size: 13px; color: var(--ink); }
+.realm-inv-move {
+  background: var(--panel); color: var(--frost);
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 3px 10px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.realm-inv-stash { margin-top: 14px; }

@@ -356,6 +356,15 @@ export async function updateJournalEntry(
   return rowToEntry(data[0] as Record<string, unknown>);
 }
 
+/** Delete an entry (Wave 10 A4). RLS restricts this to the author — deleting
+ *  someone else's returns zero rows, which we surface honestly. */
+export async function deleteJournalEntry(token: string, id: string): Promise<void> {
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('journal_entries').delete().eq('id', id).select('id');
+  if (error) throwDataError('Could not delete the entry', error);
+  if (!data?.length) throw new Error('That entry could not be deleted — only its author can.');
+}
+
 /** The promote/demote toggle: flag an entry onto (or off) the shared page.
  *  One row changes one bit — there is deliberately no copy-to-shared path. */
 export async function setShared(token: string, id: string, isShared: boolean): Promise<JournalEntry> {
@@ -376,6 +385,77 @@ export async function listAllJournal(dmToken: string): Promise<JournalEntry[]> {
     .order('author_id').order('updated_at', { ascending: false });
   if (error) throwDataError('Could not load the party journals', error);
   return (data ?? []).map(rowToEntry);
+}
+
+// ---- character spells (Wave 10, Part B3) ------------------------------------
+// A player's own known/prepared tags. RLS scopes every row to the character in
+// the token — the same per-character seam the journal uses for author_id.
+
+export interface SpellTag { known: boolean; prepared: boolean }
+
+/** Every spell this character has tagged → { known, prepared } by 5e API index. */
+export async function listCharacterSpells(token: string): Promise<Record<string, SpellTag>> {
+  const me = decodeClaims(token)?.character_id ?? '';
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('character_spells')
+    .select('spell_index, known, prepared').eq('character_id', me);
+  if (error) throwDataError('Could not load your spellbook', error);
+  const out: Record<string, SpellTag> = {};
+  for (const r of data ?? []) out[String(r.spell_index)] = { known: !!r.known, prepared: !!r.prepared };
+  return out;
+}
+
+/** Set a spell's known/prepared tags. Upserts on (campaign, character, spell),
+ *  so tagging the same spell twice just updates the flags. When both flags go
+ *  false the row is removed so an untagged spell leaves no trace. */
+export async function setSpellTag(
+  token: string, spellIndex: string, tag: SpellTag,
+): Promise<void> {
+  const claims = decodeClaims(token);
+  const sb = await getSupabaseWithToken(token);
+  if (!tag.known && !tag.prepared) {
+    const { error } = await sb.from('character_spells')
+      .delete().eq('character_id', claims?.character_id ?? '').eq('spell_index', spellIndex);
+    if (error) throwDataError('Could not update your spellbook', error);
+    return;
+  }
+  const { error } = await sb.from('character_spells').upsert({
+    campaign_id: claims?.campaign_id, character_id: claims?.character_id,
+    spell_index: spellIndex, known: tag.known, prepared: tag.prepared,
+  }, { onConflict: 'campaign_id,character_id,spell_index' });
+  if (error) throwDataError('Could not update your spellbook', error);
+}
+
+// ---- item locations (Wave 10, Part C1) --------------------------------------
+// Where a player keeps each item: 'person' or 'home'. Expressive and
+// per-character — item existence stays Canonical (DM grants); this only records
+// the arrangement, defaulting to 'person' when there is no row.
+
+export type ItemLocation = 'person' | 'home';
+
+/** item id → 'person' | 'home' for every item this character has arranged. */
+export async function listItemLocations(token: string): Promise<Record<string, ItemLocation>> {
+  const me = decodeClaims(token)?.character_id ?? '';
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('item_locations')
+    .select('item_id, location').eq('character_id', me);
+  if (error) throwDataError('Could not load where your gear is', error);
+  const out: Record<string, ItemLocation> = {};
+  for (const r of data ?? []) out[String(r.item_id)] = r.location === 'home' ? 'home' : 'person';
+  return out;
+}
+
+/** Move an item to 'person' or 'home'. Upserts on (campaign, character, item). */
+export async function setItemLocation(
+  token: string, itemId: string, location: ItemLocation,
+): Promise<void> {
+  const claims = decodeClaims(token);
+  const sb = await getSupabaseWithToken(token);
+  const { error } = await sb.from('item_locations').upsert({
+    campaign_id: claims?.campaign_id, character_id: claims?.character_id,
+    item_id: itemId, location,
+  }, { onConflict: 'campaign_id,character_id,item_id' });
+  if (error) throwDataError('Could not move that item', error);
 }
 
 /** id → display name for labelling entries with their author. Uses the same

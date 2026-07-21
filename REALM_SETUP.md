@@ -47,10 +47,11 @@ The database needs every file in the repo's `supabase/migrations/` folder to
 have been run, in filename order. The foundation one is already live; the
 two newer ones are not, and the Realm sync **cannot work without them**.
 
-For each of these two files, in this order:
+For each of these files, in this order:
 
 1. [supabase/migrations/20260719000000_realm_code.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000000_realm_code.sql)
 2. [supabase/migrations/20260719000001_service_role_grants.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000001_service_role_grants.sql)
+3. [supabase/migrations/20260721000000_realm_spells_items.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260721000000_realm_spells_items.sql) — **new in Wave 10.** Adds the two tables players need to tag spells and organise their gear. Sign-in and journals work without it, but the **Abilities** and **Gear** tabs stay empty until it is run.
 
 do this:
 
