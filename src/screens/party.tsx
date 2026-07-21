@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { state, patch } from '../state/store';
-import { PC, Ally, OwnedItem, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
+import { PC, Ally, OwnedItem, PlacedProp, CONDITIONS, AllyAttack, SidekickClass } from '../state/schema';
 import { useBestiary, BestiaryEntry, MonsterForm, StatPanel, customMonsterById, rimeAsStatBlock, abilityMod, monsterSpriteFor } from './monsters';
-import { resolveStageScene, stageGroundBand, groundBottomPct, depthScale, depthZ } from '../tv/realm-stage';
+import { resolveStageScene, stageGroundBand, groundBottomPct, depthScale, depthZ, PropSprite } from '../tv/realm-stage';
+import { PROP_CATALOG, PROP_CATEGORIES, PropCategory, PropDef, propById } from '../data/props';
 import { ApiMonsterPanel, getApiMonster } from '../lib/api';
 import { CREATURES } from '../data';
 import { allNpcs, openNpc, npcSpriteFor } from './npcs';
@@ -130,6 +131,139 @@ function PlacementSheet({ item, onClose }: { item: OwnedItem; onClose: () => voi
             onClose();
           }}>Remove from display</button>
         )}
+        <button class="btn primary" onClick={onClose}>Done</button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Wave 10 (Part H) — furnish the camp. The DM browses PROP_CATALOG by
+ *  category, taps a prop, and places it on the same stage-as-picker the Wave 5
+ *  trophy flow uses. Placed props live in state.placedProps (Canonical) — a
+ *  data-level distinction from granted items on display (inventory[].display),
+ *  so the personal-realms brief can build on which kind is which. */
+function CampFurnishing() {
+  const [browsing, setBrowsing] = useState(false);
+  const [placing, setPlacing] = useState<string | null>(null);
+  const props = state.value.placedProps;
+  return (
+    <div class="card">
+      <h3>🪑 Furnish camp</h3>
+      <p class="stat-fine" style={{ marginTop: 0 }}>
+        Decorate the scene with props from the catalog — a table by the fire, crates,
+        a well. They stand on the ground plane and the party walks around them, just
+        like a trophy on display.
+      </p>
+      {props.length > 0 && (
+        <div class="prop-placed-list">
+          {props.map((pp) => {
+            const def = propById(pp.propId);
+            return (
+              <div class="prop-placed-row" key={pp.id}>
+                <span class="prop-placed-thumb">{def ? <PropSprite def={def} /> : '❓'}</span>
+                <span class="prop-placed-name">{def?.label ?? pp.propId}</span>
+                <button class="btn mini" onClick={() => setPlacing(pp.id)}>Move ▸</button>
+                <ConfirmBtn label="Remove" confirmLabel="Remove?" class="mini ghost danger"
+                  onConfirm={() => patch((d) => { d.placedProps = d.placedProps.filter((x) => x.id !== pp.id); })} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button class="btn primary wide" style={{ marginTop: '8px' }} onClick={() => setBrowsing(true)}>+ Place a prop</button>
+      {browsing && (
+        <PropCatalogSheet onClose={() => setBrowsing(false)} onPlaced={(id) => { setBrowsing(false); setPlacing(id); }} />
+      )}
+      {placing && (() => {
+        const live = state.value.placedProps.find((x) => x.id === placing);
+        return live ? <PropPlacementSheet prop={live} onClose={() => setPlacing(null)} /> : null;
+      })()}
+    </div>
+  );
+}
+
+/** The catalog browser — props grouped by category, each a live tile preview.
+ *  Picking one drops it in camp centre and hands its id back to be positioned. */
+function PropCatalogSheet({ onClose, onPlaced }: { onClose: () => void; onPlaced: (id: string) => void }) {
+  const [cat, setCat] = useState<PropCategory>('furniture');
+  const place = (def: PropDef) => {
+    const id = nextId('prop');
+    patch((d) => { d.placedProps.push({ id, propId: def.id, x: 50, y: 0.7 }); });
+    onPlaced(id);
+  };
+  return (
+    <Sheet open title="Camp props" onClose={onClose}>
+      <div class="chip-row tight" style={{ marginBottom: '10px' }}>
+        {PROP_CATEGORIES.map((c) => (
+          <button key={c.id} class={`cond-chip${cat === c.id ? ' on' : ''}`} onClick={() => setCat(c.id)}>{c.label}</button>
+        ))}
+      </div>
+      <div class="prop-grid">
+        {PROP_CATALOG.filter((p) => p.category === cat).map((def) => (
+          <button key={def.id} class="prop-pick" onClick={() => place(def)}>
+            <span class="prop-pick-art"><PropSprite def={def} scale={2} /></span>
+            <span class="prop-pick-name">{def.label}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+/** Position a placed prop — the same stage-as-picker as the trophy flow, but the
+ *  preview is the prop's tile block at true depth-scale over the live backdrop. */
+function PropPlacementSheet({ prop, onClose }: { prop: PlacedProp; onClose: () => void }) {
+  const [pos, setPos] = useState({ x: prop.x, y: prop.y });
+  const dragging = useRef(false);
+  const s = state.value;
+  const def = propById(prop.propId);
+  const scene = resolveStageScene(s.tv.sceneId ?? 'auto', {
+    journeying: !!s.travel.activeJourney, weatherId: s.weather.current,
+  });
+  const band = stageGroundBand(scene.id);
+  const posFrom = (e: PointerEvent, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, ((e.clientX - r.left) / r.width) * 100));
+    const bottomPct = ((r.bottom - e.clientY) / r.height) * 100;
+    const y = Math.max(0, Math.min(1, (band.top - bottomPct) / (band.top - band.bottom || 1)));
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 100) / 100 };
+  };
+  const commit = (p: { x: number; y: number }) =>
+    patch((d) => { const it = d.placedProps.find((x) => x.id === prop.id); if (it) { it.x = p.x; it.y = p.y; } });
+
+  return (
+    <Sheet open title={`${def?.label ?? 'Prop'} — place in camp`} onClose={onClose}>
+      <p class="stat-fine" style={{ marginTop: 0 }}>
+        Tap the snow to place it; drag to adjust. Lower on the screen = nearer.
+      </p>
+      <div
+        class="place-stage"
+        style={{ backgroundImage: `url(${scene.url})` }}
+        onPointerDown={(e) => {
+          dragging.current = true;
+          const p = posFrom(e, e.currentTarget as HTMLElement); setPos(p); commit(p);
+          try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* fine */ }
+        }}
+        onPointerMove={(e) => { if (dragging.current) setPos(posFrom(e, e.currentTarget as HTMLElement)); }}
+        onPointerUp={(e) => {
+          if (!dragging.current) return;
+          dragging.current = false;
+          const p = posFrom(e, e.currentTarget as HTMLElement); setPos(p); commit(p);
+        }}
+      >
+        <div class="place-band" style={{ height: `${band.top}%` }} />
+        {def && (
+          <span class="place-prop" style={{
+            left: `${pos.x}%`, bottom: `${groundBottomPct(pos.y, band)}%`,
+            zIndex: depthZ(pos.y), scale: String(depthScale(pos.y)),
+          }}><PropSprite def={def} /></span>
+        )}
+      </div>
+      <div class="row-actions" style={{ marginTop: '12px' }}>
+        <button class="btn ghost danger" onClick={() => {
+          patch((d) => { d.placedProps = d.placedProps.filter((x) => x.id !== prop.id); });
+          onClose();
+        }}>Remove</button>
         <button class="btn primary" onClick={onClose}>Done</button>
       </div>
     </Sheet>
@@ -280,7 +414,12 @@ function PcCard({ pc }: { pc: PC }) {
           <ItemRows ownerId={pc.id} />
 
           <label class="field" style={{ marginTop: '10px' }}>
-            <span class="field-label">Notes (DM only)</span>
+            <span class="field-label note-label">Notes (DM only)
+              {pc.notes.trim() && (
+                <ConfirmBtn label="🗑 Clear" confirmLabel="Clear note?" class="mini ghost danger note-clear"
+                  onConfirm={() => patch((s) => { const p = s.party.find((x) => x.id === pc.id); if (p) p.notes = ''; })} />
+              )}
+            </span>
             <textarea
               class="input"
               rows={2}
@@ -819,6 +958,8 @@ export function PartyScreen() {
         <h3>🎒 Party stash</h3>
         <ItemRows ownerId={null} />
       </div>
+
+      <CampFurnishing />
 
       <div class="sub-tabs">
         <button class={`sub-tab${sub === 'pcs' ? ' active' : ''}`} onClick={() => setSub('pcs')}>Characters ({party.length})</button>

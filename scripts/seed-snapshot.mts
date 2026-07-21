@@ -33,11 +33,18 @@ patch((d) => {
     { id: 'al1', name: 'Sprig', emoji: '🦊', kind: 'Familiar', category: 'ally', linkedPcId: 'pc3', hp: 6, maxHp: 6, ac: 12, initMod: 2, conditions: [], deathS: 0, deathF: 0 } as never,
   ];
   d.weather = { current: 'clear', day: 5, log: [{ day: 5, weather: 'clear' }] };
-  d.travel = { activeJourney: null, log: [], rations: 8, partySize: 4, gold: 620 };
+  // Wave 10 shapes: a coin purse and split rations.
+  d.travel = { activeJourney: null, log: [], rations: { party: 8, pet: 3 }, partySize: 4, coins: { pp: 2, gp: 61, sp: 4, cp: 7 } };
   // Wave 5: one trophy on display so the ground plane has furniture on first open.
   d.inventory = [
     { id: 'seed-it1', name: 'Wolf Skull Trophy', emoji: '🐺', qty: 1, ownerId: null, display: { x: 72, y: 0.35 } },
     { id: 'seed-it2', name: 'Potion of Healing', emoji: '🧪', qty: 2, ownerId: 'pc2' },
+  ];
+  // Wave 10: a couple of catalog props the DM has placed around camp.
+  d.placedProps = [
+    { id: 'seed-pr1', propId: 'campfire', x: 45, y: 0.55 },
+    { id: 'seed-pr2', propId: 'barrels', x: 24, y: 0.42 },
+    { id: 'seed-pr3', propId: 'crate', x: 60, y: 0.72 },
   ];
   // Wave 6: first open lands on the tiled winter camp — the composed world
   d.tv = { ...d.tv, sceneId: 'camp_winter', partyLocation: 'Camp near Bryn Shander', slotView: 'realm' };

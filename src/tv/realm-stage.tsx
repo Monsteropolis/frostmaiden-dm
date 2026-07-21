@@ -23,6 +23,7 @@ import { PlayerView, PvPc, PvAlly, PvCombatant, HpState, PokeActive } from './pr
 import { sceneById, resolveScene, SCENES, TvScene } from './scenes';
 import { TileScene, tileSceneById, groundCells, objectRuns } from './tiles';
 import { ActorSprite, ActorAnim, actorSpriteById, actorSpriteForFoe, animForPose } from '../data/actor-sprites';
+import { propById, propCells, propCellStyle, PropDef } from '../data/props';
 import actorsUrl from '../assets/idle/idle_actors.png';
 import critterUrl from '../assets/idle/idle_critter.png';
 import cameosUrl from '../assets/idle/idle_cameos.png';
@@ -47,6 +48,11 @@ const POSE_FRAMES: Record<string, number[]> = {
   shiver: [6, 7], down: [8], cheer: [9, 10], wave: [11, 12],
 };
 export type Pose = keyof typeof POSE_FRAMES;
+
+/** Whole-purse worth in gold — the diorama's "flush" cue (Wave 10). */
+function coinsToGold(c: { pp: number; gp: number; sp: number; cp: number }): number {
+  return c.pp * 10 + c.gp + c.sp / 10 + c.cp / 100;
+}
 
 function pcHpState(p: PvPc): HpState {
   const pct = p.maxHp > 0 ? (p.hp / p.maxHp) * 100 : 0;
@@ -164,6 +170,31 @@ function combatPos(id: string, i: number, n: number, lo: number, hi: number): Po
     x: lo + ((hi - lo) / Math.max(1, n - 1 || 1)) * i + (i % 2 ? 3 : -3),
     y: 0.15 + 0.7 * seeded(hashStr(id) + 97),
   };
+}
+
+// --- the wander state machine (Wave 10 A3) ---------------------------------------
+// Replaces the old continuous micro-drift (which never crossed the walk
+// threshold for pc-mode familiars, so the cat never animated). The timeline is
+// a seeded chain of fixed-length segments; each segment is either a WALK (a
+// fresh destination a meaningful distance away) or a PAUSE (hold the last
+// destination — "stop and look around"). Consecutive pauses lengthen the dwell,
+// so it reads as wander → stop → wander. Position is a pure function of the
+// tick, so the caller derives walk-vs-idle from posAt(t) vs posAt(t−2) exactly
+// as the party/foe code already does — movement drives the pose, never a roll.
+const WANDER_SEG = 4;             // render-ticks per segment (~2.8s at 700ms/tick)
+const WANDER_WALK_CHANCE = 0.55;  // a segment sets a new destination vs. holding
+
+function wanderTarget(id: string, tick: number, bx: [number, number], by: [number, number]): Pos {
+  const h = hashStr(id);
+  const seg = Math.floor(Math.max(0, tick) / WANDER_SEG);
+  const isWalk = (k: number) => seeded(h + k * 1013904223 + 7) < WANDER_WALK_CHANCE;
+  // the walk segment that owns the current dwell (bounded lookback — a run of
+  // pauses is short in expectation; fall back to the seeded home point).
+  let owner = seg;
+  for (let hops = 0; hops < 8 && owner > 0 && !isWalk(owner); hops++) owner--;
+  const rx = seeded(h + owner * 2654435761 + 11);
+  const ry = seeded(h + owner * 40503 + 23);
+  return { x: bx[0] + (bx[1] - bx[0]) * rx, y: by[0] + (by[1] - by[0]) * ry };
 }
 
 // A bubble that's pure glyph (no letters) is an EMOTE — 😈 taunt, 🍖❗ hunger,
@@ -347,6 +378,12 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
   if (!picked) return null;
   const s = sprite.scale;
   const emote = pose === 'cheer' ? ' emote-cheer' : pose === 'wave' ? ' emote-wave' : '';
+  // A2: the wrapper carries the perspective scale (depthScale) and any per-sprite
+  // zoom, and the label is a child — so it would inherit both and render at a
+  // different size for a zoomed or nearer actor. Counter-scale the label by the
+  // inverse so every name is the same size regardless of sprite scale or depth.
+  const wrapperScale = depthScale(y) * (sprite.zoom ?? 1);
+  const labelScale = 1 / wrapperScale;
   return (
     <div
       key={flinch ? `flinch-${pokeSeq}` : undefined}
@@ -371,8 +408,17 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
       <span class="realm-sprite" style={spriteAnimStyle(sprite, picked.anim)} />
       {/* label sits below the foot line: the sprite's in-flow height is frameH·s,
           feet are footPad·s above its bottom, so (frameH−footPad)·s is the foot
-          line from the top; +2px is a purely visual gap (QA #3). */}
-      <span class="realm-sprite-name" style={{ top: `${(sprite.frameH - sprite.footPad) * s + 2}px` }}>{name}</span>
+          line from the top; +2px is a purely visual gap (QA #3). The counter-
+          scale (A2) is anchored at top-center so the name stays centered and
+          renders at a constant size no matter the sprite's zoom or depth. */}
+      <span
+        class="realm-sprite-name"
+        style={{
+          top: `${(sprite.frameH - sprite.footPad) * s + 2}px`,
+          transform: `translateX(-50%) scale(${labelScale})`,
+          transformOrigin: 'top center',
+        }}
+      >{name}</span>
     </div>
   );
 }
@@ -381,6 +427,53 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
 function pokeHitsPc(poke: PokeActive | null, pcId: string): boolean {
   if (!poke) return false;
   return poke.target === 'party' || poke.target === 'everyone' || poke.target === pcId;
+}
+
+/** A catalog prop's tile block (Wave 10 H). Exported so the DM placement picker
+ *  previews props exactly as the stage draws them. `scale` is an integer draw
+ *  multiplier for the picker thumbnail; the stage uses 1 and lets the wrapper's
+ *  depthScale do the perspective. */
+export function PropSprite({ def, scale = 1 }: { def: PropDef; scale?: number }) {
+  const cells = propCells(def);
+  if (!cells) return <span>{def.glyph}</span>;
+  return (
+    <span
+      class="realm-prop"
+      style={{ position: 'relative', display: 'block', width: `${def.w * 16 * scale}px`, height: `${def.h * 16 * scale}px` }}
+    >
+      {cells.cells.map((c, i) => (
+        <span
+          key={i}
+          style={{
+            position: 'absolute',
+            left: `${c.dx * 16 * scale}px`, top: `${c.dy * 16 * scale}px`,
+            transform: scale !== 1 ? `scale(${scale})` : undefined,
+            transformOrigin: 'top left',
+            ...propCellStyle(cells.tileset, c.cell),
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** A placed prop on the ground plane — positioned + depth-sorted like a trophy,
+ *  its feet on the ground line. It never moves and names itself on hover. */
+function PropObject({ def, x, y, band }: { def: PropDef; x: number; y: number; band: GroundBand }) {
+  return (
+    <div
+      class="realm-prop-obj"
+      tabIndex={0}
+      title={def.label}
+      style={{
+        left: `${x}%`,
+        width: `${def.w * 16}px`,
+        ...groundStyle(y, band),
+      }}
+    >
+      <PropSprite def={def} />
+    </div>
+  );
 }
 
 export function RealmStage({ v, full = false, pokeActive = null }: {
@@ -401,7 +494,8 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
   const prevInvIds = useRef<Set<string> | null>(null);
   const [itemJoy, setItemJoy] = useState<{ until: number; byOwner: Record<string, string> } | null>(null);
   useEffect(() => {
-    const inv = v.inventory ?? [];
+    // props ride the inventory wire but are furniture, not loot — no item-get joy
+    const inv = (v.inventory ?? []).filter((it) => !propById(it.emoji));
     const ids = new Set(inv.map((it) => it.id));
     if (prevInvIds.current) {
       const fresh = inv.filter((it) => !prevInvIds.current!.has(it.id));
@@ -440,14 +534,34 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     }
   }
   for (const it of v.inventory ?? []) {
-    if (it.display) obstacles.push({ x: it.display.x, y: it.display.y, rx: CELL_RX, ry: 0.03 });
+    if (!it.display) continue;
+    // A placed catalog prop (Wave 10 H) rides the inventory wire-format with its
+    // catalog id as the appearance token; it blocks with its true footprint,
+    // resolved stage-side from the catalog (no extra seam path). A granted
+    // trophy keeps the Wave 5 single-cell footprint.
+    const prop = propById(it.emoji);
+    obstacles.push(prop
+      ? { x: it.display.x, y: it.display.y, rx: CELL_RX * prop.w, ry: 0.03 * prop.h }
+      : { x: it.display.x, y: it.display.y, rx: CELL_RX, ry: 0.03 });
   }
 
   const anyDown = v.party.some((p) => p.down);
+  // A published snapshot.json can lag the code (it's Ben's hand-published
+  // artifact), so read resources tolerantly: accept the Wave 10 coin/rations
+  // shape OR an older flat gold/rations number. The logged-out view must never
+  // white-screen on a stale snapshot.
+  const res = v.resources as unknown as {
+    coins?: { pp: number; gp: number; sp: number; cp: number }; gold?: number;
+    rations?: { party: number; pet: number } | number; partySize: number;
+  };
+  const goldWorth = res.coins ? coinsToGold(res.coins) : (typeof res.gold === 'number' ? res.gold : 0);
+  const partyRations = typeof res.rations === 'object' ? res.rations.party
+    : (typeof res.rations === 'number' ? res.rations : 0);
   const ctx = {
     sceneCat: scene.cat, sceneId: scene.id, weatherId: v.weather.id, anyDown,
-    lowFood: v.resources.rations < v.resources.partySize,
-    richGold: v.resources.gold >= 500,
+    lowFood: partyRations < res.partySize,
+    // Wave 10: "flush" now reads the whole purse in gold (500gp+ still the bar).
+    richGold: goldWorth >= 500,
     wrath: v.weather.id === 'aurils_wrath',
   };
 
@@ -475,28 +589,29 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       if (joy) { pose = 'cheer'; joyBubble = joy; }           // item-get: cheer + the loot
     }
     const active = inCombat && !!activePcName && p.name === activePcName;
-    // Wave 9 B1 (QA #1): the seeded roll decides where an actor DRIFTS; whether
-    // the walk cycle PLAYS is decided by actual movement — the same model the
-    // allies below already use (moving ? walk : idle). Position is a pure
-    // function of the tick, so "am I moving?" is posAt(tick) vs posAt(tick−2):
-    // two ticks because the CSS left transition runs 1.4s (2 × 700ms), so the
-    // sprite is still gliding one tick after its target moved.
+    // Wave 10 A3: pickPose decides the STATIONARY poses (sleep/sit/shiver/down)
+    // and those hold their spot; an idle soul instead runs the wander state
+    // machine, and its walk cycle plays only while actually moving. Position is
+    // a pure function of the tick, so "am I moving?" is posAt(tick) vs
+    // posAt(tick−2) — two ticks because the CSS left transition runs 1.4s.
+    const rooted = pose === 'sleep' || pose === 'sit' || pose === 'shiver' || pose === 'down'
+      || pose === 'cheer' || pose === 'wave';
+    const home = homePos(p.id, i, v.party.length);
     const posAt = (t: number): Pos => {
-      const bt = Math.floor(t / 6);
-      const drift = pickPose(p, i, bt, ctx) === 'walk' ? ((bt + i) % 2 ? 7 : -7) : 0;
-      const pos = inCombat ? combatPos(p.id, i, v.party.length, 8, 42) : homePos(p.id, i, v.party.length);
-      // the active combatant steps toward the viewer instead of hopping a rank
-      const rawY = active ? Math.min(1, pos.y + 0.15) : pos.y;
-      return steerAround(pos.x + drift, rawY, obstacles);
+      if (inCombat) {
+        const pos = combatPos(p.id, i, v.party.length, 8, 42);
+        const rawY = active ? Math.min(1, pos.y + 0.15) : pos.y;   // active steps forward
+        return steerAround(pos.x, rawY, obstacles);
+      }
+      if (rooted) return steerAround(home.x, home.y, obstacles);
+      const tgt = wanderTarget(p.id, t, [Math.max(6, home.x - 9), Math.min(94, home.x + 9)], [0.18, 0.9]);
+      return steerAround(tgt.x, tgt.y, obstacles);
     };
     const st = posAt(tick);
     const prev = posAt(tick - 2);
     const moving = Math.abs(st.x - prev.x) > 0.5 || Math.abs(st.y - prev.y) > 0.02;
-    if (moving) {
-      if (pose === 'idle' || pose === 'walk' || pose === 'sit') pose = 'walk';
-    } else if (pose === 'walk') {
-      pose = 'idle';   // a standing character stands still
-    }
+    if (moving && (pose === 'idle' || pose === 'walk')) pose = 'walk';
+    else if (pose === 'walk') pose = 'idle';   // a standing character stands still
     const frames = POSE_FRAMES[pose];
     return {
       key: p.id,
@@ -524,16 +639,15 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       bubble = pokeActive.kind === 'taunt' ? '😈' : '🎉';
     }
     // Foes don't just stand there (QA #8/#9): a downed foe lies, the active foe
-    // steps toward the viewer, and otherwise each seeded-drifts. Wave 9 B1: the
-    // walk anim plays only while the position is actually changing (the old
-    // `c.active ? 'walk'` forced a walk cycle on a foe standing its ground) —
-    // same posAt(tick) vs posAt(tick−2) model as the party above.
+    // steps toward the viewer, and an idle foe runs the same wander state
+    // machine as the party (Wave 10 A3) within its half of the field. The walk
+    // anim plays only while the position is actually changing.
+    const home = combatPos(c.id, i, foeCombatants.length, 58, 92);
     const posAt = (t: number): Pos => {
-      const bt = Math.floor(t / 6);
-      const drifting = !down && !c.active && seeded(hashStr(c.id) + bt * 131) < 0.45;
-      const drift = drifting ? ((bt + i) % 2 ? 6 : -6) : 0;
-      const pos = combatPos(c.id, i, foeCombatants.length, 58, 92);
-      return steerAround(pos.x + drift, c.active ? Math.min(1, pos.y + 0.15) : pos.y, obstacles);
+      if (down) return steerAround(home.x, home.y, obstacles);
+      if (c.active) return steerAround(home.x, Math.min(1, home.y + 0.15), obstacles);
+      const tgt = wanderTarget(c.id, t, [Math.max(52, home.x - 8), Math.min(96, home.x + 8)], [0.15, 0.88]);
+      return steerAround(tgt.x, tgt.y, obstacles);
     };
     const st = posAt(tick);
     const prev = posAt(tick - 2);
@@ -553,40 +667,38 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     };
   });
 
-  // Allies roam by mode (all seeded/deterministic — same idiom as poses),
-  // and since Wave 5 they roam the plane: x AND y.
-  //   pc    — hover near the linked PC, small hop (the classic familiar)
-  //   party — wander the party's x-range, slow triangle drift, wider swing
-  //   free  — genuinely wanders the whole ground plane
-  const tri = (x: number) => Math.abs(((x % 2) + 2) % 2 - 1);   // 0→1→0 triangle wave
+  // Allies roam by mode, and since Wave 10 A3 all three modes run the SAME
+  // wander state machine the party uses — so the walk cycle plays only while the
+  // familiar is actually moving (the old pc-mode hover hardcoded moving=false,
+  // which is why the cat never animated). Each mode just picks the bounds:
+  //   pc    — a patch around the linked PC (the classic familiar)
+  //   party — the party's x-range
+  //   free  — the whole ground plane
   const pcXs = actors.map((ac) => ac.x);
   const partyLo = pcXs.length ? Math.max(6, Math.min(...pcXs) - 6) : 30;
   const partyHi = pcXs.length ? Math.min(94, Math.max(...pcXs) + 6) : 70;
-  const allyActors = v.allies.map((a: PvAlly, i) => {
+  const allyActors = v.allies.map((a: PvAlly) => {
     const sprite = actorSpriteById(a.sprite);
     const mode = a.linkedPcId === 'free' ? 'free' : a.linkedPcId ? 'pc' : 'party';
-    const phase = (hashStr(a.id) % 97) / 11;
-    let x: number, y: number;
-    if (mode === 'pc') {
-      const owner = actors.find((ac) => ac.key === a.linkedPcId);
-      const base = owner ? owner.x : 90 - i * 8;
-      x = base + ((tick + i) % 6 < 3 ? -6 : 6);
-      // sit a half-step nearer than the owner, alternating sides of them in depth
-      y = clamp01((owner ? owner.y : 0.5) + (hashStr(a.id) % 2 ? 0.08 : -0.08));
-    } else if (mode === 'party') {
-      x = partyLo + (partyHi - partyLo) * tri(phase + tick / 26);
-      y = 0.2 + 0.6 * tri(phase * 1.7 + tick / 33);
-    } else {
-      x = 8 + 84 * tri(phase + tick / 40);                      // slow full-stage sweep
-      y = 0.05 + 0.9 * tri(phase * 1.3 + tick / 29);            // …and the full depth
-    }
-    // roamers walk while their drift is steep; hoverers just idle
-    const moving = mode !== 'pc' && tick % 8 < 5;
-    const st = steerAround(x, y, obstacles);   // steer the familiar around placed things
+    const owner = mode === 'pc' ? actors.find((ac) => ac.key === a.linkedPcId) : undefined;
+    const bounds: { bx: [number, number]; by: [number, number] } =
+      mode === 'pc'
+        ? (() => { const b = owner ? owner.x : 84; return { bx: [Math.max(6, b - 11), Math.min(94, b + 11)] as [number, number], by: [0.2, 0.85] as [number, number] }; })()
+        : mode === 'party'
+          ? { bx: [partyLo, partyHi], by: [0.2, 0.85] }
+          : { bx: [8, 92], by: [0.05, 0.95] };
+    const posAt = (t: number): Pos => {
+      if (a.down) return steerAround(bounds.bx[0], bounds.by[1], obstacles);
+      const tgt = wanderTarget(a.id, t, bounds.bx, bounds.by);
+      return steerAround(tgt.x, tgt.y, obstacles);
+    };
+    const st = posAt(tick);
+    const prev = posAt(tick - 2);
+    const moving = Math.abs(st.x - prev.x) > 0.5 || Math.abs(st.y - prev.y) > 0.02;
     return {
       key: a.id, x: st.x, y: st.y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
       pose: a.down ? 'down' : moving ? 'walk' : 'idle',
-      frame: (tick + i) % 2,
+      frame: tick % 2,
     };
   });
   const critters = allyActors.filter((c) => !c.sprite);         // descriptor-less → 12px critter
@@ -626,21 +738,27 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             }}
           />
         )}
-        {/* camp objects — trophies the DM put on display. Furniture, not actors:
-            they never move, they y-sort with everyone else, and a tap/hover
-            names them. */}
-        {(v.inventory ?? []).filter((it) => it.display).map((it) => (
-          <div
-            key={`obj-${it.id}`}
-            class="realm-object"
-            tabIndex={0}
-            title={it.name}
-            style={{ left: `${it.display!.x}%`, ...groundStyle(it.display!.y, band) }}
-          >
-            <span class="realm-object-emoji">{it.emoji}</span>
-            <span class="realm-object-label">{it.name}</span>
-          </div>
-        ))}
+        {/* camp objects — trophies the DM put on display AND catalog props the
+            DM placed (Wave 10 H). Furniture, not actors: they never move, they
+            y-sort with everyone else. A prop draws its tileset block; a granted
+            trophy draws its emoji. Both derive from the same inventory path. */}
+        {(v.inventory ?? []).filter((it) => it.display).map((it) => {
+          const prop = propById(it.emoji);
+          return prop
+            ? <PropObject key={`obj-${it.id}`} def={prop} x={it.display!.x} y={it.display!.y} band={band} />
+            : (
+              <div
+                key={`obj-${it.id}`}
+                class="realm-object"
+                tabIndex={0}
+                title={it.name}
+                style={{ left: `${it.display!.x}%`, ...groundStyle(it.display!.y, band) }}
+              >
+                <span class="realm-object-emoji">{it.emoji}</span>
+                <span class="realm-object-label">{it.name}</span>
+              </div>
+            );
+        })}
         {allyActors.map((c) => c.sprite && (
           <SpriteActor
             key={c.key}
@@ -689,7 +807,9 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
                 backgroundPosition: `${-a.frame * 16}px ${-a.row * 24}px`,
               }}
             />
-            <span class="tv-idle-name">{a.name}</span>
+            {/* A2: counter the wrapper's depthScale so the name is a constant
+                size at any depth (0.5 keeps the pre-scaled 18px at ~9px). */}
+            <span class="tv-idle-name" style={{ transform: `translateX(-50%) scale(${0.5 / depthScale(a.y)})` }}>{a.name}</span>
           </div>
         ))}
         {foes.map((f) => f.sprite ? (

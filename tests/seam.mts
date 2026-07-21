@@ -68,9 +68,14 @@ const ALLOW = new Set<string>([
   'location',
   'travel', // null when no journey
   'travel.origin', 'travel.dest', 'travel.day', 'travel.totalDays',
-  'resources.gold', 'resources.rations', 'resources.partySize',
+  // Wave 10 (E5): the flat gold/rations became a coin purse and split rations.
+  // The two obsolete paths (resources.gold, resources.rations) are removed.
+  'resources.coins.pp', 'resources.coins.gp', 'resources.coins.sp', 'resources.coins.cp',
+  'resources.rations.party', 'resources.rations.pet', 'resources.partySize',
   'sceneId', 'youtubeId', 'mediaVisible', 'slotView', 'idleFull',
   'poke.seq', 'poke.target', 'poke.kind',
+  // Wave 10 (B1): character level, so the player spellbook can cap by it.
+  'party[].level',
   'party[].id', 'party[].name', 'party[].cls', 'party[].hp', 'party[].maxHp',
   'party[].conditions[]', 'party[].inspiration', 'party[].deathS', 'party[].deathF', 'party[].down',
   'party[].sprite',   // Wave 3 — cosmetic actor-sprite id, deliberately allowed

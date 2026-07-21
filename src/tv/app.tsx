@@ -28,6 +28,7 @@ import { sceneById, SCENES } from './scenes';
 import { RealmStage } from './realm-stage';
 import { ActorSprite, actorSpriteById, actorSpriteForFoe } from '../data/actor-sprites';
 import { SpriteThumb } from '../components/SpritePicker';
+import { formatCoins } from '../lib/currency';
 
 const CODE_KEY = 'fmdm_tv_room';
 
@@ -280,7 +281,7 @@ export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeA
   const linked = (pcId: string) => v.allies.filter((a) => a.linkedPcId === pcId);
   const orphans = v.allies.filter((a) => !a.linkedPcId || !v.party.some((p) => p.id === a.linkedPcId));
   const r = v.resources;
-  const lowFood = r.rations < r.partySize;
+  const lowFood = r.rations.party < r.partySize;
 
   return (
     <div class="tv-explore">
@@ -292,8 +293,9 @@ export function ExplorationView({ v, pokeActive = null }: { v: PlayerView; pokeA
           {orphans.map((a) => <RosterAlly a={a} key={a.id} />)}
         </div>
         <div class="tv-roster-ledger">
-          <span class="tv-res">💰 {r.gold}<span class="tv-res-label">GOLD</span></span>
-          <span class={`tv-res${lowFood ? ' low' : ''}`}>🍖 {r.rations}<span class="tv-res-label">RATIONS</span></span>
+          <span class="tv-res">💰 {formatCoins(r.coins)}<span class="tv-res-label">COINS</span></span>
+          <span class={`tv-res${lowFood ? ' low' : ''}`}>🍖 {r.rations.party}<span class="tv-res-label">PARTY</span></span>
+          {r.rations.pet > 0 && <span class="tv-res">🐾 {r.rations.pet}<span class="tv-res-label">PET</span></span>}
           <span class="tv-res">📅 {v.day}<span class="tv-res-label">DAY</span></span>
           {j && (
             <span class="tv-res journey">

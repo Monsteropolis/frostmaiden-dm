@@ -145,6 +145,33 @@ export async function getApiList(kind: keyof typeof listUrls): Promise<ApiListIt
   } catch { return null; }
 }
 
+/** Every spell a class can learn, with spell level attached — the 5e API's own
+ *  per-class endpoint, so the player spellbook filters by class WITHOUT fetching
+ *  each spell's detail. Returns [] for a non-casting class (the endpoint answers
+ *  with an empty results list), null only when offline/unreachable. Cached in
+ *  IndexedDB and runtime-cached by the service worker, like every other list. */
+export async function getClassSpells(classSlug: string): Promise<ApiListItem[] | null> {
+  const slug = classSlug.trim().toLowerCase();
+  if (!slug) return [];
+  const key = `classspells:${slug}`;
+  if (listMem.has(key)) return listMem.get(key)!;
+  try {
+    const cached = await get(`list:${key}`);
+    if (cached) { listMem.set(key, cached); return cached; }
+  } catch { /* idb unavailable */ }
+  try {
+    const res = await fetch(`https://www.dnd5eapi.co/api/2014/classes/${slug}/spells`);
+    if (res.status === 404) { const empty: ApiListItem[] = []; listMem.set(key, empty); return empty; }
+    if (!res.ok) return null;
+    const data = await res.json();
+    const list: ApiListItem[] = (data.results ?? []).map((r: Record<string, unknown>) =>
+      ({ index: String(r.index), name: String(r.name), level: typeof r.level === 'number' ? r.level : undefined }));
+    listMem.set(key, list);
+    try { await set(`list:${key}`, list); } catch { /* ignore */ }
+    return list;
+  } catch { return null; }
+}
+
 export interface ApiDetail {
   index: string;
   name: string;

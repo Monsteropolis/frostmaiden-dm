@@ -41,6 +41,10 @@ export interface PvPc {
   id: string;
   name: string;
   cls: string;
+  /** Character level — projected in Wave 10 (B1) so the player app can filter
+   *  the spellbook by what this character can cast. Class and level are the
+   *  DM's to set (the Edit sheet); players never author either. */
+  level: number;
   hp: number;
   maxHp: number;
   conditions: string[];
@@ -122,8 +126,10 @@ export interface PvTravel {
 }
 
 export interface PvResources {
-  gold: number;
-  rations: number;
+  /** The party coin purse (Wave 10, E5) — replaces the flat `gold`. */
+  coins: { pp: number; gp: number; sp: number; cp: number };
+  /** Rations split party/pet (Wave 10, E5) — replaces the flat `rations`. */
+  rations: { party: number; pet: number };
   partySize: number;
 }
 
@@ -231,7 +237,14 @@ export function projectPlayerView(s: AppState): PlayerView {
     weather: { id: wx.id, name: wx.name, icon: wx.icon, conSave: wx.conSave },
     location: deriveLocation(s),
     travel: j ? { origin: j.origin, dest: j.dest, day: j.day, totalDays: j.totalDays } : null,
-    resources: { gold: s.travel.gold ?? 0, rations: s.travel.rations, partySize: s.travel.partySize },
+    resources: {
+      coins: {
+        pp: s.travel.coins?.pp ?? 0, gp: s.travel.coins?.gp ?? 0,
+        sp: s.travel.coins?.sp ?? 0, cp: s.travel.coins?.cp ?? 0,
+      },
+      rations: { party: s.travel.rations?.party ?? 0, pet: s.travel.rations?.pet ?? 0 },
+      partySize: s.travel.partySize,
+    },
     sceneId: resolveScene(s.tv?.sceneId ?? 'auto', { journeying: !!j, weatherId: s.weather.current }).id,
     youtubeId: s.tv?.youtubeId ?? '',
     mediaVisible: (s.tv?.slotView ?? 'scene') === 'video',
@@ -240,7 +253,7 @@ export function projectPlayerView(s: AppState): PlayerView {
     poke: s.tv?.poke ?? { seq: 0, target: 'party', kind: 'wave' },
 
     party: s.party.map((p) => ({
-      id: p.id, name: p.name, cls: p.cls,
+      id: p.id, name: p.name, cls: p.cls, level: p.level ?? 1,
       hp: p.hp, maxHp: p.maxHp,
       conditions: p.conditions,
       inspiration: p.inspiration,
@@ -277,10 +290,23 @@ export function projectPlayerView(s: AppState): PlayerView {
     // Explicit field list — OwnedItem.notes (DM-only) must never ride along.
     // `display` (Wave 5 trophies) is copied field-by-field and the key is
     // omitted entirely for pack items, so the seam shape stays exact.
-    inventory: (s.inventory ?? []).map((it) => ({
-      id: it.id, name: it.name, emoji: it.emoji, qty: it.qty, ownerId: it.ownerId,
-      ...(it.display ? { display: { x: it.display.x, y: it.display.y } } : {}),
-    })),
+    //
+    // Wave 10 (Part H): catalog props the DM placed ride the SAME inventory
+    // wire-format, using `emoji` as an appearance token — the id of a
+    // PROP_CATALOG entry, exactly as Wave 5 made PvCombatant.emoji a sprite-id-
+    // or-glyph token. This adds NO new seam path (the scope fence limits
+    // projection changes to level + coins/rations). The stage resolves a prop
+    // token to a tile; the player Pack skips anything that resolves to a prop.
+    inventory: [
+      ...(s.inventory ?? []).map((it) => ({
+        id: it.id, name: it.name, emoji: it.emoji, qty: it.qty, ownerId: it.ownerId,
+        ...(it.display ? { display: { x: it.display.x, y: it.display.y } } : {}),
+      })),
+      ...(s.placedProps ?? []).map((p) => ({
+        id: `prop:${p.id}`, name: '', emoji: p.propId, qty: 1, ownerId: null as string | null,
+        display: { x: p.x, y: p.y },
+      })),
+    ],
 
     sentAt: Date.now(),
   };

@@ -50,8 +50,18 @@ function seedQuests(s: AppState): AppState {
 
 function normalize(s: AppState): AppState {
   for (const a of s.sidekicks) if (!a.category) a.category = 'sidekick';
-  if (typeof s.travel.rations !== 'number') s.travel.rations = 10;
+  // Wave 10: rations became {party,pet} and gold became a coin purse. Repair a
+  // half-shaped payload (an imported older save that skipped the migration path).
+  if (!s.travel.rations || typeof s.travel.rations !== 'object') {
+    const old = s.travel.rations as unknown;
+    s.travel.rations = { party: typeof old === 'number' ? old : 10, pet: 0 };
+  }
+  if (!s.travel.coins || typeof s.travel.coins !== 'object') {
+    const old = (s.travel as { gold?: unknown }).gold;
+    s.travel.coins = { pp: 0, gp: typeof old === 'number' ? old : 0, sp: 0, cp: 0 };
+  }
   if (typeof s.travel.partySize !== 'number') s.travel.partySize = 4;
+  if (!Array.isArray(s.placedProps)) s.placedProps = [];
   // Link Chapter 1's named beats to their quests (their labels are the quest names).
   const ch1 = s.chapters.find((c) => c.id === 1);
   if (ch1) for (const m of ch1.milestones) {

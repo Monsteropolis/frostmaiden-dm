@@ -11,6 +11,12 @@ import { allNpcs, openNpc } from './npcs';
 import { EncountersPanel } from './encounters';
 import { MapPicker, PickedPlace, placeByName, estimateLeg } from '../components/MapPicker';
 import { MAP_PLACES, Terrain, TERRAIN_LABEL, travelTimeLabel } from '../data/map';
+import { DENOMS, Denom, stepCoin, formatCoins } from '../lib/currency';
+import { SCENES } from '../tv/scenes';
+
+const COIN_LABEL: Record<Denom, string> = {
+  pp: 'Platinum (pp)', gp: 'Gold (gp)', sp: 'Silver (sp)', cp: 'Copper (cp)',
+};
 
 // Which World sub-tab is showing — a signal so other screens (the header
 // weather sheet) can deep-link straight to Weather.
@@ -189,9 +195,13 @@ function TownCard({ town }: { town: (typeof TOWNS)[number] }) {
             </div>
           )}
 
-          <Field label="Notes">
-            <textarea class="input" rows={2} value={st.notes} onChange={(e) => upd((t) => { t.notes = (e.target as HTMLTextAreaElement).value; })} />
-          </Field>
+          <div class="field-label note-label">Notes
+            {st.notes.trim() && (
+              <ConfirmBtn label="🗑 Clear" confirmLabel="Clear note?" class="mini ghost danger note-clear"
+                onConfirm={() => upd((t) => { t.notes = ''; })} />
+            )}
+          </div>
+          <textarea class="input" rows={2} value={st.notes} onChange={(e) => upd((t) => { t.notes = (e.target as HTMLTextAreaElement).value; })} />
         </div>
       )}
     </div>
@@ -213,6 +223,8 @@ function PlaceCard({ place }: { place: Place }) {
     .filter((q): q is Quest => !!q);
   const unlinkedQuests = quests.filter((q) => !place.questIds.includes(q.id));
   const nCount = place.npcIds.length;
+  const owner = place.ownerId ? state.value.party.find((p) => p.id === place.ownerId) : null;
+  const ownerLabel = place.ownerId ? (owner?.name ?? 'unknown') : 'communal';
 
   return (
     <div class={`card town ${place.visited ? 'visited' : ''}`}>
@@ -220,7 +232,9 @@ function PlaceCard({ place }: { place: Place }) {
         <div class="unit-id">
           <div class="unit-name">{place.name}</div>
           <div class="unit-meta">
-            Landmark{nCount > 0 ? <> <span class="sep">·</span> {nCount} NPC{nCount > 1 ? 's' : ''}</> : null}
+            Landmark
+            {' '}<span class="sep">·</span> <span class={`place-owner${place.ownerId ? ' owned' : ''}`}>{place.ownerId ? `⌂ ${ownerLabel}` : 'communal'}</span>
+            {nCount > 0 ? <> <span class="sep">·</span> {nCount} NPC{nCount > 1 ? 's' : ''}</> : null}
           </div>
         </div>
         <span class={`standing ${place.standing === 'unknown' ? '' : place.standing}`}
@@ -236,6 +250,30 @@ function PlaceCard({ place }: { place: Place }) {
               {place.visited ? '✦ Visited' : 'Mark visited'}
             </button>
           </div>
+
+          {/* Wave 10 (Part I): grant this property to a party member, or return
+              it to communal. A player may own several places, so it's per-place.
+              Canonical DM state — the backend mirror and access rules come next. */}
+          <div class="field-label">Ownership</div>
+          <div class="place-grant" style={{ marginBottom: '12px' }}>
+            <select class="input" value={place.ownerId ?? ''}
+              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd((p) => { p.ownerId = v || null; }); }}>
+              <option value="">Communal (no owner)</option>
+              {state.value.party.map((p) => <option value={p.id}>{p.name}</option>)}
+            </select>
+            {place.ownerId && (
+              <button class="btn mini ghost" onClick={() => upd((p) => { p.ownerId = null; })}>Return to communal</button>
+            )}
+          </div>
+
+          {/* Optional: what this property looks like — a scene id (Part I). */}
+          <Field label="Appears as (scene)">
+            <select class="input" value={place.sceneId ?? ''}
+              onChange={(e) => { const v = (e.target as HTMLSelectElement).value; upd((p) => { p.sceneId = v || undefined; }); }}>
+              <option value="">— none —</option>
+              {SCENES.map((sc) => <option value={sc.id}>{sc.name}</option>)}
+            </select>
+          </Field>
 
           <div class="field-label">Party standing</div>
           <div class="chip-row" style={{ marginBottom: '12px' }}>
@@ -270,9 +308,13 @@ function PlaceCard({ place }: { place: Place }) {
             </select>
           </div>
 
-          <Field label="Notes">
-            <textarea class="input" rows={3} value={place.notes} onChange={(e) => upd((p) => { p.notes = (e.target as HTMLTextAreaElement).value; })} />
-          </Field>
+          <div class="field-label note-label">Notes
+            {place.notes.trim() && (
+              <ConfirmBtn label="🗑 Clear" confirmLabel="Clear note?" class="mini ghost danger note-clear"
+                onConfirm={() => upd((p) => { p.notes = ''; })} />
+            )}
+          </div>
+          <textarea class="input" rows={3} value={place.notes} onChange={(e) => upd((p) => { p.notes = (e.target as HTMLTextAreaElement).value; })} />
         </div>
       )}
     </div>
@@ -538,7 +580,7 @@ function TravelPanel() {
 
   const advance = () => patch((d) => {
     const jj = d.travel.activeJourney; if (!jj) return;
-    d.travel.rations = Math.max(0, d.travel.rations - d.travel.partySize);
+    d.travel.rations.party = Math.max(0, d.travel.rations.party - d.travel.partySize);
     d.weather.day++;
     d.weather.log.push({ day: d.weather.day, weather: d.weather.current });
     d.travel.log.push({ day: d.weather.day, text: `${jj.origin} → ${jj.dest}: day ${jj.day} of ${jj.totalDays} — ${WEATHER[d.weather.current].name}` });
@@ -664,24 +706,35 @@ function TravelPanel() {
       <div class="card">
         <h3>Supplies</h3>
         <Stepper
-          label="Rations"
-          value={state.value.travel.rations}
-          low={state.value.travel.rations < state.value.travel.partySize}
-          onDelta={(dl) => patch((d) => { d.travel.rations = Math.max(0, d.travel.rations + dl); })}
+          label="Party rations 🍖"
+          value={state.value.travel.rations.party}
+          low={state.value.travel.rations.party < state.value.travel.partySize}
+          onDelta={(dl) => patch((d) => { d.travel.rations.party = Math.max(0, d.travel.rations.party + dl); })}
         />
         <Stepper
-          label="Party"
+          label="Pet rations 🐾"
+          value={state.value.travel.rations.pet}
+          onDelta={(dl) => patch((d) => { d.travel.rations.pet = Math.max(0, d.travel.rations.pet + dl); })}
+        />
+        <Stepper
+          label="Party size"
           value={state.value.travel.partySize}
           onDelta={(dl) => patch((d) => { d.travel.partySize = Math.max(1, d.travel.partySize + dl); })}
         />
-        <Stepper
-          label="Gold 💰"
-          value={state.value.travel.gold}
-          steps={[10, 1]}
-          onDelta={(dl) => patch((d) => { d.travel.gold = Math.max(0, d.travel.gold + dl); })}
-        />
-        <p class="stat-fine">Each travel day consumes one ration per party member automatically.
-          {state.value.travel.rations < state.value.travel.partySize && ' ⚠ Not enough for another day — foraging (WIS/Survival) or going hungry (exhaustion) awaits.'}</p>
+        <div class="coin-steppers">
+          <div class="field-label">Coins 💰 <span class="stat-fine">({formatCoins(state.value.travel.coins)})</span></div>
+          {DENOMS.map((den) => (
+            <Stepper
+              key={den}
+              label={COIN_LABEL[den]}
+              value={state.value.travel.coins[den]}
+              steps={den === 'gp' ? [10, 1] : [1]}
+              onDelta={(dl) => patch((d) => { d.travel.coins = stepCoin(d.travel.coins, den, dl); })}
+            />
+          ))}
+        </div>
+        <p class="stat-fine">Each travel day consumes one ration per party member automatically. Pet rations are yours to manage.
+          {state.value.travel.rations.party < state.value.travel.partySize && ' ⚠ Not enough for another day — foraging (WIS/Survival) or going hungry (exhaustion) awaits.'}</p>
       </div>
 
       <div class="card">

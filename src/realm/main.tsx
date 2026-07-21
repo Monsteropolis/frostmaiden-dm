@@ -10,7 +10,7 @@
 // ============================================================
 
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import '@fontsource/space-grotesk/400.css';
 import '@fontsource/space-grotesk/600.css';
 import '@fontsource/silkscreen/400.css';
@@ -21,10 +21,14 @@ import '../styles/tokens.css';
 import '../styles/tv.css';
 import '../styles/realm.css';
 import { RealmStage } from '../tv/realm-stage';
-import type { PlayerView } from '../tv/projection';
+import type { PlayerView, PvPc, PokeActive, PokeKind } from '../tv/projection';
+import { AbilitiesPanel } from './abilities';
+import { InventoryPanel } from './inventory';
+import { propById } from '../data/props';
 import {
   fetchRealmCharacters, realmLogin, normalizeRealmCode,
   listMyJournal, listSharedJournal, writeJournalEntry, updateJournalEntry,
+  deleteJournalEntry,
   setShared as setEntryShared, fetchCharacterNames, RealmUnreachableError,
   type RealmCharacter, type RealmSession, type JournalEntry,
 } from '../backend/realm-client';
@@ -46,10 +50,28 @@ function ago(ms: number): string {
   return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 }
 
+/** The logged-in player app's tabs. `world` is the diorama; the rest are what
+ *  you DO while in it. Adding a tab (a Places tab arrives next wave) is one
+ *  entry in this array — no rework. */
+type RealmTab = 'world' | 'journal' | 'abilities' | 'inventory';
+const REALM_TABS: { id: RealmTab; label: string; icon: string }[] = [
+  { id: 'world', label: 'World', icon: '🏔' },
+  { id: 'journal', label: 'Journal', icon: '📓' },
+  { id: 'abilities', label: 'Abilities', icon: '✨' },
+  { id: 'inventory', label: 'Gear', icon: '🎒' },
+];
+
 function Realm() {
   const [v, setV] = useState<PlayerView | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'loading' });
   const [nonce, setNonce] = useState(0);
+  const [tab, setTab] = useState<RealmTab>('world');
+  // Part D: the emote the player fired on their OWN character. In v1 this is
+  // local to this screen — dispatchEmote is the single seam a future wave makes
+  // broadcast (see EmoteBar). A short-lived PokeActive drives the stage.
+  const [emote, setEmote] = useState<PokeActive | null>(null);
+  const emoteSeq = useRef(0);
+  const emoteTimer = useRef<number>();
   // Brief 2 — the player's session token. IN MEMORY ONLY, on purpose: a
   // refresh, a closed tab, or a borrowed phone keeps nothing. Logging in adds
   // the ability to WRITE (journal/decoration, later briefs); just LOOKING at
@@ -96,13 +118,45 @@ function Realm() {
     return () => document.removeEventListener('visibilitychange', onShow);
   }, []);
 
+  useEffect(() => () => clearTimeout(emoteTimer.current), []);
+  // Falling back to the world view when a player signs out keeps a signed-out
+  // visitor from staring at a locked tab.
+  useEffect(() => { if (!session && tab !== 'world') setTab('world'); }, [session]);
+
+  // Part D — THE ONE dispatch seam. Today it plays the emote on this screen
+  // only; making the table see it later is a single added line here (broadcast
+  // the same {characterId, kind} to the DM). Nothing else in the app changes.
+  const dispatchEmote = (kind: PokeKind) => {
+    if (!session) return;
+    emoteSeq.current += 1;
+    setEmote({ seq: emoteSeq.current, target: session.characterId, kind });
+    clearTimeout(emoteTimer.current);
+    emoteTimer.current = window.setTimeout(() => setEmote(null), 2600);
+  };
+
+  const myPc: PvPc | null =
+    session && v ? v.party.find((p) => p.id === session.characterId) ?? null : null;
+  const showTabs = !!session;
+
   return (
     <div class="realm-page">
-      {v
-        ? <section class="tv-scene idle-slot full"><RealmStage v={v} full /></section>
-        : <section class="realm-blank">{status.kind === 'loading' ? 'Loading the realm…' : 'No snapshot to show.'}</section>}
-      {v && <Pack v={v} />}
-      {session && <JournalPanel session={session} />}
+      <main class="realm-main">
+        {(tab === 'world' || !showTabs) && (
+          <>
+            {v
+              ? <section class="tv-scene idle-slot full"><RealmStage v={v} full pokeActive={emote} /></section>
+              : <section class="realm-blank">{status.kind === 'loading' ? 'Loading the realm…' : 'No snapshot to show.'}</section>}
+            {showTabs && <EmoteBar onEmote={dispatchEmote} />}
+            {v && <Pack v={v} />}
+          </>
+        )}
+        {showTabs && tab === 'journal' && session && <JournalPanel session={session} />}
+        {showTabs && tab === 'abilities' && session && <AbilitiesPanel session={session} pc={myPc} />}
+        {showTabs && tab === 'inventory' && session && v && <InventoryPanel session={session} v={v} />}
+      </main>
+
+      {showTabs && <RealmTabs tab={tab} onTab={setTab} />}
+
       {expired && !session && (
         <div class="realm-strip warn">
           <div><b>Your session ended.</b> Sign in again to keep your seat.</div>
@@ -121,6 +175,49 @@ function Realm() {
           onClose={() => setLoginOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** The phone-first tab bar (Part G). Pinned above the status strip; the world
+ *  is always one tap away. Built from REALM_TABS so a new tab is a data edit. */
+function RealmTabs({ tab, onTab }: { tab: RealmTab; onTab: (t: RealmTab) => void }) {
+  return (
+    <nav class="realm-tabs" role="tablist">
+      {REALM_TABS.map((t) => (
+        <button
+          key={t.id}
+          class={`realm-tab${tab === t.id ? ' on' : ''}`}
+          role="tab"
+          aria-selected={tab === t.id}
+          onClick={() => onTab(t.id)}
+        >
+          <span class="realm-tab-icon">{t.icon}</span>
+          <span class="realm-tab-label">{t.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** Part D — the emote bar. The vocabulary is exactly what the stage's poke
+ *  channel already animates (POSE_FRAMES + the CSS emotes). Every tap goes
+ *  through the parent's single dispatchEmote. */
+const EMOTES: { kind: PokeKind; icon: string; label: string }[] = [
+  { kind: 'wave', icon: '👋', label: 'Wave' },
+  { kind: 'cheer', icon: '🎉', label: 'Cheer' },
+  { kind: 'taunt', icon: '😈', label: 'Taunt' },
+  { kind: 'flinch', icon: '😖', label: 'Flinch' },
+];
+function EmoteBar({ onEmote }: { onEmote: (k: PokeKind) => void }) {
+  return (
+    <div class="realm-emote-bar realm-ui-frame">
+      {EMOTES.map((e) => (
+        <button key={e.kind} class="realm-emote" onClick={() => onEmote(e.kind)} aria-label={e.label}>
+          <span class="realm-emote-icon">{e.icon}</span>
+          <span class="realm-emote-label">{e.label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -250,7 +347,9 @@ function findPartyBack(
  *  holds anything. Hidden entirely when nothing is carried. */
 function Pack({ v }: { v: PlayerView }) {
   const [openItem, setOpenItem] = useState<string | null>(null);
-  const inv = v.inventory ?? [];   // older published snapshots predate the field
+  // Placed catalog props ride the inventory wire (appearance token) but are
+  // camp furniture, not carried loot — never list them in the Pack.
+  const inv = (v.inventory ?? []).filter((i) => !propById(i.emoji));
   if (!inv.length) return null;
   const groups: { key: string; label: string; items: typeof inv }[] = [];
   const stash = inv.filter((i) => i.ownerId === null);
@@ -357,6 +456,17 @@ function JournalPanel({ session }: { session: RealmSession }) {
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
+  // Part A4 — deletable, behind a confirm. RLS already permits author-delete.
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const remove = async (entry: JournalEntry) => {
+    setBusy(true); setErr('');
+    try {
+      await deleteJournalEntry(session.token, entry.id);
+      setConfirmDel(null);
+      await reload(tab);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
   const startEdit = (entry: JournalEntry | null) => {
     setEditingId(entry ? entry.id : 'new');
     setDTitle(entry?.title ?? '');
@@ -442,6 +552,14 @@ function JournalPanel({ session }: { session: RealmSession }) {
                     {entry.isShared ? 'Unshare' : 'Share ▸'}
                   </button>
                   <button disabled={busy} onClick={() => startEdit(entry)}>Edit</button>
+                  {confirmDel === entry.id
+                    ? (
+                      <>
+                        <button class="danger" disabled={busy} onClick={() => remove(entry)}>Delete?</button>
+                        <button disabled={busy} onClick={() => setConfirmDel(null)}>Keep</button>
+                      </>
+                    )
+                    : <button class="danger" disabled={busy} onClick={() => setConfirmDel(entry.id)}>Delete</button>}
                 </div>
               )}
             </>

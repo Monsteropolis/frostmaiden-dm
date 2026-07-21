@@ -127,6 +127,33 @@ const migrations: Record<number, Migration> = {
       && typeof r.dmSecret === 'string' && r.dmSecret.length > 0;
     return { ...s, realm: valid ? r : newRealmIdentity(), version: 12 };
   },
+  // v12 → v13 (Wave 10): the coin purse and split rations, place ownership, and
+  // the catalog-prop layer.
+  //  - travel.gold (number) → travel.coins {pp,gp,sp,cp}; the old gold → gp.
+  //  - travel.rations (number) → travel.rations {party,pet}; the old count → party.
+  //  - places gain ownerId (null = communal — every existing place stays communal).
+  //  - placedProps starts empty.
+  12: (s) => {
+    const travel = { ...(s.travel as Record<string, unknown> ?? {}) };
+    if (!travel.coins || typeof travel.coins !== 'object') {
+      const gold = typeof travel.gold === 'number' ? travel.gold : 0;
+      travel.coins = { pp: 0, gp: gold, sp: 0, cp: 0 };
+    }
+    delete travel.gold;
+    if (typeof travel.rations === 'number') {
+      travel.rations = { party: travel.rations, pet: 0 };
+    } else if (!travel.rations || typeof travel.rations !== 'object') {
+      travel.rations = { party: 10, pet: 0 };
+    }
+    const places = ((s.places as Record<string, unknown>[]) ?? []).map((p) => ({
+      ...p, ownerId: p.ownerId === undefined ? null : p.ownerId,
+    }));
+    return {
+      ...s, travel, places,
+      placedProps: Array.isArray(s.placedProps) ? s.placedProps : [],
+      version: 13,
+    };
+  },
 };
 
 export function migrate(raw: unknown): AppState {

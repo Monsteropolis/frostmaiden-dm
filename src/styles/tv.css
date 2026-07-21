@@ -310,11 +310,16 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
    ============================================================ */
 
 :root { --font-px: 'Silkscreen', monospace; }
-/* Wave 7 (QA #1): in-world name labels get a compact, high-legibility pixel
-   font. Silkscreen (chrome font) stays for HUD numbers/headers; only the
-   diorama's floating names swap to this — clear letterforms at ~9px, still
-   crisp against both snow and cave once outlined. */
-:root { --font-label: 'Pixelify Sans', 'Silkscreen', monospace; }
+/* Wave 10 (A1): the in-world label font. AncientModernTales is a legible
+   storybook display face that reads well at ~9px with the 4-way outline as the
+   sole legibility mechanism (the grey pill is gone). Pixelify/Silkscreen remain
+   as fallbacks so a label never vanishes if the face fails to load. */
+@font-face {
+  font-family: 'Ancient Modern Tales';
+  src: url('../assets/fonts/AncientModernTales-a7Po.ttf') format('truetype');
+  font-display: swap;
+}
+:root { --font-label: 'Ancient Modern Tales', 'Pixelify Sans', 'Silkscreen', monospace; }
 
 /* --- Cosmic backdrop: stars are little fates ---------------------------------- */
 .tvfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
@@ -760,11 +765,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   position: absolute; left: 50%; transform: translateX(-50%);
   font-family: var(--font-label); font-size: 9px; line-height: 1;
   color: var(--ink); white-space: nowrap;
-  /* true 4-direction 1px outline (QA #1) … */
+  /* Wave 10 (A1): the 4-direction 1px black outline is now the SOLE legibility
+     mechanism — the translucent pill is removed so labels sit cleanly in-world. */
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-  /* … plus a subtle dark pill so names hold up over busy tile ground (QA #1) */
-  background: rgba(13, 14, 34, 0.55);
-  padding: 0 3px 1px; border-radius: 3px;
   pointer-events: none;
 }
 .realm-sprite-actor .tv-turn-mark { bottom: auto; }
@@ -959,6 +962,17 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .realm-object:hover .realm-object-label,
 .realm-object:focus .realm-object-label,
 .realm-object:active .realm-object-label { display: block; }
+
+/* Wave 10 (Part H): placed catalog props — a tile block sitting on the ground
+   plane, depth-sorted with everyone else. Feet on the bottom edge of the block. */
+.realm-prop-obj {
+  position: absolute;
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  outline: none;
+}
+.realm-prop { image-rendering: pixelated; }
+.realm-prop span { image-rendering: pixelated; }
 
 /* === WAVE 5: initiative rows — thumb · name on top · slim bar underneath ===
    The bar's color carries the health signal, so it gave its width back to the
