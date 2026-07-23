@@ -310,16 +310,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
    ============================================================ */
 
 :root { --font-px: 'Silkscreen', monospace; }
-/* Wave 10 (A1): the in-world label font. AncientModernTales is a legible
-   storybook display face that reads well at ~9px with the 4-way outline as the
-   sole legibility mechanism (the grey pill is gone). Pixelify/Silkscreen remain
-   as fallbacks so a label never vanishes if the face fails to load. */
-@font-face {
-  font-family: 'Ancient Modern Tales';
-  src: url('../assets/fonts/AncientModernTales-a7Po.ttf') format('truetype');
-  font-display: swap;
-}
-:root { --font-label: 'Ancient Modern Tales', 'Pixelify Sans', 'Silkscreen', monospace; }
+/* Wave 11 (B3): the in-world label font is Silkscreen — a true pixel font whose
+   strokes stay on whole pixels at its native 8px design size, where Ancient
+   Modern Tales (a storybook display face) went sub-pixel and broke up. The
+   old @font-face for Ancient Modern Tales was removed (nothing references it
+   after this change); the .ttf stays on disk. */
+:root { --font-label: 'Silkscreen', monospace; }
 
 /* --- Cosmic backdrop: stars are little fates ---------------------------------- */
 .tvfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
@@ -692,9 +688,26 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 .tv-realm-viewport { display: grid; place-items: center; overflow: hidden; background: var(--bg); }
 .tv-realm-canvas {
   position: relative; flex: none;
+  box-sizing: border-box;
   transform-origin: center center;
   image-rendering: pixelated;
   overflow: hidden;
+  /* Wave 11 (C2): a visible edge in the 8-bit skin — square corners, a 2px
+     frame, and a sky-distinct fill so the band above flat art reads as sky
+     inside the stage rather than empty page. */
+  border: 2px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--surface);
+}
+/* Wave 11 (C1): the 448-wide world, centred in the (possibly narrower) canvas.
+   Everything positions inside it in world coordinates; the canvas crops it. */
+.tv-realm-world { position: absolute; top: 0; bottom: 0; width: 448px; }
+/* Wave 11 (C3): the corner instrumentation — quiet, monospaced, non-interactive. */
+.tv-realm-diag {
+  position: absolute; left: 3px; top: 3px; z-index: 6;
+  font-family: var(--font-px); font-size: 7px; line-height: 1;
+  color: var(--ink-faint); background: rgba(13, 14, 34, 0.7);
+  padding: 2px 4px; pointer-events: none; letter-spacing: 0.04em;
 }
 
 /* flat scenes on the 448×224 canvas: the art is 16:9 (128×72 at 3× or 384×216
@@ -757,17 +770,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
   overflow: hidden;
 }
 @keyframes realmSpriteRun { from { background-position-x: 0; } to { background-position-x: var(--realm-to); } }
+
+/* Wave 11 (B1): the name overlay. A single unscaled layer sitting above every
+   actor; only the canvas's integer scale acts on it, so the 1px outline lands
+   on whole device pixels. The stage positions each label inline (left in canvas
+   %, top at the foot line + collision row). */
+.tv-realm-names { position: absolute; inset: 0; z-index: 2000; pointer-events: none; }
+
 .realm-sprite-name {
-  /* Wave 7 (QA #3): anchored by its TOP just below the sprite's foot line —
-     the component passes an inline `top` computed from frameH−footPad, so the
-     transparent pad is accounted for and the gap is visual, not geometric.
-     The label never covers the character. */
+  /* Wave 11 (B1/B2/B3): drawn in the tv-realm-names overlay, anchored by its TOP
+     just below the actor's foot line (the stage passes an inline `top`). Dark
+     letterforms carry themselves on snow (the winter default); a light halo
+     carries them in the cave scenes. Silkscreen at its native 8px lands on whole
+     pixels with the canvas's integer scale. */
   position: absolute; left: 50%; transform: translateX(-50%);
-  font-family: var(--font-label); font-size: 9px; line-height: 1;
-  color: var(--ink); white-space: nowrap;
-  /* Wave 10 (A1): the 4-direction 1px black outline is now the SOLE legibility
-     mechanism — the translucent pill is removed so labels sit cleanly in-world. */
-  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+  font-family: var(--font-label); font-size: 8px; line-height: 1;
+  color: #0D0E22; white-space: nowrap;
+  text-shadow: -1px -1px 0 #F2F6FA, 1px -1px 0 #F2F6FA, -1px 1px 0 #F2F6FA, 1px 1px 0 #F2F6FA;
   pointer-events: none;
 }
 .realm-sprite-actor .tv-turn-mark { bottom: auto; }

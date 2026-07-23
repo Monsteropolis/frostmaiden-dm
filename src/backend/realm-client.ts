@@ -458,6 +458,87 @@ export async function setItemLocation(
   if (error) throwDataError('Could not move that item', error);
 }
 
+// ---- character resources (Wave 11, Part E) ----------------------------------
+// One data model, two presentations: every class resource is a POOL (max/used/
+// recharge) or a STAT (a single typed number). Spell slots are nine long-rest
+// pools; rage/ki/etc. are pools too; casting modifier + misc are stats. RLS
+// scopes every row to the character in the token — the same per-character seam
+// character_spells uses. tests/boundary.mts proves the rules.
+
+export type ResourceKind = 'pool' | 'stat';
+export type Recharge = 'short' | 'long';
+
+export interface CharResource {
+  kind: ResourceKind;
+  key: string;
+  max: number;
+  used: number;
+  recharge: Recharge;
+  value: number;
+  maxOverridden: boolean;
+}
+
+const RESOURCE_COLS = 'kind, key, max, used, recharge, value, max_overridden';
+
+function rowToResource(r: Record<string, unknown>): CharResource {
+  return {
+    kind: r.kind === 'stat' ? 'stat' : 'pool',
+    key: String(r.key),
+    max: Number(r.max ?? 0),
+    used: Number(r.used ?? 0),
+    recharge: r.recharge === 'short' ? 'short' : 'long',
+    value: Number(r.value ?? 0),
+    maxOverridden: !!r.max_overridden,
+  };
+}
+
+/** Every resource row this character owns (pools and stats). */
+export async function listCharacterResources(token: string): Promise<CharResource[]> {
+  const me = decodeClaims(token)?.character_id ?? '';
+  const sb = await getSupabaseWithToken(token);
+  const { data, error } = await sb.from('character_resources')
+    .select(RESOURCE_COLS).eq('character_id', me);
+  if (error) throwDataError('Could not load your resources', error);
+  return (data ?? []).map(rowToResource);
+}
+
+/** Create or update one resource row. Upserts on (campaign, character, kind,
+ *  key); only the fields passed are written, so a spend touches `used` alone and
+ *  leaves an overridden `max` intact. Campaign + character come from the token. */
+export async function upsertResource(
+  token: string,
+  r: { kind: ResourceKind; key: string } & Partial<Omit<CharResource, 'kind' | 'key'>>,
+): Promise<void> {
+  const claims = decodeClaims(token);
+  const sb = await getSupabaseWithToken(token);
+  const row: Record<string, unknown> = {
+    campaign_id: claims?.campaign_id, character_id: claims?.character_id,
+    kind: r.kind, key: r.key,
+  };
+  if (r.max !== undefined) row.max = r.max;
+  if (r.used !== undefined) row.used = r.used;
+  if (r.recharge !== undefined) row.recharge = r.recharge;
+  if (r.value !== undefined) row.value = r.value;
+  if (r.maxOverridden !== undefined) row.max_overridden = r.maxOverridden;
+  const { error } = await sb.from('character_resources')
+    .upsert(row, { onConflict: 'campaign_id,character_id,kind,key' });
+  if (error) throwDataError('Could not update your resources', error);
+}
+
+/** Reset the `used` count on many pools at once (a rest). One array upsert. */
+export async function restResources(token: string, keys: string[]): Promise<void> {
+  if (!keys.length) return;
+  const claims = decodeClaims(token);
+  const sb = await getSupabaseWithToken(token);
+  const rows = keys.map((key) => ({
+    campaign_id: claims?.campaign_id, character_id: claims?.character_id,
+    kind: 'pool', key, used: 0,
+  }));
+  const { error } = await sb.from('character_resources')
+    .upsert(rows, { onConflict: 'campaign_id,character_id,kind,key' });
+  if (error) throwDataError('Could not apply the rest', error);
+}
+
 /** id → display name for labelling entries with their author. Uses the same
  *  session token — characters' id/name are member-readable by design. */
 export async function fetchCharacterNames(token: string): Promise<Record<string, string>> {

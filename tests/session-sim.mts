@@ -445,7 +445,7 @@ check('weather sheet is display-only with a World link', bodyHas('Set on World')
 click($('.sheet-close'), 'close'); await sleep(20);
 click(byText('.nav-btn', 'World'), 'World'); await sleep(20);
 click(byText('.sub-tab', 'Travel'), 'Travel'); await sleep(20);
-check('supplies tracker', bodyHas('Rations') && !!document.querySelector('.stepper-val'));
+check('supplies tracker', bodyHas('Party rations') && !!document.querySelector('.stepper-val'));
 check('travel rules reference', bodyHas('Extreme cold') && bodyHas('Deep snow'));
 const rationsBefore = parseInt(document.querySelector('.stepper-val')!.textContent!, 10);
 // take a 1-day trip to consume rations
@@ -612,19 +612,24 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   // -- migration: a v1 save gains gold + sceneId without losing anything
   const v1 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
   v1.version = 1;
+  // a genuine v1 save has neither the v13 coin purse nor a chosen scene
   delete (v1.travel as Record<string, unknown>).gold;
+  delete (v1.travel as Record<string, unknown>).coins;
   delete (v1.tv as Record<string, unknown>).sceneId;
   const migrated = migrate(v1);
-  check('v1→v2 adds gold', migrated.travel.gold === 0);
+  // the flat gold became the coin purse (Wave 10): a v1 save with no gold lands at 0gp
+  check('v1→v13 seeds an empty coin purse', migrated.travel.coins.gp === 0);
   check('v1→v2 adds sceneId auto', migrated.tv.sceneId === 'auto');
-  check('v1→v2 keeps rations', migrated.travel.rations === state.value.travel.rations);
+  // rations are now an object {party,pet} — compare by value, not identity
+  check('v1→v13 keeps rations', migrated.travel.rations.party === state.value.travel.rations.party
+    && migrated.travel.rations.pet === state.value.travel.rations.pet);
 
   // -- DM gold controls exist and write state
   click(byText('.nav-btn', 'World'), 'World tab'); await sleep(20);
   click(byText('.sub-tab', 'Travel'), 'Travel sub-tab'); await sleep(20);
-  check('gold row renders', bodyHas('Gold 💰'));
+  check('coins row renders', bodyHas('Coins 💰'));
   click(byText('button', '+10'), 'gold +10'); await sleep(20);
-  check('gold incremented', state.value.travel.gold === 10, `${state.value.travel.gold}`);
+  check('gold incremented', state.value.travel.coins.gp === 10, `${state.value.travel.coins.gp}`);
 
   // -- scene resolution: auto follows weather/journey, explicit wins
   check('auto: blizzard whiteout', resolveScene('auto', { journeying: true, weatherId: 'blizzard' }).id === 'blizzard');
@@ -635,7 +640,7 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
 
   // -- projection v2 carries resources + scene + ally links; TV nests allies
   patch((d) => {
-    d.travel.gold = 137;
+    d.travel.coins = { pp: 0, gp: 137, sp: 0, cp: 0 };
     d.sidekicks.push({
       id: 'skT', name: 'Grit', emoji: '🐺', type: 'Beast', hp: 11, maxHp: 11, ac: 13,
       level: 1, initMod: 1, conditions: [], linkedPcId: d.party[0]?.id,
@@ -643,8 +648,8 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
     } as never);
   });
   const pv = projectPlayerView(state.value);
-  check('projection carries gold', pv.resources.gold === 137);
-  check('projection carries rations + party size', pv.resources.rations >= 0 && pv.resources.partySize >= 1);
+  check('projection carries coins', pv.resources.coins.gp === 137);
+  check('projection carries rations + party size', pv.resources.rations.party >= 0 && pv.resources.partySize >= 1);
   check('souls removed from TV ledger', true); // display-only removal, asserted in scene 24
   check('projection resolves concrete scene', pv.sceneId !== 'auto' && SCENES.some((s) => s.id === pv.sceneId));
   check('ally carries linkedPcId', pv.allies.some((a) => a.id === 'skT' && a.linkedPcId === state.value.party[0]?.id));
@@ -653,8 +658,8 @@ console.log('\n═══ SCENE 23: Phase 7 — gold, scenes, master lists, TV id
   check('TV: party column present', html.includes('tv-party-col'));
   check('TV: ally nested under its PC', html.includes('tv-roster-ally') && html.includes('Grit'));
   check('TV: scene art renders', html.includes('tv-scene-art'));
-  check('TV: gold on the ledger', html.includes('137') && html.includes('GOLD'));
-  check('TV: rations on the ledger', html.includes('RATIONS'));
+  check('TV: coins on the ledger', html.includes('137') && html.includes('COINS'));
+  check('TV: rations on the ledger', html.includes('🍖'));
   check('TV: no secrets — no AC anywhere', !html.includes('AC '));
   patch((d) => { d.sidekicks = d.sidekicks.filter((s2) => s2.id !== 'skT'); });
 
@@ -736,7 +741,7 @@ console.log('\n═══ SCENE 24: Polish — death saves everywhere, art librar
   const pvE = projectPlayerView(state.value);
   const exploreHtml = rts(h(ExplorationView, { v: pvE }));
   check('TV ledger: souls removed', !exploreHtml.includes('SOULS'));
-  check('TV ledger: gold + rations + day remain', ['GOLD', 'RATIONS', 'DAY'].every((t) => exploreHtml.includes(t)));
+  check('TV ledger: coins + rations + day remain', ['COINS', '🍖', 'DAY'].every((t) => exploreHtml.includes(t)));
   check('TV: art scenes get contain fit', rts(h(ExplorationView, { v: { ...pvE, sceneId: 'mon-yeti' } })).includes('fit-contain'));
   check('TV: pixel scenes keep cover fit', !rts(h(ExplorationView, { v: { ...pvE, sceneId: 'town' } })).includes('fit-contain'));
   patch((d) => { const pc = d.party[0]; if (pc) { pc.hp = pc.maxHp; pc.deathS = 0; pc.deathF = 0; } });
@@ -846,23 +851,26 @@ console.log('\n═══ SCENE 26: Save files, party location, distinct weather 
   const { TvBackdrop } = await import('../src/tv/vfx.tsx');
 
   // -- save file round-trip: export shape → replaceState restores it
-  patch((d) => { d.travel.gold = 999; });
+  patch((d) => { d.travel.coins.gp = 999; });
   const exported = JSON.parse(JSON.stringify(state.value));
-  patch((d) => { d.travel.gold = 1; d.tv.partyLocation = 'scratch'; });
-  check('state diverged before import', state.value.travel.gold === 1);
+  patch((d) => { d.travel.coins.gp = 1; d.tv.partyLocation = 'scratch'; });
+  check('state diverged before import', state.value.travel.coins.gp === 1);
   replaceState(exported);
-  check('import restores gold', state.value.travel.gold === 999);
+  check('import restores gold', state.value.travel.coins.gp === 999);
   check('import restores tv settings', state.value.tv.partyLocation !== 'scratch');
   check('import keeps schema version current', state.value.version === exported.version);
   // an OLD save (v1) imports through the migration pipeline
   const oldSave = JSON.parse(JSON.stringify(exported)) as Record<string, unknown>;
   oldSave.version = 1;
+  // a genuine v1 save predates the coin purse — strip it so migration rebuilds
+  // it (flat gold, absent here, → 0gp) instead of carrying the v13 purse back
   delete (oldSave.travel as Record<string, unknown>).gold;
+  delete (oldSave.travel as Record<string, unknown>).coins;
   delete (oldSave.tv as Record<string, unknown>).sceneId;
   delete (oldSave.tv as Record<string, unknown>).youtubeId;
   delete (oldSave.tv as Record<string, unknown>).mediaVisible;
   replaceState(oldSave);
-  check('old save migrates on import', state.value.version >= 4 && state.value.travel.gold === 0 && state.value.tv.sceneId === 'auto');
+  check('old save migrates on import', state.value.version >= 4 && state.value.travel.coins.gp === 0 && state.value.tv.sceneId === 'auto');
   replaceState(exported);
 
   // -- save card renders on the Session screen
@@ -1104,13 +1112,13 @@ console.log('\n═══ SCENE 30: Wave 5 — the ground plane, trophies, monste
   const { migrate } = await import('../src/state/migrations.ts');
 
   // -- migration v9 → v10: the monster override map arrives empty (migrate always
-  //    walks to the latest schema — v12 as of Backend Brief 2 — so assert that terminus)
+  //    walks to the latest schema — v13 as of Wave 10 — so assert that terminus)
   const v9 = JSON.parse(JSON.stringify(state.value)) as Record<string, unknown>;
   v9.version = 9;
   delete v9.monsterOverrides;
   delete v9.places;
   const m10 = migrate(v9);
-  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 12);
+  check('v9→v10 adds monsterOverrides {}', JSON.stringify(m10.monsterOverrides) === '{}' && m10.version === 13);
   // -- migration v11 → v12: a Realm identity appears, and SURVIVES re-migration
   //    (a reload must never mint a second campaign id)
   check('v11→v12 generates a stable Realm identity',

@@ -172,6 +172,46 @@ export async function getClassSpells(classSlug: string): Promise<ApiListItem[] |
   } catch { return null; }
 }
 
+/** One class level from the 5e API's own per-level endpoint. Carries the slot
+ *  counts (`spellcasting`) and the class's own resource counts (`class_specific`
+ *  — rage_count, ki_points, action_surges, sorcery_points, channel_divinity…).
+ *  Cached exactly like getClassSpells: mem map → idb under `lvl:{slug}:{level}`
+ *  → fetch → store. null only when offline/unreachable or the level is unknown. */
+export interface ApiClassLevel {
+  level: number;
+  prof_bonus?: number;
+  spellcasting?: Record<string, number>;
+  class_specific?: Record<string, number | string>;
+}
+
+const classLevelMem = new Map<string, ApiClassLevel>();
+
+export async function getClassLevel(classSlug: string, level: number): Promise<ApiClassLevel | null> {
+  const slug = classSlug.trim().toLowerCase();
+  const lvl = Math.max(1, Math.min(20, Math.floor(level || 1)));
+  if (!slug) return null;
+  const key = `lvl:${slug}:${lvl}`;
+  if (classLevelMem.has(key)) return classLevelMem.get(key)!;
+  try {
+    const cached = await get(key);
+    if (cached) { classLevelMem.set(key, cached); return cached; }
+  } catch { /* idb unavailable */ }
+  try {
+    const res = await fetch(`https://www.dnd5eapi.co/api/2014/classes/${slug}/levels/${lvl}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const slim: ApiClassLevel = {
+      level: typeof data.level === 'number' ? data.level : lvl,
+      prof_bonus: typeof data.prof_bonus === 'number' ? data.prof_bonus : undefined,
+      spellcasting: data.spellcasting && typeof data.spellcasting === 'object' ? data.spellcasting : undefined,
+      class_specific: data.class_specific && typeof data.class_specific === 'object' ? data.class_specific : undefined,
+    };
+    classLevelMem.set(key, slim);
+    try { await set(key, slim); } catch { /* ignore */ }
+    return slim;
+  } catch { return null; }
+}
+
 export interface ApiDetail {
   index: string;
   name: string;

@@ -259,6 +259,33 @@ check('setup — Bob stows an item at home base', !bobLoc.error, bobLoc.error?.m
     !r.error && r.data?.length === 1 && r.data[0].location === 'home');
 }
 
+console.log('\n-- Wave 11: character_resources — a player owns their own pools/stats --');
+
+const bobRes = seen(await bob.from('character_resources')
+  .insert({ campaign_id: CAMP_A, character_id: 'pc2', kind: 'pool', key: 'slot_1', max: 4, used: 1, recharge: 'long' })
+  .select('id').single());
+check('setup — Bob records a spell-slot pool', !bobRes.error, bobRes.error?.message);
+
+{ // E2.1 — a player writes their OWN resource row → allowed
+  const ins = seen(await alice.from('character_resources')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc1', kind: 'pool', key: 'rage', max: 3, recharge: 'long' })
+    .select('id').single());
+  check('E2.1 player records their own resource → allowed', !ins.error && !!ins.data?.id, ins.error?.message);
+}
+{ // E2.2 — a player writes ANOTHER character's resource → denied, and can't read it
+  const ins = seen(await alice.from('character_resources')
+    .insert({ campaign_id: CAMP_A, character_id: 'pc2', kind: 'pool', key: 'forged', max: 9 }));
+  check('E2.2 player records a resource for someone else → denied', ins.error !== null);
+  const broad = seen(await alice.from('character_resources').select('character_id, key'));
+  const leaked = (broad.data ?? []).some((r) => r.character_id === 'pc2');
+  check('E2.2 …and cannot read another character\'s resources', !broad.error && !leaked);
+}
+{ // E2.3 — the DM reads every character's resources → allowed
+  const r = seen(await dmA.from('character_resources').select('character_id, key').eq('character_id', 'pc2'));
+  check('E2.3 DM reads a player\'s resources → allowed',
+    !r.error && r.data?.length === 1 && r.data[0].key === 'slot_1');
+}
+
 console.log('\n-- Standing guarantees beyond the ten --');
 
 { // join picker works; cross-campaign isolation holds

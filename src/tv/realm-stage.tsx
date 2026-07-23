@@ -270,22 +270,40 @@ export function resolveStageScene(sceneId: string, ctx: { journeying: boolean; w
   return chosen && chosen.cat === 'pixel' ? chosen : resolveScene('auto', ctx) ?? SCENES[0];
 }
 
+// Wave 11 (C1): the stage fits the window it's in. On a phone no integer scale
+// fits the 448-wide canvas, so instead of cropping 88px off the world we NARROW
+// the viewport to the widest 32-multiple that fits at 1×, clamped [320,448]. The
+// world stays 448 (tile scenes are authored at gridW=28); the narrow canvas is a
+// centred window onto it. STAGE_H is always 224. A 360px phone gets 352; an
+// iPhone 15 (~393) gets 384; a 1080p TV keeps 448 and lands 4×.
+interface StageScale { k: number; stageW: number; cw: number; ch: number }
 function useStageScale() {
   const ref = useRef<HTMLDivElement>(null);
-  const [k, setK] = useState(1);
+  const [d, setD] = useState<StageScale>({ k: 1, stageW: STAGE_W, cw: 0, ch: 0 });
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const fit = () => {
       const r = el.getBoundingClientRect();
-      setK(Math.max(1, Math.floor(Math.min(r.width / STAGE_W, r.height / STAGE_H))));
+      const kFull = Math.floor(Math.min(r.width / STAGE_W, r.height / STAGE_H));
+      let k: number, stageW: number;
+      if (kFull >= 1) {
+        // the full 448 world fits at an integer scale — keep it (the TV stays 4×)
+        k = kFull; stageW = STAGE_W;
+      } else {
+        // 448 won't fit even at 1×: narrow to the largest 32-multiple that fits
+        // the width, clamped [320,448]; pixels stay exact at 1×
+        k = 1;
+        stageW = Math.max(320, Math.min(STAGE_W, Math.floor(r.width / 32) * 32));
+      }
+      setD({ k, stageW, cw: Math.round(r.width), ch: Math.round(r.height) });
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return { ref, k };
+  return { ref, ...d };
 }
 
 // --- tiled backdrop (Wave 6) -------------------------------------------------------
@@ -368,26 +386,29 @@ function spriteAnimStyle(a: ActorSprite, anim: ActorAnim) {
   } as Record<string, string | undefined>;
 }
 
-function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq, band = DEFAULT_BAND }: {
+function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, active, next, x, y, pokeSeq, band = DEFAULT_BAND, onReveal }: {
   sprite: ActorSprite; pose: string; name: string;
   hp?: number; maxHp?: number; hpState: string;
   bubble: string | null; flinch: boolean; active: boolean; next: boolean;
   x: number; y: number; pokeSeq: number; band?: GroundBand;
+  onReveal?: () => void;
 }) {
   const picked = animForPose(sprite, pose);
   if (!picked) return null;
   const s = sprite.scale;
   const emote = pose === 'cheer' ? ' emote-cheer' : pose === 'wave' ? ' emote-wave' : '';
-  // A2: the wrapper carries the perspective scale (depthScale) and any per-sprite
-  // zoom, and the label is a child — so it would inherit both and render at a
-  // different size for a zoomed or nearer actor. Counter-scale the label by the
-  // inverse so every name is the same size regardless of sprite scale or depth.
-  const wrapperScale = depthScale(y) * (sprite.zoom ?? 1);
-  const labelScale = 1 / wrapperScale;
+  // Wave 11 (B1): the NAME no longer rides this wrapper. The wrapper carries a
+  // fractional depth/zoom scale, and a counter-scaled child glyph rasterises at
+  // that fractional scale before the parent scales back up — dropping the 1px
+  // outline onto sub-pixels (the "jagged, incomplete" bug). Names are now drawn
+  // in a separate unscaled overlay (tv-realm-names) in canvas coordinates, so
+  // the only scale acting on a name is the canvas's integer k.
   return (
     <div
       key={flinch ? `flinch-${pokeSeq}` : undefined}
       class={`realm-sprite-actor hp-${hpState}${flinch ? ' flinch' : ''}${active ? ' active-turn' : ''}${next ? ' next-turn' : ''}${pose === 'down' ? ' pose-down' : ''}${emote}`}
+      onClick={onReveal}
+      title={name}
       style={{
         left: `${x}%`,
         width: `${sprite.frameW * s}px`,
@@ -406,19 +427,6 @@ function SpriteActor({ sprite, pose, name, hp, maxHp, hpState, bubble, flinch, a
         </span>
       )}
       <span class="realm-sprite" style={spriteAnimStyle(sprite, picked.anim)} />
-      {/* label sits below the foot line: the sprite's in-flow height is frameH·s,
-          feet are footPad·s above its bottom, so (frameH−footPad)·s is the foot
-          line from the top; +2px is a purely visual gap (QA #3). The counter-
-          scale (A2) is anchored at top-center so the name stays centered and
-          renders at a constant size no matter the sprite's zoom or depth. */}
-      <span
-        class="realm-sprite-name"
-        style={{
-          top: `${(sprite.frameH - sprite.footPad) * s + 2}px`,
-          transform: `translateX(-50%) scale(${labelScale})`,
-          transformOrigin: 'top center',
-        }}
-      >{name}</span>
     </div>
   );
 }
@@ -487,6 +495,14 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     return () => clearInterval(iv);
   }, []);
 
+  // Wave 11 (B4): PCs are always labelled; everyone else is unlabelled until
+  // their sprite is tapped, then their name shows for ~3s. `revealed` maps an
+  // actor id → the epoch ms its label stops showing. The 700ms tick re-renders
+  // often enough that an expired reveal clears on its own.
+  const [revealed, setRevealed] = useState<Record<string, number>>({});
+  const reveal = (id: string) => setRevealed((r) => ({ ...r, [id]: Date.now() + 3000 }));
+  const isRevealed = (id: string) => (revealed[id] ?? 0) > Date.now();
+
   // The item-get moment: Expressive state derived from successive views, like
   // poses. A newly-appeared inventory id makes its owner (stash grant: the
   // whole party) cheer with the item's emoji for ~2 ticks. Nothing persists —
@@ -544,6 +560,15 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
       ? { x: it.display.x, y: it.display.y, rx: CELL_RX * prop.w, ry: 0.03 * prop.h }
       : { x: it.display.x, y: it.display.y, rx: CELL_RX, ry: 0.03 });
   }
+
+  // Wave 11 (C1): the world is 448-wide always (obstacles, actors, placements are
+  // all in world-% of 448 — CELL_RX and the obstacle x above stay /STAGE_W on
+  // purpose). `stageW` narrows only the VIEWPORT; the canvas is a centred window
+  // onto the world, so the visible world-band is [visLo, visHi]. Actor roaming is
+  // clamped into it so nobody wanders behind the crop line.
+  const { ref: vpRef, k, stageW, cw, ch } = useStageScale();
+  const visLo = ((STAGE_W - stageW) / 2 / STAGE_W) * 100;
+  const clampX = (x: number) => Math.max(visLo + 2, Math.min(100 - visLo - 2, x));
 
   const anyDown = v.party.some((p) => p.down);
   // A published snapshot.json can lag the code (it's Ben's hand-published
@@ -615,7 +640,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     const frames = POSE_FRAMES[pose];
     return {
       key: p.id,
-      x: st.x,
+      x: clampX(st.x),
       y: st.y,
       row: archetypeRow(p.cls),
       pose,
@@ -655,7 +680,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     const pose: Pose = down ? 'down' : moving ? 'walk' : 'idle';
     return {
       key: c.id,
-      x: st.x,
+      x: clampX(st.x),
       y: st.y,
       emoji: c.emoji, name: c.name, hpState: c.hpState, down,
       active: c.active, next: c.next, bubble, pose,
@@ -696,7 +721,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     const prev = posAt(tick - 2);
     const moving = Math.abs(st.x - prev.x) > 0.5 || Math.abs(st.y - prev.y) > 0.02;
     return {
-      key: a.id, x: st.x, y: st.y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
+      key: a.id, x: clampX(st.x), y: st.y, sprite, mode, down: a.down, name: a.name, hpState: a.hpState,
       pose: a.down ? 'down' : moving ? 'walk' : 'idle',
       frame: tick % 2,
     };
@@ -710,12 +735,43 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
     : CAMEO_BY_CAT[scene.cat] ?? 0;
   const cameoOn = tick % 90 >= 20 && tick % 90 < 50;          // ~20s pass every ~63s
 
-  const { ref: vpRef, k } = useStageScale();
   const pokeSeq = pokeActive?.seq ?? 0;
+
+  // Wave 11 (B4): build the label overlay. PCs are always named; sprite allies
+  // and foes are named only while revealed (tapped within the last ~3s). Emoji
+  // foes keep their own pill (tv-foe-name) and objects/props their hover label,
+  // so both are handled inline, not here.
+  const LABEL_LH = 9;                        // 8px Silkscreen + 1px leading
+  type LabelCand = { id: string; x: number; y: number; name: string; always: boolean };
+  const labelCandidates: LabelCand[] = [
+    ...actors.map((a) => ({ id: a.key, x: a.x, y: a.y, name: a.name, always: true })),
+    ...allyActors.filter((c) => c.sprite).map((c) => ({ id: c.key, x: c.x, y: c.y, name: c.name, always: false })),
+    ...foes.filter((f) => f.sprite).map((f) => ({ id: f.key, x: f.x, y: f.y, name: f.name, always: false })),
+  ].filter((l) => l.always || isRevealed(l.id));
+  // Deterministic order (sort by x, then id): the stage is tested deterministic,
+  // and a label that jitters between ticks is worse than one that overlaps.
+  labelCandidates.sort((a, b) => a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Greedy stagger: place each label on the lowest row where its x-interval
+  // clears every label already on that row; push down one line-height per clash.
+  const placedLabels: { cx: number; half: number; row: number }[] = [];
+  const labelRows = labelCandidates.map((l) => {
+    // labels live in the 448-wide world, so collide in world px (not the narrowed
+    // viewport). name.length·3 ≈ half a Silkscreen glyph-run at the 8px size.
+    const cx = (l.x / 100) * STAGE_W;
+    const half = Math.max(6, l.name.length * 3);
+    let row = 0;
+    while (row < 6 && placedLabels.some((p) => p.row === row && Math.abs(p.cx - cx) < p.half + half)) row++;
+    placedLabels.push({ cx, half, row });
+    return { ...l, row };
+  });
 
   return (
     <div class={`tv-idle-stage tv-realm-viewport${full ? ' full' : ''}`} ref={vpRef}>
-      <div class="tv-realm-canvas" style={{ width: `${STAGE_W}px`, height: `${STAGE_H}px`, transform: `scale(${k})` }}>
+      {/* Wave 11 (C): the canvas is the VIEWPORT — stageW wide, integer-scaled by
+          k, with a visible 2px frame (C2). The 448-wide world sits inside it,
+          centred; when stageW < 448 the world overhangs and centre-crops. */}
+      <div class="tv-realm-canvas" style={{ width: `${stageW}px`, height: `${STAGE_H}px`, transform: `scale(${k})` }}>
+       <div class="tv-realm-world" style={{ left: `${(stageW - STAGE_W) / 2}px` }}>
         {tiled
           ? <TiledBackdrop scene={tiled} band={band} />
           : (
@@ -766,6 +822,7 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             hpState={c.hpState}
             bubble={null} flinch={false} active={false} next={false}
             x={c.x} y={c.y} pokeSeq={pokeSeq} band={band}
+            onReveal={() => reveal(c.key)}
           />
         ))}
         {critters.map((c) => !c.down && (
@@ -788,11 +845,13 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             hp={a.hp} maxHp={a.maxHp} hpState={a.hpState}
             bubble={a.bubble} flinch={a.flinch} active={a.active} next={a.next}
             x={a.x} y={a.y} pokeSeq={pokeSeq} band={band}
+            onReveal={() => reveal(a.key)}
           />
         ) : (
           <div
             key={a.flinch ? `${a.key}-flinch-${pokeSeq}` : a.key}
             class={`tv-idle-actor pose-${a.pose} hp-${a.hpState}${a.flinch ? ' flinch' : ''}${a.active ? ' active-turn' : ''}${a.next ? ' next-turn' : ''}`}
+            onClick={() => reveal(a.key)}
             style={{ left: `${a.x}%`, ...groundStyle(a.y, band) }}
           >
             {(a.active || a.next) && <span class="tv-turn-mark">▼</span>}
@@ -807,9 +866,8 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
                 backgroundPosition: `${-a.frame * 16}px ${-a.row * 24}px`,
               }}
             />
-            {/* A2: counter the wrapper's depthScale so the name is a constant
-                size at any depth (0.5 keeps the pre-scaled 18px at ~9px). */}
-            <span class="tv-idle-name" style={{ transform: `translateX(-50%) scale(${0.5 / depthScale(a.y)})` }}>{a.name}</span>
+            {/* Wave 11 (B1): the name moved to the unscaled tv-realm-names overlay
+                — no more fractional counter-scale on the glyph. */}
           </div>
         ))}
         {foes.map((f) => f.sprite ? (
@@ -819,21 +877,49 @@ export function RealmStage({ v, full = false, pokeActive = null }: {
             hpState={f.hpState}
             bubble={f.bubble} flinch={false} active={f.active} next={f.next}
             x={f.x} y={f.y} pokeSeq={pokeSeq} band={band}
+            onReveal={() => reveal(f.key)}
           />
         ) : (
           <div
             key={f.key}
             class={`tv-foe-token hp-${f.hpState}${f.down ? ' down' : ''}${f.active ? ' active-turn' : ''}${f.next ? ' next-turn' : ''}`}
+            onClick={() => reveal(f.key)}
             style={{ left: `${f.x}%`, ...groundStyle(f.y, band) }}
             title={f.name}
           >
             {(f.active || f.next) && <span class="tv-turn-mark">▼</span>}
             {f.bubble && <span class={`tv-idle-bubble${isEmote(f.bubble) ? ' emote' : ''}`}>{f.bubble}</span>}
             <span class="tv-foe-emoji">{f.down ? '💀' : f.emoji}</span>
-            <span class="tv-foe-name">{f.name}</span>
+            {/* B4: monsters are unlabelled until tapped; the pill (left alone per
+                B2) shows only while revealed. */}
+            {isRevealed(f.key) && <span class="tv-foe-name">{f.name}</span>}
           </div>
         ))}
+        {/* Wave 11 (B1/B4): the name overlay — a single unscaled layer above the
+            actors. Only the canvas's integer k scales it, so the 1px outline
+            lands on whole device pixels. PCs are always here; tapped allies and
+            foes join for ~3s. Collisions were resolved deterministically above. */}
+        <div class="tv-realm-names">
+          {labelRows.map((l) => (
+            <span
+              class="realm-sprite-name"
+              key={l.id}
+              style={{
+                left: `${l.x}%`,
+                top: `calc(${100 - groundBottomPct(l.y, band)}% + ${2 + l.row * LABEL_LH}px)`,
+                transform: 'translateX(-50%)',
+              }}
+            >{l.name}</span>
+          ))}
+        </div>
+       </div>
+        {/* Kept at canvas level (not in the world layer) so the narrow-phone
+            centre-crop can't clip it out of the corner. */}
         {inCombat && <span class="tv-realm-round">Round {v.combat!.round}</span>}
+        {/* Wave 11 (C3): on-screen instrumentation — Ben can't open devtools on a
+            phone, so the measured container, chosen scale and chosen viewport
+            width are legible in the corner and reportable from any device. */}
+        <span class="tv-realm-diag">{cw}×{ch} · k{k} · w{stageW}</span>
       </div>
     </div>
   );

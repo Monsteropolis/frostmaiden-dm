@@ -35,6 +35,15 @@ jobs:
         run: npm run bundle:fn -- --check
       - name: Sprite audit (every descriptor vs its PNG's actual pixels — Wave 9)
         run: npm run test:sprites
+      - name: Session sim (the full UI regression — offline-first, no database)
+        run: |
+          # The sim drives the real UI in happy-dom. The compendium is offline-
+          # first, so its graceful-degradation paths (the ones a player sees on a
+          # phone with no signal) only render deterministically when the 5e API is
+          # unreachable. Block that host so the run is identical every time —
+          # happy-dom's fetch honours /etc/hosts. Everything else is local.
+          echo "127.0.0.1 www.dnd5eapi.co" | sudo tee -a /etc/hosts
+          npm run test:sim
       - name: Start local Supabase (applies committed migrations)
         run: npx supabase start
       - name: Boundary tests (RLS is the player/DM boundary)

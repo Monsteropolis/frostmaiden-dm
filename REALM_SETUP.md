@@ -7,7 +7,7 @@ The **login server** half is a small program called `realm-login` that has
 to be uploaded to Supabase once.
 
 > **Already deployed the function, but Sync says it "could not set up the
-> campaign"?** You're only missing Step 3 — the two SQL pastes. Do Step 3,
+> campaign"?** You're only missing Step 3 — the SQL pastes. Do Step 3,
 > then tap Sync again. The app's **🩺 Check Realm setup** button (next to
 > Sync) will tell you exactly which steps are done and which remain.
 
@@ -41,17 +41,18 @@ hands out are trusted by the database.
 
    **Value**: paste what you copied in Step 1. Save.
 
-## Step 3 — update the database (two quick SQL pastes)
+## Step 3 — update the database (a few quick SQL pastes)
 
 The database needs every file in the repo's `supabase/migrations/` folder to
 have been run, in filename order. The foundation one is already live; the
-two newer ones are not, and the Realm sync **cannot work without them**.
+newer ones are not, and the Realm sync **cannot work without them**.
 
 For each of these files, in this order:
 
 1. [supabase/migrations/20260719000000_realm_code.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000000_realm_code.sql)
 2. [supabase/migrations/20260719000001_service_role_grants.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260719000001_service_role_grants.sql)
 3. [supabase/migrations/20260721000000_realm_spells_items.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260721000000_realm_spells_items.sql) — **new in Wave 10.** Adds the two tables players need to tag spells and organise their gear. Sign-in and journals work without it, but the **Abilities** and **Gear** tabs stay empty until it is run.
+4. [supabase/migrations/20260722000000_character_resources.sql](https://github.com/Monsteropolis/frostmaiden-dm/blob/main/supabase/migrations/20260722000000_character_resources.sql) — **new in Wave 11.** Adds the one table behind the **Casting** tab (spell slots, rage, ki, and every other class pool). Everything else works without it, but the Casting tab can't save until it is run.
 
 do this:
 

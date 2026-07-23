@@ -5,6 +5,17 @@
    Frost = the Rime — weather, cold, ice states
    ============================================================ */
 
+/* Wave 11 (A): the interface face. Ben's font, loaded from project assets —
+   no external font service. Internal family name is "Jupiter Crash BRK"; we
+   expose it to CSS as 'Jupiter'. It ships a single weight (Regular), so the
+   bolder --font-ui uses are the browser's synthetic bold (see --font-ui note).
+   Same @font-face style as Ancient Modern Tales in tv.css. */
+@font-face {
+  font-family: 'Jupiter';
+  src: url('../assets/fonts/jupiterc.ttf') format('truetype');
+  font-display: swap;
+}
+
 :root {
   /* --- Cosmos (ground) --- */
   --bg: #0D0E22;            /* deepened midnight — app background        */
@@ -43,7 +54,9 @@
   --radius-sm: 8px;
 
   /* --- Type --- */
-  --font-ui: 'Space Grotesk', Arial, sans-serif;
+  /* Wave 11 (A): Jupiter is the interface face; Space Grotesk (already bundled)
+     stays as the fallback so a font failure degrades instead of breaking. */
+  --font-ui: 'Jupiter', 'Space Grotesk', Arial, sans-serif;
   --font-read: 'Spectral', Georgia, serif;
 
   /* --- Ergonomics --- */

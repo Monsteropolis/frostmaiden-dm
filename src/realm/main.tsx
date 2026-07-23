@@ -23,6 +23,7 @@ import '../styles/realm.css';
 import { RealmStage } from '../tv/realm-stage';
 import type { PlayerView, PvPc, PokeActive, PokeKind } from '../tv/projection';
 import { AbilitiesPanel } from './abilities';
+import { CastingPanel } from './casting';
 import { InventoryPanel } from './inventory';
 import { propById } from '../data/props';
 import {
@@ -53,11 +54,12 @@ function ago(ms: number): string {
 /** The logged-in player app's tabs. `world` is the diorama; the rest are what
  *  you DO while in it. Adding a tab (a Places tab arrives next wave) is one
  *  entry in this array — no rework. */
-type RealmTab = 'world' | 'journal' | 'abilities' | 'inventory';
+type RealmTab = 'world' | 'journal' | 'abilities' | 'casting' | 'inventory';
 const REALM_TABS: { id: RealmTab; label: string; icon: string }[] = [
   { id: 'world', label: 'World', icon: '🏔' },
   { id: 'journal', label: 'Journal', icon: '📓' },
   { id: 'abilities', label: 'Abilities', icon: '✨' },
+  { id: 'casting', label: 'Casting', icon: '🔮' },
   { id: 'inventory', label: 'Gear', icon: '🎒' },
 ];
 
@@ -152,6 +154,7 @@ function Realm() {
         )}
         {showTabs && tab === 'journal' && session && <JournalPanel session={session} />}
         {showTabs && tab === 'abilities' && session && <AbilitiesPanel session={session} pc={myPc} />}
+        {showTabs && tab === 'casting' && session && <CastingPanel session={session} pc={myPc} />}
         {showTabs && tab === 'inventory' && session && v && <InventoryPanel session={session} v={v} />}
       </main>
 
